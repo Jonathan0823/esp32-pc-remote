@@ -18,7 +18,7 @@ const unsigned long POLL_MS = 500;
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
-  bot.longPoll = 0;
+  bot.longPoll = 60;
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
@@ -137,6 +137,7 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
+    bot.longPoll = wake_is_pending() ? 0 : 60;
     int newCount = bot.getUpdates(telegramOffset);
     for (int i = 0; i < newCount; i++) {
       handleCommand(String(bot.messages[i].chat_id),

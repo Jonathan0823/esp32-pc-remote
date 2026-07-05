@@ -44,6 +44,10 @@ void wake_start_polling(String chatId) {
   wakeChatId = chatId;
 }
 
+bool wake_is_pending() {
+  return wakePending;
+}
+
 int wake_tick(const String& ip, int probePort) {
   if (!wakePending || millis() - lastWakeCheck < WAKE_RETRY_MS) return 0;
   lastWakeCheck = millis();
