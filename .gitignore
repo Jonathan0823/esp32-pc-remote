@@ -1,0 +1,7 @@
+config.h
+.pio/
+build/
+*.o
+*.a
+*.elf
+tasks/
