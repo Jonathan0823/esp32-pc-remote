@@ -21,8 +21,14 @@ int wakeDeviceProbePort = 0;
 const unsigned long WAKE_TIMEOUT_MS = 90000;
 const unsigned long WAKE_RETRY_MS = 3000;
 
-static void wake_set_pending_locked(bool pending) {
-  wakePending = pending;
+static void wake_clear_locked() {
+  wakePending = false;
+  wakeChatId = "";
+  wakeDeviceName = "";
+  wakeDeviceIp = "";
+  wakeDeviceProbePort = 0;
+  wakeStartMs = 0;
+  lastWakeCheck = 0;
 }
 
 static void wake_task(void*) {
@@ -58,7 +64,7 @@ static void wake_task(void*) {
 
     if (wake_is_pc_reachable(ip, probePort)) {
       if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-        wake_set_pending_locked(false);
+        wake_clear_locked();
         xSemaphoreGive(wakeMutex);
       }
       wakeNotifyBot.sendMessage(chatId, "🖥 " + deviceName + " is now online! (took "
@@ -69,7 +75,7 @@ static void wake_task(void*) {
 
     if (millis() - startMs >= WAKE_TIMEOUT_MS) {
       if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-        wake_set_pending_locked(false);
+        wake_clear_locked();
         xSemaphoreGive(wakeMutex);
       }
       wakeNotifyBot.sendMessage(chatId, "⚠️ " + deviceName + " did not wake within "
@@ -143,10 +149,6 @@ void wake_start_polling(String chatId, const String& deviceName, const String& i
     xSemaphoreGive(wakeMutex);
   }
   Serial.printf("[wake] async pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-}
-
-bool wake_is_pending() {
-  return wakePending;
 }
 
 unsigned long wake_elapsed_seconds() {
