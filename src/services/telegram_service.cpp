@@ -18,7 +18,7 @@ const unsigned long POLL_MS = 500;
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
-  bot.longPoll = 60;
+  bot.longPoll = 30;
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
@@ -140,7 +140,15 @@ static void handleCommand(String chatId, String text) {
 }
 
 void telegram_poll() {
+  String wakeChatId;
+  String wakeMessage;
+  if (wake_take_notification(wakeChatId, wakeMessage)) {
+    Serial.printf("[telegram] sending queued wake notification chat=%s\n", wakeChatId.c_str());
+    bot.sendMessage(wakeChatId, wakeMessage, "");
+  }
+
   if (millis() - lastPoll >= POLL_MS) {
+    bot.longPoll = 30;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
