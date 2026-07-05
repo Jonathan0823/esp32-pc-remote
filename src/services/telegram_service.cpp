@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <UniversalTelegramBot.h>
+#include <Preferences.h>
 #include "config.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
@@ -8,12 +9,17 @@
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOT_TOKEN, client);
+Preferences telegramPrefs;
+long telegramOffset = 1;
+bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 1500;
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
+  telegramPrefs.begin("telegram", false);
+  telegramOffset = telegramPrefs.getLong("offset", 1);
 }
 
 static String menuText() {
@@ -119,8 +125,7 @@ static void handleCommand(String chatId, String text) {
 
   if (cmd == "/reboot") {
     bot.sendMessage(chatId, "🔄 Rebooting ESP32...", "");
-    delay(100);
-    ESP.restart();
+    telegramRebootPending = true;
     return;
   }
 
@@ -130,10 +135,19 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    int newCount = bot.getUpdates(bot.last_message_received + 1);
+    int newCount = bot.getUpdates(telegramOffset);
     for (int i = 0; i < newCount; i++) {
       handleCommand(String(bot.messages[i].chat_id),
                     String(bot.messages[i].text));
+    }
+    if (newCount > 0) {
+      telegramOffset = bot.last_message_received + 1;
+      telegramPrefs.putLong("offset", telegramOffset);
+    }
+    if (telegramRebootPending) {
+      telegramPrefs.putLong("offset", telegramOffset);
+      delay(100);
+      ESP.restart();
     }
     lastPoll = millis();
   }
