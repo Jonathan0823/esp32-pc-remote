@@ -15,6 +15,7 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WiFiUdp.h>
 #include <UniversalTelegramBot.h>
 #include "config.h"
 
@@ -23,6 +24,30 @@ UniversalTelegramBot bot(BOT_TOKEN, client);
 
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 1500;
+
+WiFiUDP udp;
+
+void sendWoL() {
+  byte mac[6];
+  sscanf(PC_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+  byte packet[102];
+  memset(packet, 0xFF, 6);
+  for (int i = 0; i < 16; i++) memcpy(&packet[6 + i * 6], mac, 6);
+  IPAddress bcast;
+  bcast.fromString(WOL_BCAST);
+  udp.beginPacket(bcast, WOL_PORT);
+  udp.write(packet, 102);
+  udp.endPacket();
+  Serial.println("WoL sent to " + String(PC_MAC) + " via " + String(WOL_BCAST) + ":" + String(WOL_PORT));
+}
+
+bool isPCReachable() {
+  // ponytail: TCP probe to Artemis port; swap to ICMP ping if reliability matters
+  WiFiClient probe;
+  bool r = probe.connect(PC_IP, 47989, 2000);
+  probe.stop();
+  return r;
+}
 
 void setup() {
   Serial.begin(115200);
@@ -70,12 +95,18 @@ void handleCommand(String chatId, String text) {
     bot.sendMessage(chatId, "pong", "");
     return;
   }
+  if (text == "/wake") {
+    sendWoL();
+    bot.sendMessage(chatId, "⚡ Magic packet sent — PC should wake soon", "");
+    return;
+  }
   if (text == "/status") {
     String msg = "✅ Bot alive\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
-    msg += "⏱ Uptime: " + String(millis() / 1000) + "s";
+    msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
+    msg += "🖥 PC: " + String(isPCReachable() ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
     return;
   }
