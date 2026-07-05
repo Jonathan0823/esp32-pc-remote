@@ -22,6 +22,10 @@ void telegram_setup() {
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
+  Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
+                bot.longPoll,
+                bot.waitForResponse,
+                telegramOffset);
 }
 
 static String menuText() {
@@ -138,7 +142,17 @@ static void handleCommand(String chatId, String text) {
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
     bot.longPoll = wake_is_pending() ? 0 : 60;
+    uint32_t pollStart = millis();
+    Serial.printf("[telegram] getUpdates mode=%s offset=%ld longPoll=%d\n",
+                  wake_is_pending() ? "wake" : "idle",
+                  telegramOffset,
+                  bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
+    Serial.printf("[telegram] getUpdates done mode=%s updates=%d elapsed=%lums next=%ld\n",
+                  wake_is_pending() ? "wake" : "idle",
+                  newCount,
+                  millis() - pollStart,
+                  bot.last_message_received + 1);
     for (int i = 0; i < newCount; i++) {
       handleCommand(String(bot.messages[i].chat_id),
                     String(bot.messages[i].text));
@@ -149,6 +163,7 @@ void telegram_poll() {
     }
     if (telegramRebootPending) {
       telegramPrefs.putLong("offset", telegramOffset);
+      Serial.printf("[telegram] reboot pending; offset=%ld\n", telegramOffset);
       delay(100);
       ESP.restart();
     }
