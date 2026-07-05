@@ -13,11 +13,13 @@ Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
-const unsigned long POLL_MS = 1500;
+const unsigned long POLL_MS = 500;
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
+  bot.longPoll = 0;
+  bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
 }

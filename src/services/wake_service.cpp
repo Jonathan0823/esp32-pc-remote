@@ -32,7 +32,7 @@ void wake_send_magic(const String& mac, const String& bcast, int port) {
 // ponytail: TCP probe instead of ICMP ping — swap if PC firewall blocks TCP
 bool wake_is_pc_reachable(const String& ip, int port) {
   WiFiClient probe;
-  bool r = probe.connect(ip.c_str(), port, 2000);
+  bool r = probe.connect(ip.c_str(), port, 750);
   probe.stop();
   return r;
 }

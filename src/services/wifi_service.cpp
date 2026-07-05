@@ -19,6 +19,6 @@ void wifi_ensure() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Wi-Fi lost — reconnecting...");
     WiFi.reconnect();
-    delay(2000);
+    delay(250);
   }
 }
