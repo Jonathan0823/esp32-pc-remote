@@ -140,13 +140,6 @@ static void handleCommand(String chatId, String text) {
 }
 
 void telegram_poll() {
-  String wakeChatId;
-  String wakeMessage;
-  if (wake_take_notification(wakeChatId, wakeMessage)) {
-    Serial.printf("[telegram] sending queued wake notification chat=%s\n", wakeChatId.c_str());
-    bot.sendMessage(wakeChatId, wakeMessage, "");
-  }
-
   if (millis() - lastPoll >= POLL_MS) {
     bot.longPoll = 30;
     uint32_t pollStart = millis();

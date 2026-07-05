@@ -1,10 +1,17 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>
+#include "config.h"
 #include "src/services/wake_service.h"
 
 WiFiUDP wakeUdp;
+WiFiClientSecure wakeNotifyClient;
+UniversalTelegramBot wakeNotifyBot(BOT_TOKEN, wakeNotifyClient);
 TaskHandle_t wakeTaskHandle = nullptr;
+TaskHandle_t wakeNotifyTaskHandle = nullptr;
 SemaphoreHandle_t wakeMutex = nullptr;
+SemaphoreHandle_t wakeNotifySignal = nullptr;
 
 bool wakePending = false;
 unsigned long wakeStartMs = 0;
@@ -33,6 +40,45 @@ static void wake_queue_notification_locked(const String& chatId, const String& m
   wakeNotifyPending = true;
   wakeNotifyChatId = chatId;
   wakeNotifyMessage = message;
+  if (wakeNotifySignal) {
+    xSemaphoreGive(wakeNotifySignal);
+  }
+}
+
+static void wake_notify_task(void*) {
+  for (;;) {
+    if (!wakeNotifySignal) {
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
+    if (xSemaphoreTake(wakeNotifySignal, pdMS_TO_TICKS(250)) != pdTRUE) {
+      continue;
+    }
+
+    String chatId;
+    String message;
+    bool pending = false;
+
+    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+      pending = wakeNotifyPending;
+      if (pending) {
+        chatId = wakeNotifyChatId;
+        message = wakeNotifyMessage;
+        wakeNotifyPending = false;
+        wakeNotifyChatId = "";
+        wakeNotifyMessage = "";
+      }
+      xSemaphoreGive(wakeMutex);
+    }
+
+    if (!pending) {
+      continue;
+    }
+
+    bool sent = wakeNotifyBot.sendMessage(chatId, message, "");
+    Serial.printf("[wake] notify send chat=%s %s\n", chatId.c_str(), sent ? "ok" : "fail");
+  }
 }
 
 static void wake_task(void*) {
@@ -103,6 +149,14 @@ static void wake_ensure_task() {
   if (wakeMutex == nullptr) {
     wakeMutex = xSemaphoreCreateMutex();
   }
+  if (wakeNotifySignal == nullptr) {
+    wakeNotifySignal = xSemaphoreCreateBinary();
+  }
+  if (wakeNotifyTaskHandle == nullptr) {
+    wakeNotifyClient.setInsecure();
+    xTaskCreatePinnedToCore(wake_notify_task, "wake_notify_task", 4096, nullptr, 1, &wakeNotifyTaskHandle, 1);
+    Serial.println("[wake] notify task started");
+  }
   if (wakeTaskHandle == nullptr) {
     xTaskCreatePinnedToCore(wake_task, "wake_task", 4096, nullptr, 1, &wakeTaskHandle, 1);
     Serial.println("[wake] async task started");
@@ -154,24 +208,6 @@ void wake_start_polling(String chatId, const String& deviceName, const String& i
     xSemaphoreGive(wakeMutex);
   }
   Serial.printf("[wake] async pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-}
-
-bool wake_take_notification(String& chatId, String& message) {
-  if (!wakeMutex) return false;
-
-  bool hasNotification = false;
-  if (xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-    hasNotification = wakeNotifyPending;
-    if (hasNotification) {
-      chatId = wakeNotifyChatId;
-      message = wakeNotifyMessage;
-      wakeNotifyPending = false;
-      wakeNotifyChatId = "";
-      wakeNotifyMessage = "";
-    }
-    xSemaphoreGive(wakeMutex);
-  }
-  return hasNotification;
 }
 
 unsigned long wake_elapsed_seconds() {
