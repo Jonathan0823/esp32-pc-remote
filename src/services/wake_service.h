@@ -6,10 +6,8 @@
 unsigned long wake_timeout_seconds();
 void wake_send_magic(const String& mac, const String& bcast, int port);
 bool wake_is_pc_reachable(const String& ip, int port);
-void wake_start_polling(String chatId);
+void wake_start_polling(String chatId, const String& deviceName, const String& ip, int probePort);
 bool wake_is_pending();
-// Returns: 0 = no event, 1 = PC online, -1 = timeout
-int wake_tick(const String& ip, int probePort);
 unsigned long wake_elapsed_seconds();
 String wake_chat_id();
 

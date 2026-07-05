@@ -87,7 +87,7 @@ static void handleCommand(String chatId, String text) {
   if (cmd == "/wake") {
     Device dev = device_get_active();
     wake_send_magic(dev.mac, dev.bcast, dev.wolPort);
-    wake_start_polling(chatId);
+    wake_start_polling(chatId, dev.name, dev.ip, dev.probePort);
     bot.sendMessage(chatId, "⚡ Wake signal sent to " + dev.name
                     + " — waiting up to " + String(wake_timeout_seconds())
                     + "s for PC to respond...", "");
@@ -141,15 +141,12 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    bot.longPoll = wake_is_pending() ? 0 : 60;
     uint32_t pollStart = millis();
-    Serial.printf("[telegram] getUpdates mode=%s offset=%ld longPoll=%d\n",
-                  wake_is_pending() ? "wake" : "idle",
+    Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
-    Serial.printf("[telegram] getUpdates done mode=%s updates=%d elapsed=%lums next=%ld\n",
-                  wake_is_pending() ? "wake" : "idle",
+    Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
                   bot.last_message_received + 1);
@@ -168,17 +165,5 @@ void telegram_poll() {
       ESP.restart();
     }
     lastPoll = millis();
-  }
-
-  // wake polling — auto-reply once PC comes online or times out
-  Device dev = device_get_active();
-  int w = wake_tick(dev.ip, dev.probePort);
-  if (w == 1) {
-    bot.sendMessage(wake_chat_id(), "🖥 " + dev.name + " is now online! (took "
-                    + String(wake_elapsed_seconds()) + "s)", "");
-  } else if (w == -1) {
-    bot.sendMessage(wake_chat_id(), "⚠️ " + dev.name + " did not wake within "
-                    + String(wake_timeout_seconds())
-                    + "s. Check BIOS WoL settings.", "");
   }
 }

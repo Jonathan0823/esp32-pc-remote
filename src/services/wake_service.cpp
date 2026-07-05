@@ -1,16 +1,102 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>
 #include "config.h"
 #include "src/services/wake_service.h"
 
 WiFiUDP wakeUdp;
+WiFiClientSecure wakeNotifyClient;
+UniversalTelegramBot wakeNotifyBot(BOT_TOKEN, wakeNotifyClient);
+TaskHandle_t wakeTaskHandle = nullptr;
+SemaphoreHandle_t wakeMutex = nullptr;
 
 bool wakePending = false;
 unsigned long wakeStartMs = 0;
 unsigned long lastWakeCheck = 0;
 String wakeChatId = "";
+String wakeDeviceName = "";
+String wakeDeviceIp = "";
+int wakeDeviceProbePort = 0;
 const unsigned long WAKE_TIMEOUT_MS = 90000;
 const unsigned long WAKE_RETRY_MS = 3000;
+
+static void wake_set_pending_locked(bool pending) {
+  wakePending = pending;
+}
+
+static void wake_task(void*) {
+  for (;;) {
+    String chatId;
+    String deviceName;
+    String ip;
+    int probePort = 0;
+    unsigned long startMs = 0;
+    unsigned long lastCheckMs = 0;
+    bool pending = false;
+
+    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+      pending = wakePending;
+      chatId = wakeChatId;
+      deviceName = wakeDeviceName;
+      ip = wakeDeviceIp;
+      probePort = wakeDeviceProbePort;
+      startMs = wakeStartMs;
+      lastCheckMs = lastWakeCheck;
+      xSemaphoreGive(wakeMutex);
+    }
+
+    if (!pending) {
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
+    if (millis() - lastCheckMs < WAKE_RETRY_MS) {
+      vTaskDelay(pdMS_TO_TICKS(250));
+      continue;
+    }
+
+    if (wake_is_pc_reachable(ip, probePort)) {
+      if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+        wake_set_pending_locked(false);
+        xSemaphoreGive(wakeMutex);
+      }
+      wakeNotifyBot.sendMessage(chatId, "🖥 " + deviceName + " is now online! (took "
+                                      + String((millis() - startMs) / 1000) + "s)", "");
+      Serial.printf("[wake] notify online target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
+      continue;
+    }
+
+    if (millis() - startMs >= WAKE_TIMEOUT_MS) {
+      if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+        wake_set_pending_locked(false);
+        xSemaphoreGive(wakeMutex);
+      }
+      wakeNotifyBot.sendMessage(chatId, "⚠️ " + deviceName + " did not wake within "
+                                      + String(WAKE_TIMEOUT_MS / 1000)
+                                      + "s. Check BIOS WoL settings.", "");
+      Serial.printf("[wake] notify timeout target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
+      continue;
+    }
+
+    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+      lastWakeCheck = millis();
+      xSemaphoreGive(wakeMutex);
+    }
+    vTaskDelay(pdMS_TO_TICKS(250));
+  }
+}
+
+static void wake_ensure_task() {
+  if (wakeMutex == nullptr) {
+    wakeMutex = xSemaphoreCreateMutex();
+  }
+  if (wakeTaskHandle == nullptr) {
+    wakeNotifyClient.setInsecure();
+    xTaskCreatePinnedToCore(wake_task, "wake_task", 4096, nullptr, 1, &wakeTaskHandle, 1);
+    Serial.println("[wake] async task started");
+  }
+}
 
 void wake_send_magic(const String& mac, const String& bcast, int port) {
   byte macBytes[6];
@@ -44,28 +130,23 @@ bool wake_is_pc_reachable(const String& ip, int port) {
   return r;
 }
 
-void wake_start_polling(String chatId) {
-  wakePending = true;
-  wakeStartMs = millis();
-  lastWakeCheck = millis();
-  wakeChatId = chatId;
+void wake_start_polling(String chatId, const String& deviceName, const String& ip, int probePort) {
+  wake_ensure_task();
+  if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
+    wakePending = true;
+    wakeStartMs = millis();
+    lastWakeCheck = millis();
+    wakeChatId = chatId;
+    wakeDeviceName = deviceName;
+    wakeDeviceIp = ip;
+    wakeDeviceProbePort = probePort;
+    xSemaphoreGive(wakeMutex);
+  }
+  Serial.printf("[wake] async pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
 }
 
 bool wake_is_pending() {
   return wakePending;
-}
-
-int wake_tick(const String& ip, int probePort) {
-  if (!wakePending || millis() - lastWakeCheck < WAKE_RETRY_MS) return 0;
-  lastWakeCheck = millis();
-  if (wake_is_pc_reachable(ip, probePort)) {
-    wakePending = false;
-    return 1;
-  } else if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
-    wakePending = false;
-    return -1;
-  }
-  return 0;
 }
 
 unsigned long wake_elapsed_seconds() {
