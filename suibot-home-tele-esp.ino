@@ -27,6 +27,14 @@ const unsigned long POLL_MS = 1500;
 
 WiFiUDP udp;
 
+// wake polling state
+bool wakePending = false;
+unsigned long wakeStartMs = 0;
+unsigned long lastWakeCheck = 0;
+String wakeChatId = "";
+const unsigned long WAKE_TIMEOUT_MS = 90000;
+const unsigned long WAKE_RETRY_MS = 3000;
+
 void sendWoL() {
   byte mac[6];
   sscanf(PC_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
@@ -87,6 +95,19 @@ void loop() {
     }
     lastPoll = millis();
   }
+
+  // wake polling — auto-reply once PC comes online or times out
+  if (wakePending && millis() - lastWakeCheck >= WAKE_RETRY_MS) {
+    lastWakeCheck = millis();
+    if (isPCReachable()) {
+      unsigned long elapsed = (millis() - wakeStartMs) / 1000;
+      bot.sendMessage(wakeChatId, "🖥 PC is now online! (took " + String(elapsed) + "s)", "");
+      wakePending = false;
+    } else if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
+      bot.sendMessage(wakeChatId, "⚠️ PC did not wake within " + String(WAKE_TIMEOUT_MS / 1000) + "s. Check BIOS WoL settings.", "");
+      wakePending = false;
+    }
+  }
 }
 
 void handleCommand(String chatId, String text) {
@@ -97,7 +118,11 @@ void handleCommand(String chatId, String text) {
   }
   if (text == "/wake") {
     sendWoL();
-    bot.sendMessage(chatId, "⚡ Magic packet sent — PC should wake soon", "");
+    wakePending = true;
+    wakeStartMs = millis();
+    lastWakeCheck = millis();
+    wakeChatId = chatId;
+    bot.sendMessage(chatId, "⚡ Wake signal sent — waiting up to " + String(WAKE_TIMEOUT_MS / 1000) + "s for PC to respond...", "");
     return;
   }
   if (text == "/status") {
@@ -106,7 +131,10 @@ void handleCommand(String chatId, String text) {
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
-    msg += "🖥 PC: " + String(isPCReachable() ? "online" : "offline / sleeping");
+    msg += "🖥 " + String(PC_NAME) + "\n";
+    msg += "   MAC: " + String(PC_MAC) + "\n";
+    msg += "   Target: " + String(PC_IP) + "\n";
+    msg += "   Status: " + String(isPCReachable() ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
     return;
   }
