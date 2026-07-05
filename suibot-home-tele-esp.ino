@@ -18,10 +18,12 @@
 #include "src/services/wifi_service.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
+#include "src/services/device_service.h"
 
 void setup() {
   Serial.begin(115200);
   Serial.println("\n=== ESP32 Telegram Bot ===");
+  device_init();
   wifi_connect();
   telegram_setup();
 }

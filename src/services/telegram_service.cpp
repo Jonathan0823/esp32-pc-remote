@@ -4,6 +4,7 @@
 #include "config.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
+#include "src/services/device_service.h"
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOT_TOKEN, client);
@@ -22,7 +23,8 @@ static void handleCommand(String chatId, String text) {
     return;
   }
   if (text == "/wake") {
-    wake_send_magic();
+    Device dev = device_get_active();
+    wake_send_magic(dev.mac, dev.bcast, dev.wolPort);
     wake_start_polling(chatId);
     bot.sendMessage(chatId, "⚡ Wake signal sent — waiting up to "
                     + String(wake_timeout_seconds())
@@ -30,17 +32,18 @@ static void handleCommand(String chatId, String text) {
     return;
   }
   if (text == "/status") {
+    Device dev = device_get_active();
+    bool reachable = wake_is_pc_reachable(dev.ip, dev.probePort);
     String msg = "✅ Bot alive\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
-    msg += "🖥 " + String(PC_NAME) + "\n";
-    msg += "   MAC: " + String(PC_MAC) + "\n";
-    msg += "   Target: " + String(PC_IP) + "\n";
-    msg += "   Status: " + String(wake_is_pc_reachable()
-                                  ? "online" : "offline / sleeping");
+    msg += "🖥 " + dev.name + "\n";
+    msg += "   MAC: " + dev.mac + "\n";
+    msg += "   IP: " + dev.ip + "\n";
+    msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
     return;
   }
@@ -57,7 +60,8 @@ void telegram_poll() {
   }
 
   // wake polling — auto-reply once PC comes online or times out
-  int w = wake_tick();
+  Device dev = device_get_active();
+  int w = wake_tick(dev.ip, dev.probePort);
   if (w == 1) {
     bot.sendMessage(wake_chat_id(), "🖥 PC is now online! (took "
                     + String(wake_elapsed_seconds()) + "s)", "");

@@ -12,26 +12,27 @@ String wakeChatId = "";
 const unsigned long WAKE_TIMEOUT_MS = 90000;
 const unsigned long WAKE_RETRY_MS = 3000;
 
-void wake_send_magic() {
-  byte mac[6];
-  sscanf(PC_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-         &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5]);
+void wake_send_magic(const String& mac, const String& bcast, int port) {
+  byte macBytes[6];
+  sscanf(mac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
+         &macBytes[0], &macBytes[1], &macBytes[2],
+         &macBytes[3], &macBytes[4], &macBytes[5]);
   byte packet[102];
   memset(packet, 0xFF, 6);
-  for (int i = 0; i < 16; i++) memcpy(&packet[6 + i * 6], mac, 6);
-  IPAddress bcast;
-  bcast.fromString(WOL_BCAST);
-  wakeUdp.beginPacket(bcast, WOL_PORT);
+  for (int i = 0; i < 16; i++) memcpy(&packet[6 + i * 6], macBytes, 6);
+  IPAddress bcastAddr;
+  bcastAddr.fromString(bcast);
+  wakeUdp.beginPacket(bcastAddr, port);
   wakeUdp.write(packet, 102);
   wakeUdp.endPacket();
-  Serial.println("WoL sent to " + String(PC_MAC) + " via "
-                 + String(WOL_BCAST) + ":" + String(WOL_PORT));
+  Serial.println("WoL sent to " + mac + " via "
+                 + bcast + ":" + String(port));
 }
 
-bool wake_is_pc_reachable() {
-  // ponytail: TCP probe to Artemis port; swap to ICMP ping if reliability matters
+// ponytail: TCP probe instead of ICMP ping — swap if PC firewall blocks TCP
+bool wake_is_pc_reachable(const String& ip, int port) {
   WiFiClient probe;
-  bool r = probe.connect(PC_IP, 47989, 2000);
+  bool r = probe.connect(ip.c_str(), port, 2000);
   probe.stop();
   return r;
 }
@@ -43,10 +44,10 @@ void wake_start_polling(String chatId) {
   wakeChatId = chatId;
 }
 
-int wake_tick() {
+int wake_tick(const String& ip, int probePort) {
   if (!wakePending || millis() - lastWakeCheck < WAKE_RETRY_MS) return 0;
   lastWakeCheck = millis();
-  if (wake_is_pc_reachable()) {
+  if (wake_is_pc_reachable(ip, probePort)) {
     wakePending = false;
     return 1;
   } else if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
