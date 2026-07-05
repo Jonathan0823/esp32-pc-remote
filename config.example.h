@@ -13,3 +13,4 @@
 #define PC_IP       "192.168.1.50"              // target PC IP (for /status check)
 #define WOL_BCAST   "192.168.1.255"             // LAN broadcast address
 #define WOL_PORT    9                            // WoL port (usually 7 or 9)
+#define PC_TCP_PORT  47989                         // TCP port for /status probe
