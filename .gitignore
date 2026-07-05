@@ -5,3 +5,6 @@ build/
 *.a
 *.elf
 tasks/
+AGENTS.md
+.vscode/
+*.log
