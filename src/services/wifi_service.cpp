@@ -9,9 +9,6 @@ static const unsigned long RECONNECT_INTERVAL_MS = 10000;
 
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(true);
-  WiFi.persistent(false);
-  WiFi.setSleep(false);
   Serial.printf("[wifi] connect ssid=%s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();
@@ -19,11 +16,12 @@ void wifi_connect() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     if (millis() - lastLog >= 5000) {
-      Serial.printf("[wifi] waiting %lus\n", (millis() - start) / 1000);
+      Serial.printf("[wifi] waiting %lus status=%d\n", (millis() - start) / 1000, WiFi.status());
       lastLog = millis();
     }
     Serial.print(".");
   }
+
   Serial.printf("\n[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
   wifiWasConnected = true;
@@ -56,6 +54,6 @@ void wifi_ensure() {
 
   Serial.printf("[wifi] reconnect uptime=%lus\n", now / 1000);
   log_event("warn", "wifi", "reconnect", "WiFi reconnect attempt");
-  WiFi.disconnect();
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.reconnect();
+  delay(250);
 }
