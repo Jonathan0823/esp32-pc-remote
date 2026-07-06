@@ -38,10 +38,6 @@ void telegram_setup() {
                 telegramOffset);
 }
 
-void telegram_send_message(const String& chatId, const String& message, const char* parseMode) {
-  bot.sendMessage(chatId, message, parseMode);
-}
-
 static String menuText() {
   String msg = "🤖 *ESP32 PC Remote commands*\n\n";
   msg += "/start /help — Show this menu\n";
@@ -49,8 +45,6 @@ static String menuText() {
   msg += "/status — ESP32 health + target PC state\n";
   msg += "/wake — Ask for confirmation to wake the selected PC\n";
   msg += "/wakeconfirm <name> — Confirm and send WoL\n";
-  msg += "/devices — List known machines\n";
-  msg += "/target <name> — Switch active PC\n";
   msg += "/reboot — Restart the ESP32\n\n";
   msg += "Current target: " + device_active_name();
   return msg;
@@ -134,29 +128,6 @@ static void handleCommand(String chatId, String text) {
     bot.sendMessage(chatId, "⚡ Wake signal sent to " + dev.name
                     + " — waiting up to " + String(wake_timeout_seconds())
                     + "s for PC to respond...", "");
-    return;
-  }
-
-  if (cmd == "/devices") {
-    const Device& d = device_get_active();
-    String msg = "📋 Configured machine:\n";
-    msg += "👉 " + d.name + "\n";
-    msg += "   IP: " + d.ip + "\n";
-    msg += "   MAC: " + d.mac;
-    bot.sendMessage(chatId, msg, "");
-    return;
-  }
-
-  if (cmd == "/target") {
-    String name = (sp >= 0) ? text.substring(sp + 1) : "";
-    name.trim();
-    if (name.length() == 0) {
-      bot.sendMessage(chatId, "Only one target is configured:\n\n"
-                      "Current target: " + device_active_name(), "");
-      return;
-    }
-    bot.sendMessage(chatId, "Only one target is configured:\n\n"
-                    "Current target: " + device_active_name(), "");
     return;
   }
 

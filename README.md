@@ -2,12 +2,11 @@
 
 ESP32 Telegram bot for remote PC control.
 
-Wake a home PC, check whether it is online, switch between machines, and reboot the ESP32 from Telegram.
+Wake a home PC, check whether it is online, and reboot the ESP32 from Telegram.
 
 ## What it does
 - Confirm before sending Wake-on-LAN to the selected PC
 - Check whether the PC is online via TCP probe
-- Switch between target machines
 - Report ESP32 health over Telegram
 - Recover the ESP32 from Telegram with `/reboot`
 - Recover from Wi‑Fi drops with backoff + hard STA restart
@@ -19,8 +18,6 @@ Wake a home PC, check whether it is online, switch between machines, and reboot 
 - `/status` — ESP32 health + target PC status
 - `/wake` — ask for confirmation before waking the active target
 - `/wakeconfirm <name>` — confirm and send WoL to the active target
-- `/devices` — list known machines
-- `/target <name>` — switch active PC
 - `/reboot` — restart the ESP32
 
 ## Requirements
@@ -42,7 +39,7 @@ Wake a home PC, check whether it is online, switch between machines, and reboot 
 ## Configuration
 `config.h` is ignored by git. Keep your real Wi‑Fi password and bot token there.
 
-The example config currently supports one PC, but the code is structured so more targets can be added later.
+The firmware is intentionally single-target right now.
 
 ## Grafana Cloud logging (optional)
 The ESP can push event logs directly to Grafana Cloud Loki for diagnostics and dashboards.
@@ -88,7 +85,7 @@ Suggested alert thresholds:
 - ⚠️ Telegram poll failure count
 
 Tip: check `/ping` first when the ESP seems offline — it shows whether the ESP crashed, had a brownout, or lost Wi‑Fi.
-If Wi‑Fi is flaky, the firmware now retries with backoff and eventually restarts the STA stack.
+If Wi‑Fi is flaky, the firmware now retries with backoff.
 
 ## Public release checklist
 - Do not commit `config.h`

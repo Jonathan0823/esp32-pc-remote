@@ -1,8 +1,10 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <UniversalTelegramBot.h>
 #include "config.h"
-#include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
+
+extern UniversalTelegramBot bot;
 
 static WiFiUDP wakeUdp;
 
@@ -17,7 +19,7 @@ static int wakeDeviceProbePort = 0;
 static const unsigned long WAKE_TIMEOUT_MS = 90000;
 static const unsigned long WAKE_RETRY_MS = 3000;
 
-static void wake_clear_locked() {
+static void wake_clear() {
   wakePending = false;
   wakeChatId = "";
   wakeDeviceName = "";
@@ -33,19 +35,21 @@ void wake_poll() {
   if (millis() - lastWakeCheck < WAKE_RETRY_MS) return;
 
   if (wake_is_pc_reachable(wakeDeviceIp, wakeDeviceProbePort)) {
-    String message = "🖥 " + wakeDeviceName + " is now online! (took "
-                   + String((millis() - wakeStartMs) / 1000) + "s)";
-    telegram_send_message(wakeChatId, message, "");
-    wake_clear_locked();
+    bot.sendMessage(wakeChatId,
+                    "🖥 " + wakeDeviceName + " is now online! (took "
+                    + String((millis() - wakeStartMs) / 1000) + "s)",
+                    "");
+    wake_clear();
     return;
   }
 
   if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
-    String message = "⚠️ " + wakeDeviceName + " did not wake within "
-                   + String(WAKE_TIMEOUT_MS / 1000)
-                   + "s. Check BIOS WoL settings.";
-    telegram_send_message(wakeChatId, message, "");
-    wake_clear_locked();
+    bot.sendMessage(wakeChatId,
+                    "⚠️ " + wakeDeviceName + " did not wake within "
+                    + String(WAKE_TIMEOUT_MS / 1000)
+                    + "s. Check BIOS WoL settings.",
+                    "");
+    wake_clear();
     return;
   }
 
