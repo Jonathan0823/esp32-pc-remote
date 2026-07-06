@@ -18,12 +18,6 @@ bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 500;
 
-// Diagnostic trackers
-static unsigned long lastPollOkMs = 0;
-static int pollFailCount = 0;
-static int pollFailStreak = 0;
-static bool pollFailAlerted = false;
-
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
@@ -71,10 +65,7 @@ static void handleCommand(String chatId, String text) {
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
     msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n";
     msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
-    msg += "📬 Poll OK: " + String(lastPollOkMs > 0
-                                   ? String((millis() - lastPollOkMs) / 1000) + "s ago"
-                                   : "never") + "\n";
-    msg += "⚠️ Poll fails: " + String(pollFailCount);
+
     bot.sendMessage(chatId, msg, "");
     return;
   }
@@ -149,22 +140,8 @@ void telegram_poll() {
                   millis() - pollStart,
                   bot.last_message_received + 1);
 
-    if (newCount >= 0) {
-      lastPollOkMs = millis();
-      if (pollFailStreak > 0) {
-        log_event("info", "telegram", "poll_recovered", "getUpdates recovered");
-      }
-      pollFailStreak = 0;
-      pollFailAlerted = false;
-    } else {
-      pollFailCount++;
-      pollFailStreak++;
-      if (!pollFailAlerted && pollFailStreak >= 3) {
-        pollFailAlerted = true;
-        log_event("warn", "telegram", "poll_fail",
-                  String("getUpdates failing streak=" + String(pollFailStreak) +
-                         " total=" + String(pollFailCount)).c_str());
-      }
+    if (newCount < 0) {
+      Serial.printf("[telegram] getUpdates failed\n");
     }
 
     for (int i = 0; i < newCount; i++) {
