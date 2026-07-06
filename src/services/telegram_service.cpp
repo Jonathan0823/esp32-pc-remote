@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <UniversalTelegramBot.h>
 #include <Preferences.h>
 #include "config.h"
@@ -25,6 +26,76 @@ static unsigned long lastPollOkMs = 0;
 static int pollFailCount = 0;
 static int pollFailStreak = 0;
 static bool pollFailAlerted = false;
+
+static int telegram_poll_updates(long offset) {
+  WiFiClientSecure pollClient;
+  pollClient.setInsecure();
+  pollClient.setTimeout((TELEGRAM_LONG_POLL_SECONDS + 5) * 1000UL);
+
+  HTTPClient http;
+  http.setReuse(false);
+  http.setTimeout((TELEGRAM_LONG_POLL_SECONDS + 5) * 1000UL);
+
+  String url = String("https://api.telegram.org/bot") + BOT_TOKEN +
+               "/getUpdates?offset=" + String(offset) +
+               "&limit=1&timeout=" + String(TELEGRAM_LONG_POLL_SECONDS);
+
+  if (!http.begin(pollClient, url)) {
+    Serial.println("[telegram] poll begin failed");
+    return -1;
+  }
+
+  int code = http.GET();
+  String body = code > 0 ? http.getString() : String();
+  http.end();
+
+  if (code != HTTP_CODE_OK) {
+    Serial.printf("[telegram] poll http=%d body=%u\n", code, body.length());
+    return -1;
+  }
+
+  DynamicJsonDocument doc(4096);
+  DeserializationError error = deserializeJson(doc, body);
+  if (error || !doc["ok"].as<bool>()) {
+    Serial.printf("[telegram] poll json=%s body=%u\n",
+                  error ? error.c_str() : "ok=false", body.length());
+    return -1;
+  }
+
+  JsonArray result = doc["result"].as<JsonArray>();
+  int resultCount = result.size();
+  if (resultCount == 0) {
+    return 0;
+  }
+
+  for (JsonObjectConst update : result) {
+    bot.last_message_received = update["update_id"] | bot.last_message_received;
+  }
+
+  int newCount = 0;
+  for (JsonObjectConst update : result) {
+    if (newCount >= HANDLE_MESSAGES) break;
+
+    JsonObjectConst message = update["message"];
+    if (message.isNull()) continue;
+
+    telegramMessage &msg = bot.messages[newCount];
+    msg.text = message["text"] | "";
+    msg.chat_id = message["chat"]["id"].as<String>();
+    msg.chat_title = message["chat"]["title"].as<String>();
+    msg.from_id = message["from"]["id"].as<String>();
+    msg.from_name = message["from"]["first_name"].as<String>();
+    msg.date = message["date"].as<String>();
+    msg.type = "message";
+    msg.message_id = message["message_id"] | 0;
+    msg.hasDocument = false;
+    msg.longitude = 0;
+    msg.latitude = 0;
+    newCount++;
+  }
+
+  return newCount;
+}
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
@@ -145,7 +216,7 @@ void telegram_poll() {
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
                   bot.longPoll);
-    int newCount = bot.getUpdates(telegramOffset);
+    int newCount = telegram_poll_updates(telegramOffset);
     uint32_t elapsed = millis() - pollStart;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
