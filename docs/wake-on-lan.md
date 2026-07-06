@@ -5,11 +5,14 @@ WoL must be enabled at every layer: BIOS, OS, and NIC driver.
 ## BIOS
 
 1. Enter BIOS (usually F2/Del during boot)
-2. Look for **Wake-on-LAN**, **PCI-E Wake**, **Magic Packet Wake**, or **Power On by PCIe**
+2. Look for **Wake-on-LAN**, **PCI Power Up**, **Allow PCI wake-up event**, **Boot from PCI/PCI-E**, **Magic Packet Wake**, or **Power On by PCIe**
 3. Enable it
-4. Save and exit
+4. **Disable ErP / ErP-ready** if present — it cuts power to the Ethernet card in S5 (soft-off) state
+5. Save and exit
 
-The exact name varies by motherboard vendor. Check your manual if unsure.
+The exact names vary by motherboard vendor. Check your manual if unsure.
+
+> Some motherboards have a bug that causes immediate wake-up after shutdown when WoL is enabled in BIOS. If this happens, disable ErP, xHCI, or EuP 2013 in BIOS.
 
 ## Windows
 
@@ -43,29 +46,44 @@ sudo ethtool -s <interface> wol g
 
 ### Make it persistent
 
-**Ubuntu/Debian** — add a NetPlan hook or systemd service:
+**Ubuntu/Debian** — systemd service:
 
-```bash
-# /etc/systemd/system/wol.service
+```ini
+# /etc/systemd/system/wol@.service
 [Unit]
-Description=Enable Wake-on-LAN
+Description=Wake-on-LAN for %i
+Requires=network.target
+After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/ethtool -s <interface> wol g
+ExecStart=/usr/bin/ethtool -s %i wol g
 
 [Install]
-WantedBy=basic.target
+WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable wol.service
-sudo systemctl start wol.service
+sudo systemctl enable wol@eth0.service
+sudo systemctl start wol@eth0.service
 ```
+
+Replace `eth0` with your interface name (check with `ip link`).
 
 ## Test WoL before using the ESP32
 
-Install a WoL tool on your phone (e.g. **Wolow** on Android) and send a magic packet. If the PC wakes, the ESP32 config is the only thing left to fix. If it doesn't, the PC still needs BIOS or OS changes above.
+**Quick test** — Install a WoL tool on your phone (e.g. **Wolow** on Android) and send a magic packet. If the PC wakes, the ESP32 config is the only thing left to fix.
+
+If the quick test fails, fix BIOS/OS settings above. If it still doesn't work:
+
+**Advanced: verify the packet arrives** — On the target PC, capture the incoming magic packet:
+
+```bash
+# requires ngrep
+sudo ngrep '\xff{6}(.{6})\1{15}' -x port 9
+```
+
+If you see the 102-byte magic frame, the packet reaches the NIC but the OS/driver drops it. Check driver WoL support and power management.
 
 ## TCP probe port
 
