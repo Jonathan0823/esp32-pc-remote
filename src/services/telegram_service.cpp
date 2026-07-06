@@ -16,42 +16,21 @@ Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
-// ponytail: ISP/router proxies drop idle HTTPS connections, so long-poll
-//           never delivers updates via the open connection.
-//           Use short polling (longPoll=0) instead — every poll returns
-//           immediately with any available updates.
-static const unsigned long TELEGRAM_LONG_POLL_SECONDS = 0;
-static const unsigned long POLL_MS = 1500;
+const unsigned long POLL_MS = 500;
 
 // Diagnostic trackers
 static unsigned long lastPollOkMs = 0;
 static int pollFailCount = 0;
 static int pollFailStreak = 0;
 static bool pollFailAlerted = false;
-static TaskHandle_t telegramTaskHandle = nullptr;
-
-static void telegram_task(void*) {
-  for (;;) {
-    telegram_poll();
-    vTaskDelay(pdMS_TO_TICKS(100));
-  }
-}
-
-static void telegram_ensure_task() {
-  if (telegramTaskHandle != nullptr) return;
-  xTaskCreatePinnedToCore(telegram_task, "telegram_task", 8192, nullptr, 1,
-                          &telegramTaskHandle, 1);
-  Serial.println("[telegram] async task started");
-}
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
-  bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
+  bot.longPoll = 30;
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
-  telegram_ensure_task();
   Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
                 bot.longPoll,
                 bot.waitForResponse,
@@ -159,54 +138,49 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    lastPoll = millis();
-    bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
+    bot.longPoll = 30;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
-    uint32_t elapsed = millis() - pollStart;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
-                  elapsed,
+                  millis() - pollStart,
                   bot.last_message_received + 1);
 
     if (newCount >= 0) {
-      // Successful poll
       lastPollOkMs = millis();
       if (pollFailStreak > 0) {
         log_event("info", "telegram", "poll_recovered", "getUpdates recovered");
       }
       pollFailStreak = 0;
       pollFailAlerted = false;
-      if (newCount > 0) {
-        // New messages received — process them
-        for (int i = 0; i < newCount; i++) {
-          handleCommand(String(bot.messages[i].chat_id),
-                        String(bot.messages[i].text));
-        }
-        telegramOffset = bot.last_message_received + 1;
-        telegramPrefs.putLong("offset", telegramOffset);
-      }
     } else {
-      // Poll error
       pollFailCount++;
       pollFailStreak++;
       if (!pollFailAlerted && pollFailStreak >= 3) {
         pollFailAlerted = true;
         log_event("warn", "telegram", "poll_fail",
                   String("getUpdates failing streak=" + String(pollFailStreak) +
-                         " total=" + String(pollFailCount) +
-                         " elapsed=" + String(elapsed) + "ms").c_str());
+                         " total=" + String(pollFailCount)).c_str());
       }
     }
 
+    for (int i = 0; i < newCount; i++) {
+      handleCommand(String(bot.messages[i].chat_id),
+                    String(bot.messages[i].text));
+    }
+    if (newCount > 0) {
+      telegramOffset = bot.last_message_received + 1;
+      telegramPrefs.putLong("offset", telegramOffset);
+    }
     if (telegramRebootPending) {
       telegramPrefs.putLong("offset", telegramOffset);
       Serial.printf("[telegram] reboot pending; offset=%ld\n", telegramOffset);
       delay(100);
       ESP.restart();
     }
+    lastPoll = millis();
   }
 }
