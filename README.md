@@ -10,6 +10,7 @@ Wake a home PC, check whether it is online, switch between machines, and reboot 
 - Switch between target machines
 - Report ESP32 health over Telegram
 - Recover the ESP32 from Telegram with `/reboot`
+- Recover from Wi‑Fi drops with backoff + hard STA restart
 - Send diagnostics and event logs to Grafana Cloud (optional)
 
 ## Commands
@@ -62,7 +63,8 @@ What gets logged:
 - Telegram poll failures
 - Wake-on-LAN events
 - Command usage
-- Heartbeat on every flush (30s interval)
+- Heartbeat every 60s while healthy
+- Wi‑Fi reconnect / recovery attempts
 
 Log format:
 ```json
@@ -81,6 +83,7 @@ Logs arrive in a single Loki stream labeled `{app="esp32-pc-remote"}`.
 - ⚠️ Telegram poll failure count
 
 Tip: check `/ping` first when the ESP seems offline — it shows whether the ESP crashed, had a brownout, or lost Wi‑Fi.
+If Wi‑Fi is flaky, the firmware now retries with backoff and eventually restarts the STA stack.
 
 ## Public release checklist
 - Do not commit `config.h`
