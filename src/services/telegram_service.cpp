@@ -38,6 +38,10 @@ void telegram_setup() {
                 telegramOffset);
 }
 
+void telegram_send_message(const String& chatId, const String& message, const char* parseMode) {
+  bot.sendMessage(chatId, message, parseMode);
+}
+
 static String menuText() {
   String msg = "🤖 *ESP32 PC Remote commands*\n\n";
   msg += "/start /help — Show this menu\n";
