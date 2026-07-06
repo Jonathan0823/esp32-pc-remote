@@ -97,7 +97,3 @@ void wake_start_polling(String chatId, const String& deviceName, const String& i
   wakeDeviceProbePort = probePort;
   Serial.printf("[wake] pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
 }
-
-unsigned long wake_timeout_seconds() {
-  return WAKE_TIMEOUT_MS / 1000;
-}

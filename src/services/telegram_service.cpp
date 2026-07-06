@@ -5,7 +5,6 @@
 #include "config.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
-#include "src/services/device_service.h"
 #include "src/services/log_service.h"
 
 // Declared in esp32-pc-remote.ino
@@ -46,7 +45,8 @@ static String menuText() {
   msg += "/wake — Ask for confirmation to wake the selected PC\n";
   msg += "/wakeconfirm <name> — Confirm and send WoL\n";
   msg += "/reboot — Restart the ESP32\n\n";
-  msg += "Current target: " + device_active_name();
+  msg += "Current target: ";
+  msg += PC_NAME;
   return msg;
 }
 
@@ -81,8 +81,7 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/status") {
-    Device dev = device_get_active();
-    bool reachable = wake_is_pc_reachable(dev.ip, dev.probePort);
+    bool reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
     String msg = "✅ ESP32 healthy\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
@@ -90,18 +89,17 @@ static void handleCommand(String chatId, String text) {
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
     msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n\n";
-    msg += "🖥 Target: " + dev.name + "\n";
-    msg += "   MAC: " + dev.mac + "\n";
-    msg += "   IP: " + dev.ip + "\n";
+    msg += "🖥 Target: " + String(PC_NAME) + "\n";
+    msg += "   MAC: " + String(PC_MAC) + "\n";
+    msg += "   IP: " + String(PC_IP) + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
     return;
   }
 
   if (cmd == "/wake") {
-    Device dev = device_get_active();
-    bot.sendMessage(chatId, "⚠️ Confirm wake for " + dev.name + "\n\n"
-                    "Send /wakeconfirm " + dev.name + " to send the WoL packet.", "");
+    bot.sendMessage(chatId, "⚠️ Confirm wake for " + String(PC_NAME) + "\n\n"
+                    "Send /wakeconfirm " + String(PC_NAME) + " to send the WoL packet.", "");
     return;
   }
 
@@ -110,24 +108,21 @@ static void handleCommand(String chatId, String text) {
     name.trim();
     if (name.length() == 0) {
       bot.sendMessage(chatId, "Usage: /wakeconfirm <name>\n\n"
-                      "Current target: " + device_active_name(), "");
+                      "Current target: " + String(PC_NAME), "");
       return;
     }
 
-    String activeName = device_active_name();
-    if (name != activeName) {
+    if (name != PC_NAME) {
       bot.sendMessage(chatId, "❌ Confirmation mismatch: " + name + "\n\n"
-                      "Current target: " + activeName + "\n"
-                      "Send /wakeconfirm " + activeName + " to confirm.", "");
+                      "Current target: " + String(PC_NAME) + "\n"
+                      "Send /wakeconfirm " + String(PC_NAME) + " to confirm.", "");
       return;
     }
 
-    Device dev = device_get_active();
-    wake_send_magic(dev.mac, dev.bcast, dev.wolPort);
-    wake_start_polling(chatId, dev.name, dev.ip, dev.probePort);
-    bot.sendMessage(chatId, "⚡ Wake signal sent to " + dev.name
-                    + " — waiting up to " + String(wake_timeout_seconds())
-                    + "s for PC to respond...", "");
+    wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+    wake_start_polling(chatId, PC_NAME, PC_IP, PC_TCP_PORT);
+    bot.sendMessage(chatId, "⚡ Wake signal sent to " + String(PC_NAME)
+                    + " — waiting up to 90s for PC to respond...", "");
     return;
   }
 

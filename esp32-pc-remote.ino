@@ -20,7 +20,6 @@
 #include "src/services/wifi_service.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
-#include "src/services/device_service.h"
 #include "src/services/log_service.h"
 
 const char* reset_reason_label(esp_reset_reason_t reason) {
@@ -48,8 +47,7 @@ void setup() {
   delay(50);
   Serial.println("\n=== ESP32 PC Remote ===");
   Serial.printf("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
-  device_init();
-  Serial.printf("[boot] target=%s\n", device_active_name().c_str());
+  Serial.printf("[boot] target=%s\n", PC_NAME);
   wifi_connect();
   telegram_setup();
   log_init();
@@ -66,7 +64,7 @@ void setup() {
 
 void loop() {
   wifi_ensure();
-  log_heartbeat(device_active_name());
+  log_heartbeat(PC_NAME);
 
   if (WiFi.status() == WL_CONNECTED) {
     wake_poll();
