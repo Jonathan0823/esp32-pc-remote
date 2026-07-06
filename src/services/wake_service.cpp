@@ -77,7 +77,9 @@ bool wake_is_pc_reachable(const String& ip, int port) {
   WiFiClient probe;
   uint32_t start = millis();
   Serial.printf("[wake] probe %s:%d start\n", ip.c_str(), port);
-  bool r = probe.connect(ip.c_str(), port, 750);
+  // ponytail: local network TCP connect should either succeed (<10ms)
+  // or fail with RST (<100ms); 200ms is a safe ceiling
+  bool r = probe.connect(ip.c_str(), port, 200);
   probe.stop();
   Serial.printf("[wake] probe %s:%d %s in %lums\n",
                 ip.c_str(),
