@@ -138,13 +138,11 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/devices") {
-    String msg = "📋 Known machines:\n";
-    int activeIdx = device_active_index();
-    for (int i = 0; i < device_count(); i++) {
-      const Device& d = device_get(i);
-      msg += (i == activeIdx ? "👉 " : "   ") + d.name;
-      msg += " — " + d.ip + "\n";
-    }
+    const Device& d = device_get_active();
+    String msg = "📋 Configured machine:\n";
+    msg += "👉 " + d.name + "\n";
+    msg += "   IP: " + d.ip + "\n";
+    msg += "   MAC: " + d.mac;
     bot.sendMessage(chatId, msg, "");
     return;
   }
@@ -153,22 +151,12 @@ static void handleCommand(String chatId, String text) {
     String name = (sp >= 0) ? text.substring(sp + 1) : "";
     name.trim();
     if (name.length() == 0) {
-      bot.sendMessage(chatId, "Usage: /target <name>\n\n"
+      bot.sendMessage(chatId, "Only one target is configured:\n\n"
                       "Current target: " + device_active_name(), "");
       return;
     }
-    int idx = device_find(name);
-    if (idx >= 0) {
-      device_set_active(idx);
-      bot.sendMessage(chatId, "✅ Target switched to " + name, "");
-    } else {
-      String msg = "❌ Unknown target: " + name + "\n\nAvailable: ";
-      for (int i = 0; i < device_count(); i++) {
-        if (i > 0) msg += ", ";
-        msg += device_get(i).name;
-      }
-      bot.sendMessage(chatId, msg, "");
-    }
+    bot.sendMessage(chatId, "Only one target is configured:\n\n"
+                    "Current target: " + device_active_name(), "");
     return;
   }
 
