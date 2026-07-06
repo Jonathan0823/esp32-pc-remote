@@ -57,25 +57,13 @@ void setup() {
     log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
   }
 
-  esp_err_t wdtStatus = esp_task_wdt_status(NULL);
-  if (wdtStatus == ESP_ERR_INVALID_STATE) {
-    // ponytail: Telegram long-poll blocks the loop task for ~60s
-    esp_task_wdt_config_t wdtConfig = {120000, 0, true};
-    esp_err_t err = esp_task_wdt_init(&wdtConfig);
-    Serial.printf("[wdt] init=%d\n", err);
-    wdtStatus = err;
-  }
-
-  if (wdtStatus == ESP_ERR_NOT_FOUND) {
-    // ponytail: bootloader initializes WDT with a short timeout;
-    //           reconfigure to 120s so long-poll (60s) doesn't trigger it
-    esp_task_wdt_config_t wdtConfig = {120000, 0, true};
-    esp_task_wdt_init(&wdtConfig);
-    esp_err_t err = esp_task_wdt_add(NULL);
-    Serial.printf("[wdt] subscribe=%d\n", err);
-  } else if (wdtStatus == ESP_OK) {
-    Serial.println("[wdt] subscribed");
-  }
+  // ponytail: Telegram long-poll blocks loopTask for ~60s.
+  //           Deinit and reinit WDT with 120s timeout so it doesn't fire.
+  esp_task_wdt_deinit();
+  esp_task_wdt_config_t wdtConfig = {120000, 0, true};
+  esp_task_wdt_init(&wdtConfig);
+  esp_task_wdt_add(NULL);
+  Serial.println("[wdt] configured 120s");
 }
 
 void loop() {
