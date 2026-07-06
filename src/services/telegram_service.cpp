@@ -97,12 +97,19 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/wake") {
-    String keyboard = "{\"inline_keyboard\":[["
-      "{\"text\":\"✅ Yes\",\"callback_data\":\"wake_confirm\"},"
-      "{\"text\":\"❌ No\",\"callback_data\":\"wake_cancel\"}"
-      "]]}";
-    bot.sendMessageWithInlineKeyboard(chatId,
-      "Wake " + String(PC_NAME) + "?", "", keyboard);
+    DynamicJsonDocument payload(1024);
+    payload["chat_id"] = chatId;
+    payload["text"] = "Wake " + String(PC_NAME) + "?";
+    JsonObject markup = payload.createNestedObject("reply_markup");
+    JsonArray rows = markup.createNestedArray("inline_keyboard");
+    JsonArray row = rows.createNestedArray();
+    JsonObject yes = row.createNestedObject();
+    yes["text"] = "✅ Yes";
+    yes["callback_data"] = "wake_confirm";
+    JsonObject no = row.createNestedObject();
+    no["text"] = "❌ No";
+    no["callback_data"] = "wake_cancel";
+    bot.sendPostToTelegram(bot.buildCommand("sendMessage"), payload.as<JsonObject>());
     return;
   }
 
