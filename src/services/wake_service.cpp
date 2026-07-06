@@ -5,26 +5,24 @@
 #include "config.h"
 #include "src/services/wake_service.h"
 
-WiFiUDP wakeUdp;
-WiFiClientSecure wakeNotifyClient;
-UniversalTelegramBot wakeNotifyBot(BOT_TOKEN, wakeNotifyClient);
-TaskHandle_t wakeTaskHandle = nullptr;
-TaskHandle_t wakeNotifyTaskHandle = nullptr;
-SemaphoreHandle_t wakeMutex = nullptr;
-SemaphoreHandle_t wakeNotifySignal = nullptr;
+static WiFiUDP wakeUdp;
+static WiFiClientSecure wakeNotifyClient;
+static UniversalTelegramBot wakeNotifyBot(BOT_TOKEN, wakeNotifyClient);
 
-bool wakePending = false;
-unsigned long wakeStartMs = 0;
-unsigned long lastWakeCheck = 0;
-String wakeChatId = "";
-String wakeDeviceName = "";
-String wakeDeviceIp = "";
-int wakeDeviceProbePort = 0;
-bool wakeNotifyPending = false;
-String wakeNotifyChatId = "";
-String wakeNotifyMessage = "";
-const unsigned long WAKE_TIMEOUT_MS = 90000;
-const unsigned long WAKE_RETRY_MS = 3000;
+static bool wakePending = false;
+static unsigned long wakeStartMs = 0;
+static unsigned long lastWakeCheck = 0;
+static String wakeChatId = "";
+static String wakeDeviceName = "";
+static String wakeDeviceIp = "";
+static int wakeDeviceProbePort = 0;
+static bool wakeNotifyPending = false;
+static String wakeNotifyChatId = "";
+static String wakeNotifyMessage = "";
+static bool wakeNotifyReady = false;
+
+static const unsigned long WAKE_TIMEOUT_MS = 90000;
+static const unsigned long WAKE_RETRY_MS = 3000;
 
 static void wake_clear_locked() {
   wakePending = false;
@@ -36,131 +34,59 @@ static void wake_clear_locked() {
   lastWakeCheck = 0;
 }
 
+static void wake_ensure_notify_ready() {
+  if (wakeNotifyReady) return;
+  wakeNotifyClient.setInsecure();
+  wakeNotifyReady = true;
+}
+
 static void wake_queue_notification_locked(const String& chatId, const String& message) {
   wakeNotifyPending = true;
   wakeNotifyChatId = chatId;
   wakeNotifyMessage = message;
-  if (wakeNotifySignal) {
-    xSemaphoreGive(wakeNotifySignal);
-  }
 }
 
-static void wake_notify_task(void*) {
-  for (;;) {
-    if (!wakeNotifySignal) {
-      vTaskDelay(pdMS_TO_TICKS(250));
-      continue;
-    }
+void wake_poll() {
+  if (!wakePending && !wakeNotifyPending) return;
+  wake_ensure_notify_ready();
 
-    if (xSemaphoreTake(wakeNotifySignal, pdMS_TO_TICKS(250)) != pdTRUE) {
-      continue;
-    }
-
-    String chatId;
-    String message;
-    bool pending = false;
-
-    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-      pending = wakeNotifyPending;
-      if (pending) {
-        chatId = wakeNotifyChatId;
-        message = wakeNotifyMessage;
-        wakeNotifyPending = false;
-        wakeNotifyChatId = "";
-        wakeNotifyMessage = "";
-      }
-      xSemaphoreGive(wakeMutex);
-    }
-
-    if (!pending) {
-      continue;
-    }
-
-    bool sent = wakeNotifyBot.sendMessage(chatId, message, "");
-    Serial.printf("[wake] notify send chat=%s %s\n", chatId.c_str(), sent ? "ok" : "fail");
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
   }
-}
 
-static void wake_task(void*) {
-  for (;;) {
-    String chatId;
-    String deviceName;
-    String ip;
-    int probePort = 0;
-    unsigned long startMs = 0;
-    unsigned long lastCheckMs = 0;
-    bool pending = false;
-
-    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-      pending = wakePending;
-      chatId = wakeChatId;
-      deviceName = wakeDeviceName;
-      ip = wakeDeviceIp;
-      probePort = wakeDeviceProbePort;
-      startMs = wakeStartMs;
-      lastCheckMs = lastWakeCheck;
-      xSemaphoreGive(wakeMutex);
+  if (wakeNotifyPending) {
+    bool sent = wakeNotifyBot.sendMessage(wakeNotifyChatId, wakeNotifyMessage, "");
+    Serial.printf("[wake] notify send chat=%s %s\n", wakeNotifyChatId.c_str(), sent ? "ok" : "fail");
+    if (sent) {
+      wakeNotifyPending = false;
+      wakeNotifyChatId = "";
+      wakeNotifyMessage = "";
     }
-
-    if (!pending) {
-      vTaskDelay(pdMS_TO_TICKS(250));
-      continue;
-    }
-
-    if (millis() - lastCheckMs < WAKE_RETRY_MS) {
-      vTaskDelay(pdMS_TO_TICKS(250));
-      continue;
-    }
-
-    if (wake_is_pc_reachable(ip, probePort)) {
-      String message = "🖥 " + deviceName + " is now online! (took "
-                     + String((millis() - startMs) / 1000) + "s)";
-      if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-        wake_queue_notification_locked(chatId, message);
-        wake_clear_locked();
-        xSemaphoreGive(wakeMutex);
-      }
-      Serial.printf("[wake] queued online target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-      continue;
-    }
-
-    if (millis() - startMs >= WAKE_TIMEOUT_MS) {
-      String message = "⚠️ " + deviceName + " did not wake within "
-                     + String(WAKE_TIMEOUT_MS / 1000)
-                     + "s. Check BIOS WoL settings.";
-      if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-        wake_queue_notification_locked(chatId, message);
-        wake_clear_locked();
-        xSemaphoreGive(wakeMutex);
-      }
-      Serial.printf("[wake] queued timeout target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-      continue;
-    }
-
-    if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-      lastWakeCheck = millis();
-      xSemaphoreGive(wakeMutex);
-    }
-    vTaskDelay(pdMS_TO_TICKS(250));
+    return;
   }
-}
 
-static void wake_ensure_task() {
-  if (wakeMutex == nullptr) {
-    wakeMutex = xSemaphoreCreateMutex();
+  if (millis() - lastWakeCheck < WAKE_RETRY_MS) {
+    return;
   }
-  if (wakeNotifySignal == nullptr) {
-    wakeNotifySignal = xSemaphoreCreateBinary();
+
+  if (wake_is_pc_reachable(wakeDeviceIp, wakeDeviceProbePort)) {
+    String message = "🖥 " + wakeDeviceName + " is now online! (took "
+                   + String((millis() - wakeStartMs) / 1000) + "s)";
+    wake_queue_notification_locked(wakeChatId, message);
+    wake_clear_locked();
+    return;
   }
-  if (wakeNotifyTaskHandle == nullptr) {
-    wakeNotifyClient.setInsecure();
-    xTaskCreatePinnedToCore(wake_notify_task, "wake_notify_task", 4096, nullptr, 1, &wakeNotifyTaskHandle, 1);
-    Serial.println("[wake] notify task started");
+
+  if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
+    String message = "⚠️ " + wakeDeviceName + " did not wake within "
+                   + String(WAKE_TIMEOUT_MS / 1000)
+                   + "s. Check BIOS WoL settings.";
+    wake_queue_notification_locked(wakeChatId, message);
+    wake_clear_locked();
+    return;
   }
-  if (wakeTaskHandle == nullptr) {
-    xTaskCreatePinnedToCore(wake_task, "wake_task", 4096, nullptr, 1, &wakeTaskHandle, 1);
-    Serial.println("[wake] async task started");
-  }
+
+  lastWakeCheck = millis();
 }
 
 void wake_send_magic(const String& mac, const String& bcast, int port) {
@@ -180,7 +106,6 @@ void wake_send_magic(const String& mac, const String& bcast, int port) {
                  + bcast + ":" + String(port));
 }
 
-// ponytail: TCP probe instead of ICMP ping — swap if PC firewall blocks TCP
 bool wake_is_pc_reachable(const String& ip, int port) {
   WiFiClient probe;
   uint32_t start = millis();
@@ -196,26 +121,15 @@ bool wake_is_pc_reachable(const String& ip, int port) {
 }
 
 void wake_start_polling(String chatId, const String& deviceName, const String& ip, int probePort) {
-  wake_ensure_task();
-  if (wakeMutex && xSemaphoreTake(wakeMutex, portMAX_DELAY) == pdTRUE) {
-    wakePending = true;
-    wakeStartMs = millis();
-    lastWakeCheck = millis();
-    wakeChatId = chatId;
-    wakeDeviceName = deviceName;
-    wakeDeviceIp = ip;
-    wakeDeviceProbePort = probePort;
-    xSemaphoreGive(wakeMutex);
-  }
-  Serial.printf("[wake] async pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-}
-
-unsigned long wake_elapsed_seconds() {
-  return (millis() - wakeStartMs) / 1000;
-}
-
-String wake_chat_id() {
-  return wakeChatId;
+  wake_ensure_notify_ready();
+  wakePending = true;
+  wakeStartMs = millis();
+  lastWakeCheck = millis();
+  wakeChatId = chatId;
+  wakeDeviceName = deviceName;
+  wakeDeviceIp = ip;
+  wakeDeviceProbePort = probePort;
+  Serial.printf("[wake] pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
 }
 
 unsigned long wake_timeout_seconds() {

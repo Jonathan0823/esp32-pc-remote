@@ -6,6 +6,5 @@
 void log_init();
 void log_event(const char* level, const char* component, const char* event, const char* msg);
 void log_heartbeat(const String& targetName);
-void log_flush();
 
 #endif

@@ -58,7 +58,7 @@ void loop() {
   wifi_ensure();
   log_heartbeat(device_active_name());
   if (WiFi.status() == WL_CONNECTED) {
+    wake_poll();
     telegram_poll();
-    log_flush();
   }
 }
