@@ -16,7 +16,8 @@ Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
-const unsigned long POLL_MS = 500;
+static const unsigned long TELEGRAM_LONG_POLL_SECONDS = 60;
+static const unsigned long POLL_MS = TELEGRAM_LONG_POLL_SECONDS * 1000UL;
 
 // Diagnostic trackers
 static unsigned long lastPollOkMs = 0;
@@ -27,7 +28,7 @@ static bool pollFailAlerted = false;
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
-  bot.longPoll = 30;
+  bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
@@ -138,7 +139,7 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    bot.longPoll = 30;
+    bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
