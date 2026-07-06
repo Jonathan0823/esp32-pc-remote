@@ -17,7 +17,8 @@ long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 static const unsigned long TELEGRAM_LONG_POLL_SECONDS = 60;
-static const unsigned long POLL_MS = TELEGRAM_LONG_POLL_SECONDS * 1000UL;
+// Retry cadence only; getUpdates() itself blocks for TELEGRAM_LONG_POLL_SECONDS.
+static const unsigned long POLL_MS = 1000;
 
 // Diagnostic trackers
 static unsigned long lastPollOkMs = 0;

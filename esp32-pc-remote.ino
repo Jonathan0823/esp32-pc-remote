@@ -57,9 +57,22 @@ void setup() {
     log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
   }
 
-  esp_task_wdt_config_t wdtConfig = {60000, 0, true};
-  esp_task_wdt_init(&wdtConfig);
-  esp_task_wdt_add(NULL);
+  esp_err_t wdtStatus = esp_task_wdt_status(NULL);
+  if (wdtStatus == ESP_ERR_INVALID_STATE) {
+    esp_task_wdt_config_t wdtConfig = {60000, 0, true};
+    esp_err_t err = esp_task_wdt_init(&wdtConfig);
+    Serial.printf("[wdt] init err=%d\n", err);
+    wdtStatus = err;
+  } else if (wdtStatus == ESP_OK) {
+    Serial.println("[wdt] current task already subscribed");
+  } else {
+    Serial.printf("[wdt] status err=%d\n", wdtStatus);
+  }
+
+  if (wdtStatus == ESP_ERR_NOT_FOUND) {
+    esp_err_t err = esp_task_wdt_add(NULL);
+    Serial.printf("[wdt] add err=%d\n", err);
+  }
 }
 
 void loop() {
