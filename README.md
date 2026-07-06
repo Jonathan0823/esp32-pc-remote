@@ -1,97 +1,86 @@
 # esp32-pc-remote
 
-ESP32 Telegram bot for remote PC control.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![ESP32](https://img.shields.io/badge/Board-ESP32-green)](https://www.espressif.com/)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-0088cc)](https://core.telegram.org/bots)
 
-Wake a home PC, check whether it is online, and reboot the ESP32 from Telegram.
+Wake your PC from anywhere — no static IP, no port forwarding, no cloud subscription.
 
-## What it does
-- Confirm before sending Wake-on-LAN to the selected PC
-- Check whether the PC is online via TCP probe
-- Report ESP32 health over Telegram
-- Recover the ESP32 from Telegram with `/reboot`
-- Recover from Wi‑Fi drops with backoff + hard STA restart
-- Send uptime-focused diagnostics and alert logs to Grafana Cloud (optional)
+Just an ESP32, a Telegram bot, and a WiFi connection. Send `/wakeconfirm mypc`, the ESP32 sends a Wake-on-LAN magic packet on your LAN.
 
-## Commands
-- `/start` or `/help` — show the menu and current target
-- `/ping` — ESP32 diagnostics (including reset reason, poll health)
-- `/status` — ESP32 health + target PC status
-- `/wake` — ask for confirmation before waking the active target
-- `/wakeconfirm <name>` — confirm and send WoL to the active target
-- `/reboot` — restart the ESP32
+## Quickstart
 
-## Requirements
-- ESP32 board support in Arduino CLI
-- `UniversalTelegramBot` library
-- A Telegram bot token
-- A PC with WoL enabled
-- A TCP port on the PC that the ESP32 can probe for online status
-
-## Setup
-1. Copy `config.example.h` to `config.h`
-2. Fill in Wi‑Fi, Telegram, and PC values
-3. Build and upload:
-   ```bash
-   arduino-cli compile --fqbn esp32:esp32:esp32 .
-   arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
-   ```
-
-## Configuration
-`config.h` is ignored by git. Keep your real Wi‑Fi password and bot token there.
-
-The firmware is intentionally single-target right now.
-
-## Grafana Cloud logging (optional)
-The ESP can push event logs directly to Grafana Cloud Loki for diagnostics and dashboards.
-
-1. Create a **free Grafana Cloud** account at https://grafana.com
-2. Get your **Logs** instance URL, username, and API key
-3. Fill in `config.h`:
-   ```c
-   #define GRAFANA_LOGS_URL   "https://<instance>.grafana.net"
-   #define GRAFANA_LOGS_USER  "<logs-instance-id>"
-   #define GRAFANA_LOGS_TOKEN "<grafana-cloud-api-token>"
-   ```
-4. Leave them blank to skip cloud logging entirely.
-
-What gets logged:
-- Boot / reset reason
-- Wi‑Fi connect / reconnect / disconnect
-- Heartbeat every 60s while healthy
-- Telegram poll failures after a short streak
-- Telegram poll recovery after an outage
-
-Log format:
-```json
-{"level":"info","component":"boot","event":"start","msg":"ESP32 PC Remote started","uptime_s":0,"heap":48320,"rssi":-56,"ip":"192.168.1.100"}
+```bash
+cp config.example.h config.h   # fill in WiFi + bot token + PC MAC
+arduino-cli compile --fqbn esp32:esp32:esp32 .
+arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
 ```
 
-Logs arrive in a single Loki stream labeled `{app="esp32-pc-remote"}`.
-This is intentionally sparse so Grafana stays useful for alerts and uptime, not every command.
+Send `/help` to your bot. That's it.
 
-Suggested alert thresholds:
-- Heartbeat missing for 2–3 minutes
-- Wi‑Fi lost for more than 1 minute
-- Telegram poll fail streak >= 3
-- Reset reason = brownout or panic
+## What it does
 
-## /ping diagnostics
-- 📡 RSSI
-- 🌐 IP address
-- ⏱ Uptime
-- 💾 Free heap
-- 🔄 Last reset reason (brownout, poweron, panic, etc.)
-- 📬 Time since last successful Telegram poll
-- ⚠️ Telegram poll failure count
+- **Wake your PC** from Telegram with confirmation (`/wake` → `/wakeconfirm <name>`)
+- **Check if it's online** via TCP probe (`/status`)
+- **Diagnose the ESP32** — reset reason, heap, WiFi RSSI, poll health (`/ping`)
+- **Auto-recover** — watchdog reboots on hang, WiFi reconnects with backoff
+- **Grafana Cloud logging** (optional) — uptime + alert-only events
 
-Tip: check `/ping` first when the ESP seems offline — it shows whether the ESP crashed, had a brownout, or lost Wi‑Fi.
-If Wi‑Fi is flaky, the firmware now retries with backoff.
+## Commands
 
-## Public release checklist
-- Do not commit `config.h`
-- Rotate the Telegram bot token if it was ever shared outside your machine
-- Keep private network details out of screenshots, logs, and issues
-- Review `.gitignore` before adding new local files
+| Command | What it does |
+|---------|-------------|
+| `/help` or `/start` | Show menu |
+| `/ping` | ESP32 health: reset reason, heap, RSSI, poll stats |
+| `/status` | ESP32 health + target PC online status |
+| `/wake` | Ask for wake confirmation |
+| `/wakeconfirm <name>` | Confirm and send WoL |
+| `/reboot` | Reboot the ESP32 |
+
+See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting your token.
+
+## Requirements
+
+- Any ESP32 board
+- [Arduino CLI](https://arduino.github.io/arduino-cli/) with `esp32:esp32` core
+- `UniversalTelegramBot` library
+- A PC with Wake-on-LAN enabled in BIOS
+- A TCP port on the PC for online probing (e.g. 47989 for Moonlight)
+
+## Troubleshooting
+
+**PC won't wake**
+- Verify WoL is enabled in BIOS and OS (check your NIC driver settings)
+- Send WoL from another tool first — if it works there, the ESP32 config is wrong
+
+**ESP32 keeps rebooting**
+- Check `/ping` for the reset reason
+- `task_wdt` = main loop hung (watchdog saved you)
+- `brownout` = power supply too weak
+
+**Bot doesn't respond**
+- Check WiFi: does `/ping` show an IP?
+- Check the bot token in `config.h`
+
+## Grafana Cloud logging (optional)
+
+Push boot, WiFi, and watchdog events to Grafana Cloud Loki.
+
+1. Create a free [Grafana Cloud](https://grafana.com) account
+2. Fill `GRAFANA_LOGS_URL`, `GRAFANA_LOGS_USER`, `GRAFANA_LOGS_TOKEN` in `config.h`
+3. Leave blank to skip
+
+Logs go to stream `{app="esp32-pc-remote"}`. Only critical state changes are sent — no command noise.  
+[Detailed setup →](docs/grafana.md)
+
+## Contributing
+
+Issues and PRs welcome. Keep `config.h` out of commits. See [CONTRIBUTING](CONTRIBUTING.md).
 
 ## License
+
 MIT
+
+---
+
+If this is useful, [star the repo](https://github.com/Jonathan0823/esp32-pc-remote) ⭐

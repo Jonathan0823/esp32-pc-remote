@@ -15,6 +15,7 @@
 
 #include <WiFi.h>
 #include <esp_system.h>
+#include <esp_task_wdt.h>
 #include "config.h"
 #include "src/services/wifi_service.h"
 #include "src/services/telegram_service.h"
@@ -52,13 +53,25 @@ void setup() {
   wifi_connect();
   telegram_setup();
   log_init();
+
+  // log once if previous run was watchdog-triggered (WiFi is up after wifi_connect)
+  if (esp_reset_reason() == ESP_RST_TASK_WDT) {
+    log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
+  }
+
+  esp_task_wdt_config_t wdtConfig = {60000, 0, true};
+  esp_task_wdt_init(&wdtConfig);
+  esp_task_wdt_add(NULL);
 }
 
 void loop() {
   wifi_ensure();
   log_heartbeat(device_active_name());
+
   if (WiFi.status() == WL_CONNECTED) {
     wake_poll();
     telegram_poll();
   }
+
+  esp_task_wdt_reset();
 }
