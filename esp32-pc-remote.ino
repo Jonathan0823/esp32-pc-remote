@@ -20,8 +20,9 @@
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
 #include "src/services/device_service.h"
+#include "src/services/log_service.h"
 
-static const char* reset_reason_label(esp_reset_reason_t reason) {
+const char* reset_reason_label(esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_POWERON: return "poweron";
     case ESP_RST_EXT: return "external";
@@ -37,20 +38,27 @@ static const char* reset_reason_label(esp_reset_reason_t reason) {
   }
 }
 
+const char* current_reset_reason() {
+  return reset_reason_label(esp_reset_reason());
+}
+
 void setup() {
   Serial.begin(115200);
   delay(50);
-  Serial.println("\n=== ESP32 Telegram Bot ===");
-  Serial.printf("[boot] reset=%s heap=%u\n", reset_reason_label(esp_reset_reason()), ESP.getFreeHeap());
+  Serial.println("\n=== ESP32 PC Remote ===");
+  Serial.printf("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
   device_init();
   Serial.printf("[boot] target=%s\n", device_active_name().c_str());
   wifi_connect();
   telegram_setup();
+  log_init();
 }
 
 void loop() {
   wifi_ensure();
+  log_heartbeat(device_active_name());
   if (WiFi.status() == WL_CONNECTED) {
+    wake_poll();
     telegram_poll();
   }
 }

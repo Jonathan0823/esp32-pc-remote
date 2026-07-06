@@ -13,12 +13,7 @@ struct Device {
 };
 
 void device_init();
-int device_count();
-const Device& device_get(int index);
 const Device& device_get_active();
-int device_active_index();
 String device_active_name();
-int device_find(const String& name);
-bool device_set_active(int index);
 
 #endif
