@@ -136,6 +136,8 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
+    // ponytail: reset longPoll so sendMessage/sendInline use short timeout
+    bot.longPoll = 0;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
