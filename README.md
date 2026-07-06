@@ -6,7 +6,7 @@
 
 Wake your PC from anywhere — no static IP, no port forwarding, no cloud subscription.
 
-Just an ESP32, a Telegram bot, and a WiFi connection. Send `/wakeconfirm mypc`, the ESP32 sends a Wake-on-LAN magic packet on your LAN.
+Just an ESP32, a Telegram bot, and a WiFi connection. Send `/wake`, the ESP32 sends a Wake-on-LAN magic packet on your LAN.
 
 ## Quickstart
 
@@ -34,7 +34,6 @@ Send `/help` to your bot. That's it.
 | `/ping` | ESP32 health: reset reason, heap, RSSI, poll stats |
 | `/status` | ESP32 health + target PC online status |
 | `/wake` | Ask for wake confirmation |
-| `/wakeconfirm <name>` | Confirm and send WoL |
 | `/reboot` | Reboot the ESP32 |
 
 See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting your token.
