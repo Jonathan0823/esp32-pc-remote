@@ -59,7 +59,8 @@ void setup() {
 
   esp_err_t wdtStatus = esp_task_wdt_status(NULL);
   if (wdtStatus == ESP_ERR_INVALID_STATE) {
-    esp_task_wdt_config_t wdtConfig = {60000, 0, true};
+    // ponytail: Telegram long-poll blocks the loop task for ~60s
+    esp_task_wdt_config_t wdtConfig = {120000, 0, true};
     esp_err_t err = esp_task_wdt_init(&wdtConfig);
     Serial.printf("[wdt] init err=%d\n", err);
     wdtStatus = err;
