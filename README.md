@@ -44,7 +44,7 @@ See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting 
 - Any ESP32 board
 - [Arduino CLI](https://arduino.github.io/arduino-cli/) with `esp32:esp32` core
 - `UniversalTelegramBot` library
-- A PC with Wake-on-LAN enabled in BIOS
+- A PC with [Wake-on-LAN configured](docs/wake-on-lan.md) (BIOS + OS + NIC)
 - A TCP port on the PC for online probing (e.g. 47989 for Moonlight)
 
 ## Troubleshooting
