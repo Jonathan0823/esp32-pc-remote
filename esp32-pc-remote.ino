@@ -56,6 +56,7 @@ void setup() {
 
 void loop() {
   wifi_ensure();
+  log_heartbeat(device_active_name());
   if (WiFi.status() == WL_CONNECTED) {
     telegram_poll();
     log_flush();

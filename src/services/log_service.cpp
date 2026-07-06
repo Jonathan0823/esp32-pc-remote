@@ -16,6 +16,8 @@ static const unsigned long FLUSH_INTERVAL_MS = 30000;  // flush every 30s
 
 static WiFiClientSecure logClient;
 static bool grafanaConfigured = false;
+static unsigned long lastHeartbeatMs = 0;
+const unsigned long HEARTBEAT_MS = 60000;
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -89,6 +91,15 @@ void log_event(const char* level, const char* component,
   int writePos = (logHead + logCount) % MAX_LOG_ENTRIES;
   logBuffer[writePos] = entry;
   logCount++;
+}
+
+void log_heartbeat(const String& targetName) {
+  if (!grafanaConfigured) return;
+  if (millis() - lastHeartbeatMs < HEARTBEAT_MS) return;
+  lastHeartbeatMs = millis();
+
+  String msg = "alive target=" + targetName;
+  log_event("info", "heartbeat", "tick", msg.c_str());
 }
 
 // ── Flush pending log entries to Grafana Cloud Loki ────────────────────
