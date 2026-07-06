@@ -42,8 +42,7 @@ static String menuText() {
   msg += "/start /help — Show this menu\n";
   msg += "/ping — Check bot health & diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
-  msg += "/wake — Ask for confirmation to wake the selected PC\n";
-  msg += "/wakeconfirm <name> — Confirm and send WoL\n";
+  msg += "/wake — Wake the selected PC (inline confirmation)\n";
   msg += "/reboot — Restart the ESP32\n\n";
   msg += "Current target: ";
   msg += PC_NAME;
@@ -98,31 +97,12 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/wake") {
-    bot.sendMessage(chatId, "⚠️ Confirm wake for " + String(PC_NAME) + "\n\n"
-                    "Send /wakeconfirm " + String(PC_NAME) + " to send the WoL packet.", "");
-    return;
-  }
-
-  if (cmd == "/wakeconfirm") {
-    String name = (sp >= 0) ? text.substring(sp + 1) : "";
-    name.trim();
-    if (name.length() == 0) {
-      bot.sendMessage(chatId, "Usage: /wakeconfirm <name>\n\n"
-                      "Current target: " + String(PC_NAME), "");
-      return;
-    }
-
-    if (name != PC_NAME) {
-      bot.sendMessage(chatId, "❌ Confirmation mismatch: " + name + "\n\n"
-                      "Current target: " + String(PC_NAME) + "\n"
-                      "Send /wakeconfirm " + String(PC_NAME) + " to confirm.", "");
-      return;
-    }
-
-    wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
-    wake_start_polling(chatId, PC_NAME, PC_IP, PC_TCP_PORT);
-    bot.sendMessage(chatId, "⚡ Wake signal sent to " + String(PC_NAME)
-                    + " — waiting up to 90s for PC to respond...", "");
+    String keyboard = "{\"inline_keyboard\":[["
+      "{\"text\":\"✅ Yes\",\"callback_data\":\"wake_confirm\"},"
+      "{\"text\":\"❌ No\",\"callback_data\":\"wake_cancel\"}"
+      "]]}";
+    bot.sendMessageWithInlineKeyboard(chatId,
+      "Wake " + String(PC_NAME) + "?", "", keyboard);
     return;
   }
 
@@ -134,6 +114,18 @@ static void handleCommand(String chatId, String text) {
 
   // unknown command — show help hint
   bot.sendMessage(chatId, "Unknown command. Type /help for available commands.", "");
+}
+
+static void handleCallback(const telegramMessage& msg) {
+  if (msg.text == "wake_confirm") {
+    bot.answerCallbackQuery(msg.query_id, "", false, "", 0);
+    wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+    wake_start_polling(msg.chat_id, PC_NAME, PC_IP, PC_TCP_PORT);
+    bot.sendMessage(msg.chat_id, "⚡ Wake signal sent to " + String(PC_NAME)
+                    + " — waiting up to 90s for PC to respond...", "");
+  } else if (msg.text == "wake_cancel") {
+    bot.answerCallbackQuery(msg.query_id, "Cancelled", false, "", 0);
+  }
 }
 
 void telegram_poll() {
@@ -168,8 +160,12 @@ void telegram_poll() {
     }
 
     for (int i = 0; i < newCount; i++) {
-      handleCommand(String(bot.messages[i].chat_id),
-                    String(bot.messages[i].text));
+      if (bot.messages[i].type == "callback_query") {
+        handleCallback(bot.messages[i]);
+      } else {
+        handleCommand(String(bot.messages[i].chat_id),
+                      String(bot.messages[i].text));
+      }
     }
     if (newCount > 0) {
       telegramOffset = bot.last_message_received + 1;
