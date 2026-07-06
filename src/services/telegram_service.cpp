@@ -22,6 +22,8 @@ const unsigned long POLL_MS = 500;
 // Diagnostic trackers
 static unsigned long lastPollOkMs = 0;
 static int pollFailCount = 0;
+static int pollFailStreak = 0;
+static bool pollFailAlerted = false;
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
@@ -60,7 +62,6 @@ static void handleCommand(String chatId, String text) {
 
   if (cmd == "/start" || cmd == "/help") {
     bot.sendMessage(chatId, menuText(), "Markdown");
-    log_event("info", "telegram", "cmd_help", "Help shown");
     return;
   }
 
@@ -78,7 +79,6 @@ static void handleCommand(String chatId, String text) {
                                    : "never") + "\n";
     msg += "⚠️ Poll fails: " + String(pollFailCount);
     bot.sendMessage(chatId, msg, "");
-    log_event("info", "telegram", "cmd_ping", "Ping replied");
     return;
   }
 
@@ -97,8 +97,6 @@ static void handleCommand(String chatId, String text) {
     msg += "   IP: " + dev.ip + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
-    log_event("info", "telegram", "cmd_status",
-              String("Status: " + String(reachable ? "online" : "offline")).c_str());
     return;
   }
 
@@ -106,8 +104,6 @@ static void handleCommand(String chatId, String text) {
     Device dev = device_get_active();
     bot.sendMessage(chatId, "⚠️ Confirm wake for " + dev.name + "\n\n"
                     "Send /wakeconfirm " + dev.name + " to send the WoL packet.", "");
-    log_event("info", "wake", "confirm_prompt",
-              String("Prompted confirm for " + dev.name).c_str());
     return;
   }
 
@@ -134,8 +130,6 @@ static void handleCommand(String chatId, String text) {
     bot.sendMessage(chatId, "⚡ Wake signal sent to " + dev.name
                     + " — waiting up to " + String(wake_timeout_seconds())
                     + "s for PC to respond...", "");
-    log_event("info", "wake", "sent",
-              String("WoL sent to " + dev.name).c_str());
     return;
   }
 
@@ -163,8 +157,6 @@ static void handleCommand(String chatId, String text) {
     if (idx >= 0) {
       device_set_active(idx);
       bot.sendMessage(chatId, "✅ Target switched to " + name, "");
-      log_event("info", "telegram", "target_switch",
-                String("Target → " + name).c_str());
     } else {
       String msg = "❌ Unknown target: " + name + "\n\nAvailable: ";
       for (int i = 0; i < device_count(); i++) {
@@ -179,7 +171,6 @@ static void handleCommand(String chatId, String text) {
   if (cmd == "/reboot") {
     bot.sendMessage(chatId, "🔄 Rebooting ESP32...", "");
     telegramRebootPending = true;
-    log_event("warn", "telegram", "reboot", "User requested reboot");
     return;
   }
 
@@ -204,6 +195,11 @@ void telegram_poll() {
     if (newCount >= 0) {
       // Successful poll
       lastPollOkMs = millis();
+      if (pollFailStreak > 0) {
+        log_event("info", "telegram", "poll_recovered", "getUpdates recovered");
+      }
+      pollFailStreak = 0;
+      pollFailAlerted = false;
       if (newCount > 0) {
         // New messages received — process them
         for (int i = 0; i < newCount; i++) {
@@ -216,9 +212,14 @@ void telegram_poll() {
     } else {
       // Poll error
       pollFailCount++;
-      log_event("warn", "telegram", "poll_fail",
-                String("getUpdates failed count=" + String(pollFailCount) +
-                       " elapsed=" + String(elapsed) + "ms").c_str());
+      pollFailStreak++;
+      if (!pollFailAlerted && pollFailStreak >= 3) {
+        pollFailAlerted = true;
+        log_event("warn", "telegram", "poll_fail",
+                  String("getUpdates failing streak=" + String(pollFailStreak) +
+                         " total=" + String(pollFailCount) +
+                         " elapsed=" + String(elapsed) + "ms").c_str());
+      }
     }
 
     if (telegramRebootPending) {

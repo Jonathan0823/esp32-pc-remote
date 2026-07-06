@@ -4,7 +4,6 @@
 #include <UniversalTelegramBot.h>
 #include "config.h"
 #include "src/services/wake_service.h"
-#include "src/services/log_service.h"
 
 WiFiUDP wakeUdp;
 WiFiClientSecure wakeNotifyClient;
@@ -79,8 +78,6 @@ static void wake_notify_task(void*) {
 
     bool sent = wakeNotifyBot.sendMessage(chatId, message, "");
     Serial.printf("[wake] notify send chat=%s %s\n", chatId.c_str(), sent ? "ok" : "fail");
-    log_event(sent ? "info" : "warn", "wake", "notify",
-              String("Wake result sent=" + String(sent ? "ok" : "fail")).c_str());
   }
 }
 
@@ -124,9 +121,6 @@ static void wake_task(void*) {
         xSemaphoreGive(wakeMutex);
       }
       Serial.printf("[wake] queued online target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-      log_event("info", "wake", "online",
-                String(deviceName + " online in " +
-                       String((millis() - startMs) / 1000) + "s").c_str());
       continue;
     }
 
@@ -140,9 +134,6 @@ static void wake_task(void*) {
         xSemaphoreGive(wakeMutex);
       }
       Serial.printf("[wake] queued timeout target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
-      log_event("warn", "wake", "timeout",
-                String(deviceName + " wake timeout " +
-                       String(WAKE_TIMEOUT_MS / 1000) + "s").c_str());
       continue;
     }
 
@@ -187,8 +178,6 @@ void wake_send_magic(const String& mac, const String& bcast, int port) {
   wakeUdp.endPacket();
   Serial.println("WoL sent to " + mac + " via "
                  + bcast + ":" + String(port));
-  log_event("info", "wake", "magic_packet",
-            String("WoL to " + mac).c_str());
 }
 
 // ponytail: TCP probe instead of ICMP ping — swap if PC firewall blocks TCP
