@@ -1,9 +1,15 @@
 #include <WiFi.h>
 #include "config.h"
 #include "src/services/wifi_service.h"
+#include "src/services/log_service.h"
+
+static unsigned long lastReconnectAttempt = 0;
+static const unsigned long RECONNECT_INTERVAL_MS = 10000;
 
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(false);
   Serial.printf("[wifi] connect ssid=%s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();
@@ -20,12 +26,21 @@ void wifi_connect() {
                 millis() - start,
                 WiFi.localIP().toString().c_str(),
                 WiFi.RSSI());
+  log_event("info", "wifi", "connected", "WiFi connected");
 }
 
 void wifi_ensure() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.printf("[wifi] lost; reconnecting uptime=%lus\n", millis() / 1000);
-    WiFi.reconnect();
-    delay(250);
+  if (WiFi.status() == WL_CONNECTED) {
+    lastReconnectAttempt = 0;   // reset timer once reconnected
+    return;
   }
+
+  unsigned long now = millis();
+  if (lastReconnectAttempt != 0 && now - lastReconnectAttempt < RECONNECT_INTERVAL_MS) return;
+  lastReconnectAttempt = now;
+
+  Serial.printf("[wifi] lost; restarting STA connect uptime=%lus\n", now / 1000);
+  WiFi.disconnect();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  log_event("warn", "wifi", "reconnect", "WiFi lost, reconnecting");
 }

@@ -6,6 +6,10 @@
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
 #include "src/services/device_service.h"
+#include "src/services/log_service.h"
+
+// Declared in esp32-pc-remote.ino
+extern const char* current_reset_reason();
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOT_TOKEN, client);
@@ -14,6 +18,10 @@ long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 500;
+
+// Diagnostic trackers
+static unsigned long lastPollOkMs = 0;
+static int pollFailCount = 0;
 
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
@@ -52,6 +60,7 @@ static void handleCommand(String chatId, String text) {
 
   if (cmd == "/start" || cmd == "/help") {
     bot.sendMessage(chatId, menuText(), "Markdown");
+    log_event("info", "telegram", "cmd_help", "Help shown");
     return;
   }
 
@@ -62,8 +71,14 @@ static void handleCommand(String chatId, String text) {
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
-    msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free";
+    msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n";
+    msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
+    msg += "📬 Poll OK: " + String(lastPollOkMs > 0
+                                   ? String((millis() - lastPollOkMs) / 1000) + "s ago"
+                                   : "never") + "\n";
+    msg += "⚠️ Poll fails: " + String(pollFailCount);
     bot.sendMessage(chatId, msg, "");
+    log_event("info", "telegram", "cmd_ping", "Ping replied");
     return;
   }
 
@@ -82,6 +97,8 @@ static void handleCommand(String chatId, String text) {
     msg += "   IP: " + dev.ip + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     bot.sendMessage(chatId, msg, "");
+    log_event("info", "telegram", "cmd_status",
+              String("Status: " + String(reachable ? "online" : "offline")).c_str());
     return;
   }
 
@@ -89,6 +106,8 @@ static void handleCommand(String chatId, String text) {
     Device dev = device_get_active();
     bot.sendMessage(chatId, "⚠️ Confirm wake for " + dev.name + "\n\n"
                     "Send /wakeconfirm " + dev.name + " to send the WoL packet.", "");
+    log_event("info", "wake", "confirm_prompt",
+              String("Prompted confirm for " + dev.name).c_str());
     return;
   }
 
@@ -115,6 +134,8 @@ static void handleCommand(String chatId, String text) {
     bot.sendMessage(chatId, "⚡ Wake signal sent to " + dev.name
                     + " — waiting up to " + String(wake_timeout_seconds())
                     + "s for PC to respond...", "");
+    log_event("info", "wake", "sent",
+              String("WoL sent to " + dev.name).c_str());
     return;
   }
 
@@ -142,6 +163,8 @@ static void handleCommand(String chatId, String text) {
     if (idx >= 0) {
       device_set_active(idx);
       bot.sendMessage(chatId, "✅ Target switched to " + name, "");
+      log_event("info", "telegram", "target_switch",
+                String("Target → " + name).c_str());
     } else {
       String msg = "❌ Unknown target: " + name + "\n\nAvailable: ";
       for (int i = 0; i < device_count(); i++) {
@@ -156,6 +179,7 @@ static void handleCommand(String chatId, String text) {
   if (cmd == "/reboot") {
     bot.sendMessage(chatId, "🔄 Rebooting ESP32...", "");
     telegramRebootPending = true;
+    log_event("warn", "telegram", "reboot", "User requested reboot");
     return;
   }
 
@@ -171,18 +195,32 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
+    uint32_t elapsed = millis() - pollStart;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
-                  millis() - pollStart,
+                  elapsed,
                   bot.last_message_received + 1);
-    for (int i = 0; i < newCount; i++) {
-      handleCommand(String(bot.messages[i].chat_id),
-                    String(bot.messages[i].text));
+
+    if (newCount >= 0) {
+      // Successful poll
+      lastPollOkMs = millis();
+      if (newCount > 0) {
+        // New messages received — process them
+        for (int i = 0; i < newCount; i++) {
+          handleCommand(String(bot.messages[i].chat_id),
+                        String(bot.messages[i].text));
+        }
+        telegramOffset = bot.last_message_received + 1;
+        telegramPrefs.putLong("offset", telegramOffset);
+      }
+    } else {
+      // Poll error
+      pollFailCount++;
+      log_event("warn", "telegram", "poll_fail",
+                String("getUpdates failed count=" + String(pollFailCount) +
+                       " elapsed=" + String(elapsed) + "ms").c_str());
     }
-    if (newCount > 0) {
-      telegramOffset = bot.last_message_received + 1;
-      telegramPrefs.putLong("offset", telegramOffset);
-    }
+
     if (telegramRebootPending) {
       telegramPrefs.putLong("offset", telegramOffset);
       Serial.printf("[telegram] reboot pending; offset=%ld\n", telegramOffset);

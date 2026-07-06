@@ -14,3 +14,8 @@
 #define WOL_BCAST   "192.168.1.255"             // LAN broadcast address
 #define WOL_PORT    9                            // WoL port (usually 7 or 9)
 #define PC_TCP_PORT  47989                         // TCP port for /status probe
+
+// Grafana Cloud Loki (optional — leave blank to skip cloud logging)
+#define GRAFANA_LOGS_URL   ""                                 // e.g. "https://<instance>.grafana.net"
+#define GRAFANA_LOGS_USER  ""                                 // Logs instance ID (username)
+#define GRAFANA_LOGS_TOKEN ""                                 // Grafana Cloud API token (password)
