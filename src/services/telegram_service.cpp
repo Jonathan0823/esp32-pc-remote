@@ -110,6 +110,7 @@ static void handleCommand(String chatId, String text) {
     no["text"] = "❌ No";
     no["callback_data"] = "wake_cancel";
     bot.sendPostToTelegram(bot.buildCommand("sendMessage"), payload.as<JsonObject>());
+    client.stop();
     return;
   }
 
