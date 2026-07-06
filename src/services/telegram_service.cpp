@@ -129,7 +129,9 @@ static void handleCallback(const telegramMessage& msg) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    bot.longPoll = 60;
+    // ponytail: while wake is pending, use 5s polls so wake detection
+    // isn't delayed by the 60s long-poll
+    bot.longPoll = wake_is_pending() ? 5 : 60;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,

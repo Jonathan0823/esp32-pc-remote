@@ -29,6 +29,10 @@ static void wake_clear() {
   lastWakeCheck = 0;
 }
 
+bool wake_is_pending() {
+  return wakePending;
+}
+
 void wake_poll() {
   if (!wakePending) return;
   if (WiFi.status() != WL_CONNECTED) return;

@@ -71,8 +71,8 @@ void loop() {
   log_heartbeat(PC_NAME);
 
   if (WiFi.status() == WL_CONNECTED) {
-    telegram_poll();
     wake_poll();
+    telegram_poll();
   }
 
   esp_task_wdt_reset();
