@@ -33,7 +33,8 @@ static String menuText() {
   msg += "/start /help — Show this menu\n";
   msg += "/ping — Check bot health & diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
-  msg += "/wake — Wake the selected PC\n";
+  msg += "/wake — Ask for confirmation to wake the selected PC\n";
+  msg += "/wakeconfirm <name> — Confirm and send WoL\n";
   msg += "/devices — List known machines\n";
   msg += "/target <name> — Switch active PC\n";
   msg += "/reboot — Restart the ESP32\n\n";
@@ -85,6 +86,29 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/wake") {
+    Device dev = device_get_active();
+    bot.sendMessage(chatId, "⚠️ Confirm wake for " + dev.name + "\n\n"
+                    "Send /wakeconfirm " + dev.name + " to send the WoL packet.", "");
+    return;
+  }
+
+  if (cmd == "/wakeconfirm") {
+    String name = (sp >= 0) ? text.substring(sp + 1) : "";
+    name.trim();
+    if (name.length() == 0) {
+      bot.sendMessage(chatId, "Usage: /wakeconfirm <name>\n\n"
+                      "Current target: " + device_active_name(), "");
+      return;
+    }
+
+    String activeName = device_active_name();
+    if (name != activeName) {
+      bot.sendMessage(chatId, "❌ Confirmation mismatch: " + name + "\n\n"
+                      "Current target: " + activeName + "\n"
+                      "Send /wakeconfirm " + activeName + " to confirm.", "");
+      return;
+    }
+
     Device dev = device_get_active();
     wake_send_magic(dev.mac, dev.bcast, dev.wolPort);
     wake_start_polling(chatId, dev.name, dev.ip, dev.probePort);

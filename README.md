@@ -2,8 +2,10 @@
 
 ESP32 Telegram bot for remote PC control.
 
+Wake a home PC, check whether it is online, switch between machines, and reboot the ESP32 from Telegram.
+
 ## What it does
-- Wake the selected PC with Wake-on-LAN
+- Confirm before sending Wake-on-LAN to the selected PC
 - Check whether the PC is online
 - Switch between target machines
 - Report ESP32 health over Telegram
@@ -13,7 +15,8 @@ ESP32 Telegram bot for remote PC control.
 - `/start` or `/help` — show the menu and current target
 - `/ping` — ESP32 diagnostics
 - `/status` — ESP32 health + target status
-- `/wake` — send WoL to the active target
+- `/wake` — ask for confirmation before waking the active target
+- `/wakeconfirm <name>` — confirm and send WoL to the active target
 - `/devices` — list known machines
 - `/target <name>` — switch active target
 - `/reboot` — restart the ESP32
