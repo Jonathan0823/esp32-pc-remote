@@ -16,19 +16,25 @@ void wifi_connect() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();
   uint32_t lastLog = start;
-  while (WiFi.status() != WL_CONNECTED) {
+  const unsigned long WIFI_TIMEOUT = 15000;
+  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT) {
     delay(500);
     if (millis() - lastLog >= 5000) {
-      Serial.printf("[wifi] waiting %lus\n", (millis() - start) / 1000);
+      Serial.printf("[wifi] waiting %lus status=%d\n", (millis() - start) / 1000, WiFi.status());
       lastLog = millis();
     }
     Serial.print(".");
   }
-  Serial.printf("\n[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
-                WiFi.localIP().toString().c_str(), WiFi.RSSI());
-  wifiWasConnected = true;
-  lastReconnectAttempt = 0;
-  log_event("info", "wifi", "connected", "WiFi connected");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("\n[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
+                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    wifiWasConnected = true;
+    lastReconnectAttempt = 0;
+    log_event("info", "wifi", "connected", "WiFi connected");
+  } else {
+    Serial.printf("\n[wifi] FAILED after %lums status=%d\n", millis() - start, WiFi.status());
+    log_event("warn", "wifi", "connect_fail", "WiFi failed to connect");
+  }
 }
 
 void wifi_ensure() {
