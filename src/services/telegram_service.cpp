@@ -16,10 +16,12 @@ Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
-// ponytail: Telegram API max timeout is 50; suibot uses 30.
-//           ISP/router proxies often time out ~30-45s on idle connections.
-static const unsigned long TELEGRAM_LONG_POLL_SECONDS = 30;
-static const unsigned long POLL_MS = 1000;
+// ponytail: ISP/router proxies drop idle HTTPS connections, so long-poll
+//           never delivers updates via the open connection.
+//           Use short polling (longPoll=0) instead — every poll returns
+//           immediately with any available updates.
+static const unsigned long TELEGRAM_LONG_POLL_SECONDS = 0;
+static const unsigned long POLL_MS = 1500;
 
 // Diagnostic trackers
 static unsigned long lastPollOkMs = 0;
@@ -49,9 +51,6 @@ void telegram_setup() {
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
-  // ponytail: warm up DNS + SSL so the first poll doesn't stall on cold connect
-  client.connect("api.telegram.org", 443, 3000);
-  client.stop();
   telegram_ensure_task();
   Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
                 bot.longPoll,
