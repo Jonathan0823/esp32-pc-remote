@@ -82,7 +82,6 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED) {
     wake_poll();
-    telegram_poll();
   }
 
   esp_task_wdt_reset();

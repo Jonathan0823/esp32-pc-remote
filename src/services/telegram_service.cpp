@@ -13,6 +13,8 @@ extern const char* current_reset_reason();
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOT_TOKEN, client);
+static WiFiClientSecure pollClient;
+static UniversalTelegramBot pollBot(BOT_TOKEN, pollClient);
 Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
@@ -26,6 +28,21 @@ static unsigned long lastPollOkMs = 0;
 static int pollFailCount = 0;
 static int pollFailStreak = 0;
 static bool pollFailAlerted = false;
+static TaskHandle_t telegramTaskHandle = nullptr;
+
+static void telegram_task(void*) {
+  for (;;) {
+    telegram_poll();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+static void telegram_ensure_task() {
+  if (telegramTaskHandle != nullptr) return;
+  xTaskCreatePinnedToCore(telegram_task, "telegram_task", 8192, nullptr, 1,
+                          &telegramTaskHandle, 1);
+  Serial.println("[telegram] async task started");
+}
 
 static int telegram_poll_updates(long offset) {
   WiFiClientSecure pollClient;
@@ -69,7 +86,7 @@ static int telegram_poll_updates(long offset) {
   }
 
   for (JsonObjectConst update : result) {
-    bot.last_message_received = update["update_id"] | bot.last_message_received;
+    pollBot.last_message_received = update["update_id"] | pollBot.last_message_received;
   }
 
   int newCount = 0;
@@ -79,7 +96,7 @@ static int telegram_poll_updates(long offset) {
     JsonObjectConst message = update["message"];
     if (message.isNull()) continue;
 
-    telegramMessage &msg = bot.messages[newCount];
+    telegramMessage &msg = pollBot.messages[newCount];
     msg.text = message["text"] | "";
     msg.chat_id = message["chat"]["id"].as<String>();
     msg.chat_title = message["chat"]["title"].as<String>();
@@ -100,10 +117,14 @@ static int telegram_poll_updates(long offset) {
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
+  pollClient.setInsecure();
   bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
   bot.waitForResponse = 250;
+  pollBot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
+  pollBot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
+  telegram_ensure_task();
   Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
                 bot.longPoll,
                 bot.waitForResponse,
@@ -211,17 +232,17 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    bot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
+    pollBot.longPoll = TELEGRAM_LONG_POLL_SECONDS;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
-                  bot.longPoll);
+                  pollBot.longPoll);
     int newCount = telegram_poll_updates(telegramOffset);
     uint32_t elapsed = millis() - pollStart;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   elapsed,
-                  bot.last_message_received + 1);
+                  pollBot.last_message_received + 1);
 
     if (newCount >= 0) {
       // Successful poll
@@ -234,10 +255,10 @@ void telegram_poll() {
       if (newCount > 0) {
         // New messages received — process them
         for (int i = 0; i < newCount; i++) {
-          handleCommand(String(bot.messages[i].chat_id),
-                        String(bot.messages[i].text));
+          handleCommand(String(pollBot.messages[i].chat_id),
+                        String(pollBot.messages[i].text));
         }
-        telegramOffset = bot.last_message_received + 1;
+        telegramOffset = pollBot.last_message_received + 1;
         telegramPrefs.putLong("offset", telegramOffset);
       }
     } else {
