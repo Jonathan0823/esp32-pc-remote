@@ -27,7 +27,7 @@ static bool pollFailAlerted = false;
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
-  bot.longPoll = 30;
+  bot.longPoll = 60;
   bot.waitForResponse = 250;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
@@ -138,7 +138,7 @@ static void handleCommand(String chatId, String text) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    bot.longPoll = 30;
+    bot.longPoll = 60;
     uint32_t pollStart = millis();
     Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
