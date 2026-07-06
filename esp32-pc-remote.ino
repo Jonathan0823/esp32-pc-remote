@@ -1,5 +1,5 @@
 /*
- * ESP32 Telegram Bot — suibot-home-tele-esp
+ * ESP32 Telegram Bot — esp32-pc-remote
  *
  * Dependencies (install via Arduino CLI):
  *   arduino-cli core install esp32:esp32

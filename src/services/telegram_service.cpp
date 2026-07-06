@@ -29,7 +29,7 @@ void telegram_setup() {
 }
 
 static String menuText() {
-  String msg = "🤖 *suibot commands*\n\n";
+  String msg = "🤖 *ESP32 PC Remote commands*\n\n";
   msg += "/start /help — Show this menu\n";
   msg += "/ping — Check bot health & diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";

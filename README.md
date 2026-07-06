@@ -1,4 +1,4 @@
-# suibot-home-tele-esp
+# esp32-pc-remote
 
 ESP32 Telegram bot for remote PC control.
 
