@@ -11,7 +11,7 @@ Wake a home PC, check whether it is online, switch between machines, and reboot 
 - Report ESP32 health over Telegram
 - Recover the ESP32 from Telegram with `/reboot`
 - Recover from Wi‑Fi drops with backoff + hard STA restart
-- Send diagnostics and event logs to Grafana Cloud (optional)
+- Send uptime-focused diagnostics and alert logs to Grafana Cloud (optional)
 
 ## Commands
 - `/start` or `/help` — show the menu and current target
@@ -60,11 +60,9 @@ The ESP can push event logs directly to Grafana Cloud Loki for diagnostics and d
 What gets logged:
 - Boot / reset reason
 - Wi‑Fi connect / reconnect / disconnect
-- Telegram poll failures
-- Wake-on-LAN events
-- Command usage
 - Heartbeat every 60s while healthy
-- Wi‑Fi reconnect / recovery attempts
+- Telegram poll failures after a short streak
+- Telegram poll recovery after an outage
 
 Log format:
 ```json
@@ -72,6 +70,13 @@ Log format:
 ```
 
 Logs arrive in a single Loki stream labeled `{app="esp32-pc-remote"}`.
+This is intentionally sparse so Grafana stays useful for alerts and uptime, not every command.
+
+Suggested alert thresholds:
+- Heartbeat missing for 2–3 minutes
+- Wi‑Fi lost for more than 1 minute
+- Telegram poll fail streak >= 3
+- Reset reason = brownout or panic
 
 ## /ping diagnostics
 - 📡 RSSI
