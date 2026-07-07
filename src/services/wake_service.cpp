@@ -16,6 +16,10 @@ static String wakeDeviceName = "";
 static String wakeDeviceIp = "";
 static int wakeDeviceProbePort = 0;
 
+static String lastWakeResult = "";
+static unsigned long lastWakeResultMs = 0;
+static unsigned long lastOnlineSeenMs = 0;
+
 static const unsigned long WAKE_TIMEOUT_MS = 90000;
 static const unsigned long WAKE_RETRY_MS = 3000;
 
@@ -39,20 +43,25 @@ void wake_poll() {
   if (millis() - lastWakeCheck < WAKE_RETRY_MS) return;
 
   if (wake_is_pc_reachable(wakeDeviceIp, wakeDeviceProbePort)) {
+    lastWakeResult = "success";
+    lastWakeResultMs = millis();
+    lastOnlineSeenMs = millis();
     bot.sendMessage(wakeChatId,
-                    "🖥 " + wakeDeviceName + " is now online! (took "
+                    "<b>" + wakeDeviceName + "</b> is online (took "
                     + String((millis() - wakeStartMs) / 1000) + "s)",
-                    "");
+                    "HTML");
     wake_clear();
     return;
   }
 
   if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
+    lastWakeResult = "timeout";
+    lastWakeResultMs = millis();
     bot.sendMessage(wakeChatId,
-                    "⚠️ " + wakeDeviceName + " did not wake within "
+                    "<b>" + wakeDeviceName + "</b> did not wake within "
                     + String(WAKE_TIMEOUT_MS / 1000)
                     + "s. Check BIOS WoL settings.",
-                    "");
+                    "HTML");
     wake_clear();
     return;
   }
@@ -102,4 +111,27 @@ void wake_start_polling(String chatId, const String& deviceName, const String& i
   wakeDeviceIp = ip;
   wakeDeviceProbePort = probePort;
   Serial.printf("[wake] pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
+}
+
+unsigned long wake_pending_elapsed_seconds() {
+  if (!wakePending) return 0;
+  return (millis() - wakeStartMs) / 1000;
+}
+
+String wake_last_result() {
+  return lastWakeResult;
+}
+
+unsigned long wake_last_result_age_seconds() {
+  if (lastWakeResultMs == 0) return 0;
+  return (millis() - lastWakeResultMs) / 1000;
+}
+
+unsigned long wake_last_online_age_seconds() {
+  if (lastOnlineSeenMs == 0) return 0;
+  return (millis() - lastOnlineSeenMs) / 1000;
+}
+
+void wake_mark_online_seen() {
+  lastOnlineSeenMs = millis();
 }
