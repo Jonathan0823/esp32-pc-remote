@@ -161,11 +161,8 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
-    // ponytail: close the socket after each poll; keep TLS state from going stale.
-    client.stop();
-    // Reset longPoll to 0 so sendMessage/sendPostToTelegram doesn't wait 15s.
+    // ponytail: reset longPoll after polling so sendMessage uses 250ms, not 60s.
     bot.longPoll = 0;
-    Serial.println("[telegram] client stopped, longPoll=0");
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
