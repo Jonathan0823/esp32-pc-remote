@@ -39,6 +39,11 @@ static void send_loki_line(const char* log_line) {
   String endpoint = String(GRAFANA_LOGS_URL) + "/loki/api/v1/push";
   if (!http.begin(logClient, endpoint)) return;
 
+  // ponytail: Grafana logging is best-effort; cap wait so it can't stall the bot.
+  logClient.setTimeout(2000);
+  http.setConnectTimeout(2000);
+  http.setTimeout(2000);
+  http.setReuse(false);
   http.setAuthorization(GRAFANA_LOGS_USER, GRAFANA_LOGS_TOKEN);
   http.addHeader("Content-Type", "application/json");
 
