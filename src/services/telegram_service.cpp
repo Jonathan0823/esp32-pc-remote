@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_task_wdt.h>
 #include <UniversalTelegramBot.h>
 #include <Preferences.h>
 #include "config.h"
@@ -149,6 +150,9 @@ static void handleCallback(const telegramMessage& msg) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
+    // Reset WDT before blocking getUpdates call (can block up to 60s).
+    esp_task_wdt_reset();
+
     // ponytail: while wake is pending, use 5s polls so wake detection
     // isn't delayed by the 60s long-poll
     bot.longPoll = wake_is_pending() ? 5 : 60;
@@ -159,7 +163,9 @@ void telegram_poll() {
     int newCount = bot.getUpdates(telegramOffset);
     // ponytail: close the socket after each poll; keep TLS state from going stale.
     client.stop();
-    Serial.println("[telegram] client stopped after getUpdates");
+    // Reset longPoll to 0 so sendMessage/sendPostToTelegram doesn't wait 15s.
+    bot.longPoll = 0;
+    Serial.println("[telegram] client stopped, longPoll=0");
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
