@@ -31,15 +31,24 @@ void telegram_setup() {
                 telegramOffset);
 }
 
+static String fmt_dur(unsigned long s) {
+  if (s == 0) return "0s";
+  if (s < 60) return String(s) + "s";
+  if (s < 3600) return String(s / 60) + "m " + String(s % 60) + "s";
+  if (s < 86400) return String(s / 3600) + "h " + String((s % 3600) / 60) + "m";
+  return String(s / 86400) + "d " + String((s % 86400) / 3600) + "h";
+}
+
 static String menuText() {
-  String msg = "🤖 *ESP32 PC Remote commands*\n\n";
-  msg += "/start /help — Show this menu\n";
-  msg += "/ping — Check bot health & diagnostics\n";
-  msg += "/status — ESP32 health + target PC state\n";
-  msg += "/wake — Wake the selected PC (inline confirmation)\n";
-  msg += "/reboot — Restart the ESP32\n\n";
-  msg += "Current target: ";
+  String msg = "<b>ESP32 PC Remote — commands</b>\n\n";
+  msg += "/help     Show this menu\n";
+  msg += "/ping     Device diagnostics\n";
+  msg += "/status   ESP32 + target state\n";
+  msg += "/wake     Power on the PC\n";
+  msg += "/reboot   Restart the ESP32\n\n";
+  msg += "Target: <b>";
   msg += PC_NAME;
+  msg += "</b>";
   return msg;
 }
 
@@ -52,45 +61,85 @@ static void handleCommand(String chatId, String text) {
   cmd.toLowerCase();
 
   if (cmd == "/start" || cmd == "/help") {
-    bot.sendMessage(chatId, menuText(), "Markdown");
+    bot.sendMessage(chatId, menuText(), "HTML");
     return;
   }
 
   if (cmd == "/ping") {
-    String msg = "🤖 Bot alive\n";
-    msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
-                                 ? "connected" : "disconnected") + "\n";
-    msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
-    msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
-    msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
-    msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n";
-    msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
+    String msg = "<b>ESP32 diagnostics</b>\n\n";
+    msg += "Wi-Fi:     " + String(WiFi.status() == WL_CONNECTED
+                                  ? "connected" : "disconnected");
+    if (WiFi.status() == WL_CONNECTED) {
+      msg += ", " + String(WiFi.RSSI()) + " dBm";
+    }
+    msg += "\n";
+    msg += "IP:        " + WiFi.localIP().toString() + "\n";
+    msg += "Uptime:    " + fmt_dur(millis() / 1000) + "\n";
+    msg += "Heap:      " + String(ESP.getFreeHeap() / 1024) + " KB free\n";
+    msg += "Reset:     " + String(current_reset_reason()) + "\n";
 
-    bot.sendMessage(chatId, msg, "");
+    bot.sendMessage(chatId, msg, "HTML");
     return;
   }
 
   if (cmd == "/status") {
-    bool reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
-    String msg = "✅ ESP32 healthy\n";
-    msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
-                                 ? "connected" : "disconnected") + "\n";
-    msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
-    msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
-    msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
-    msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n\n";
-    msg += "🖥 Target: " + String(PC_NAME) + "\n";
-    msg += "   MAC: " + String(PC_MAC) + "\n";
-    msg += "   IP: " + String(PC_IP) + "\n";
-    msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
-    bot.sendMessage(chatId, msg, "");
+    String msg;
+    bool wifiUp = WiFi.status() == WL_CONNECTED;
+    bool reachable = false;
+
+    if (wifiUp && !wake_is_pending()) {
+      reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
+    }
+
+    if (wifiUp) {
+      msg = "ESP32 — connected, " + String(WiFi.RSSI()) + " dBm, "
+          + WiFi.localIP().toString() + ", up "
+          + fmt_dur(millis() / 1000) + "\n\n";
+    } else {
+      msg = "<b>ESP32 — disconnected</b>\n\n";
+    }
+
+    if (!wifiUp) {
+      msg += "Target: " + String(PC_NAME) + " — can't check\n";
+    } else if (wake_is_pending()) {
+      msg += "Target: <b>" + String(PC_NAME) + "</b> — waking... ("
+          + String(wake_pending_elapsed_seconds()) + "s)\n";
+    } else if (reachable) {
+      wake_mark_online_seen();
+      msg += "Target: <b>" + String(PC_NAME) + "</b> — online (seen just now)\n";
+    } else {
+      msg += "Target: <b>" + String(PC_NAME) + "</b> — not reachable\n";
+      unsigned long age = wake_last_online_age_seconds();
+      if (age > 0) {
+        msg += "Seen:   " + fmt_dur(age) + " ago\n";
+      }
+    }
+
+    if (!wake_is_pending()) {
+      String lastWake = wake_last_result();
+      if (lastWake.length() > 0) {
+        msg += "Wake:   ";
+        if (lastWake == "success")       msg += "succeeded";
+        else if (lastWake == "timeout")  msg += "timed out";
+        else                             msg += lastWake;
+
+        unsigned long age = wake_last_result_age_seconds();
+        if (age > 0) {
+          msg += " " + fmt_dur(age) + " ago";
+        }
+        msg += "\n";
+      }
+    }
+
+    bot.sendMessage(chatId, msg, "HTML");
     return;
   }
 
   if (cmd == "/wake") {
     DynamicJsonDocument payload(1024);
     payload["chat_id"] = chatId;
-    payload["text"] = "Wake " + String(PC_NAME) + "?";
+    payload["parse_mode"] = "HTML";
+    payload["text"] = "Wake <b>" + String(PC_NAME) + "</b>?";
     JsonObject markup = payload.createNestedObject("reply_markup");
     JsonArray rows = markup.createNestedArray("inline_keyboard");
     JsonArray row = rows.createNestedArray();
@@ -106,13 +155,13 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/reboot") {
-    bot.sendMessage(chatId, "🔄 Rebooting ESP32...", "");
+    bot.sendMessage(chatId, "Restarting ESP32...", "HTML");
     telegramRebootPending = true;
     return;
   }
 
   // unknown command — show help hint
-  bot.sendMessage(chatId, "Unknown command. Type /help for available commands.", "");
+  bot.sendMessage(chatId, "Unknown command. Try /help for available commands.", "HTML");
 }
 
 static void handleCallback(const telegramMessage& msg) {
@@ -120,8 +169,7 @@ static void handleCallback(const telegramMessage& msg) {
     bot.answerCallbackQuery(msg.query_id, "", false, "", 0);
     wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
     wake_start_polling(msg.chat_id, PC_NAME, PC_IP, PC_TCP_PORT);
-    bot.sendMessage(msg.chat_id, "⚡ Wake signal sent to " + String(PC_NAME)
-                    + " — waiting up to 90s for PC to respond...", "");
+    bot.sendMessage(msg.chat_id, "Wake sent to <b>" + String(PC_NAME) + "</b> — waiting up to 90s...", "HTML");
   } else if (msg.text == "wake_cancel") {
     bot.answerCallbackQuery(msg.query_id, "Cancelled", false, "", 0);
   }

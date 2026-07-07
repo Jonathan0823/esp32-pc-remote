@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <ArduinoJson.h>
 #include "config.h"
 #include "src/services/log_service.h"
 
@@ -9,22 +10,6 @@ static WiFiClientSecure logClient;
 static bool grafanaConfigured = false;
 static unsigned long lastHeartbeatMs = 0;
 const unsigned long HEARTBEAT_MS = 60000;
-
-static void escape_json(const char* in, char* out, size_t out_len) {
-  size_t pos = 0;
-  for (; *in && pos < out_len - 6; in++) {
-    char c = *in;
-    switch (c) {
-      case '"':  out[pos++] = '\\'; out[pos++] = '"'; break;
-      case '\\': out[pos++] = '\\'; out[pos++] = '\\'; break;
-      case '\n': out[pos++] = '\\'; out[pos++] = 'n'; break;
-      case '\r': out[pos++] = '\\'; out[pos++] = 'r'; break;
-      case '\t': out[pos++] = '\\'; out[pos++] = 't'; break;
-      default:   out[pos++] = c;
-    }
-  }
-  out[pos] = '\0';
-}
 
 static void make_ts(char* buf, size_t len) {
   time_t now = time(nullptr);
@@ -34,7 +19,7 @@ static void make_ts(char* buf, size_t len) {
     buf[0] = '\0';
 }
 
-static void send_loki_line(const char* log_line) {
+static void send_loki_line(const char* logLine) {
   HTTPClient http;
   String endpoint = String(GRAFANA_LOGS_URL) + "/loki/api/v1/push";
   if (!http.begin(logClient, endpoint)) return;
@@ -45,21 +30,20 @@ static void send_loki_line(const char* log_line) {
   char ts[32];
   make_ts(ts, sizeof(ts));
 
-  char* escaped_log = (char*)malloc(1024);
-  char* payload = (char*)malloc(2048);
-  if (!escaped_log || !payload) { free(escaped_log); free(payload); return; }
-  escape_json(log_line, escaped_log, 1024);
+  DynamicJsonDocument envelope(1024);
+  JsonArray streams = envelope.createNestedArray("streams");
+  JsonObject s = streams.createNestedObject();
+  JsonObject labels = s.createNestedObject("stream");
+  labels["app"] = "esp32-pc-remote";
+  JsonArray values = s.createNestedArray("values");
+  JsonArray pair = values.createNestedArray();
+  pair.add(ts[0] ? ts : "0");
+  pair.add(logLine);
 
-  int plen = snprintf(payload, 2048,
-    "{\"streams\":[{\"stream\":{\"app\":\"esp32-pc-remote\"},\"values\":[[\"%s\",\"%s\"]]}]}",
-    ts[0] ? ts : "0", escaped_log);
-
-  int code = http.POST((uint8_t*)payload, plen);
+  String payload;
+  serializeJson(envelope, payload);
+  http.POST((uint8_t*)payload.c_str(), payload.length());
   http.end();
-  // ponytail: ignore HTTP errors — best-effort logging
-  (void)code;
-  free(escaped_log);
-  free(payload);
 }
 
 void log_init() {
@@ -83,27 +67,21 @@ void log_event(const char* level, const char* component,
                const char* event, const char* msg) {
   if (!grafanaConfigured) return;
 
-  char* escaped = (char*)malloc(512);
-  char* log_line = (char*)malloc(768);
-  if (!escaped || !log_line) { free(escaped); free(log_line); return; }
-  escape_json(msg, escaped, 512);
-
-  int pos = snprintf(log_line, 768,
-    "{\"level\":\"%s\",\"component\":\"%s\",\"event\":\"%s\",\"msg\":\"%s\",\"uptime_s\":%lu,\"heap\":%u",
-    level, component, event, escaped,
-    (unsigned long)(millis() / 1000), ESP.getFreeHeap());
-
+  DynamicJsonDocument doc(512);
+  doc["level"] = level;
+  doc["component"] = component;
+  doc["event"] = event;
+  doc["msg"] = msg;
+  doc["uptime_s"] = (unsigned long)(millis() / 1000);
+  doc["heap"] = ESP.getFreeHeap();
   if (WiFi.status() == WL_CONNECTED) {
-    snprintf(log_line + pos, sizeof(log_line) - pos,
-      ",\"rssi\":%d,\"ip\":\"%s\"}",
-      WiFi.RSSI(), WiFi.localIP().toString().c_str());
-  } else {
-    snprintf(log_line + pos, sizeof(log_line) - pos, "}");
+    doc["rssi"] = WiFi.RSSI();
+    doc["ip"] = WiFi.localIP().toString();
   }
 
-  send_loki_line(log_line);
-  free(escaped);
-  free(log_line);
+  String logLine;
+  serializeJson(doc, logLine);
+  send_loki_line(logLine.c_str());
 }
 
 void log_heartbeat(const String& targetName) {
