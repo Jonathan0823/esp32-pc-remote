@@ -185,6 +185,9 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
+    // ponytail: close the socket after every poll; UniversalTelegramBot keeps
+    // it open on success, which breaks the next request on reused TLS state.
+    client.stop();
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
