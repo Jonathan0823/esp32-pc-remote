@@ -137,6 +137,8 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
+    // ponytail: close the socket after each poll; keep TLS state from going stale.
+    client.stop();
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
