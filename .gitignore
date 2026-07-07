@@ -8,3 +8,5 @@ tasks/
 AGENTS.md
 .vscode/
 *.log
+compile_commands.json
+.clangd
