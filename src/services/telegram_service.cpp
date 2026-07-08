@@ -44,6 +44,21 @@ static String method_name(const String& command) {
   return slash >= 0 ? command.substring(slash + 1) : command;
 }
 
+static void telegram_log_http_failure(const char* label, int code) {
+  String msg = String("HTTP failed code=") + code;
+  String desc = HTTPClient::errorToString(code);
+  if (desc.length() > 0) {
+    msg += " (" + desc + ")";
+  }
+  log_print("[telegram] %s %s\n", label, msg.c_str());
+  log_event("error", "telegram", label, msg.c_str());
+}
+
+static void telegram_log_begin_failure(const char* label) {
+  log_print("[telegram] %s http.begin failed\n", label);
+  log_event("error", "telegram", label, "http.begin failed");
+}
+
 static String telegram_post_raw(const String& method,
                                 JsonObject payload,
                                 const char* label,
@@ -66,7 +81,7 @@ static String telegram_post_raw(const String& method,
     http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
     if (!http.begin(tls, telegram_url(method))) {
-      log_print("[telegram] %s http.begin failed\n", label);
+      telegram_log_begin_failure(label);
       continue;
     }
 
@@ -79,7 +94,7 @@ static String telegram_post_raw(const String& method,
 
     if (code > 0) return response;
 
-    log_print("[telegram] %s HTTP failed code=%d\n", label, code);
+    telegram_log_http_failure(label, code);
   }
 
   log_print("[telegram] %s failed after retry\n", label);
