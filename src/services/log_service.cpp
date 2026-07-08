@@ -88,25 +88,32 @@ void log_event(const char* level, const char* component,
                const char* event, const char* msg) {
   if (!grafanaConfigured) return;
 
-  char* escaped = (char*)malloc(512);
-  char* log_line = (char*)malloc(768);
+  char* escaped = (char*)malloc(1024);
+  char* log_line = (char*)malloc(1536);
   if (!escaped || !log_line) { free(escaped); free(log_line); return; }
-  escape_json(msg, escaped, 512);
+  escape_json(msg, escaped, 1024);
 
-  int pos = snprintf(log_line, 768,
-    "{\"level\":\"%s\",\"component\":\"%s\",\"event\":\"%s\",\"msg\":\"%s\",\"uptime_s\":%lu,\"heap\":%u",
-    level, component, event, escaped,
-    (unsigned long)(millis() / 1000), ESP.getFreeHeap());
-
+  // ponytail: single snprintf to avoid the two-call truncation bug.
+  String ipStr;
+  int rssi = 0;
   if (WiFi.status() == WL_CONNECTED) {
-    snprintf(log_line + pos, sizeof(log_line) - pos,
-      ",\"rssi\":%d,\"ip\":\"%s\"}",
-      WiFi.RSSI(), WiFi.localIP().toString().c_str());
-  } else {
-    snprintf(log_line + pos, sizeof(log_line) - pos, "}");
+    ipStr = WiFi.localIP().toString();
+    rssi = WiFi.RSSI();
   }
 
-  send_loki_line(log_line);
+  int needed = snprintf(log_line, 1536,
+    "{\"level\":\"%s\",\"component\":\"%s\",\"event\":\"%s\",\"msg\":\"%s\","
+    "\"uptime_s\":%lu,\"heap\":%u,\"rssi\":%d,\"ip\":\"%s\"}",
+    level, component, event, escaped,
+    (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
+    rssi, ipStr.c_str());
+
+  if (needed > 0 && needed < 1536) {
+    send_loki_line(log_line);
+  } else {
+    Serial.println("[log] truncated line skipped (grafana)");
+  }
+
   free(escaped);
   free(log_line);
 }
