@@ -1,10 +1,8 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
-#include <UniversalTelegramBot.h>
 #include "config.h"
 #include "src/services/wake_service.h"
-
-extern UniversalTelegramBot bot;
+#include "src/services/telegram_service.h"
 
 static WiFiUDP wakeUdp;
 
@@ -39,20 +37,20 @@ void wake_poll() {
   if (millis() - lastWakeCheck < WAKE_RETRY_MS) return;
 
   if (wake_is_pc_reachable(wakeDeviceIp, wakeDeviceProbePort)) {
-    bot.sendMessage(wakeChatId,
-                    "🖥 " + wakeDeviceName + " is now online! (took "
-                    + String((millis() - wakeStartMs) / 1000) + "s)",
-                    "");
+    telegram_send_text_once(wakeChatId,
+                            "🖥 " + wakeDeviceName + " is now online! (took "
+                            + String((millis() - wakeStartMs) / 1000) + "s)",
+                            "");
     wake_clear();
     return;
   }
 
   if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
-    bot.sendMessage(wakeChatId,
-                    "⚠️ " + wakeDeviceName + " did not wake within "
-                    + String(WAKE_TIMEOUT_MS / 1000)
-                    + "s. Check BIOS WoL settings.",
-                    "");
+    telegram_send_text_once(wakeChatId,
+                            "⚠️ " + wakeDeviceName + " did not wake within "
+                            + String(WAKE_TIMEOUT_MS / 1000)
+                            + "s. Check BIOS WoL settings.",
+                            "");
     wake_clear();
     return;
   }

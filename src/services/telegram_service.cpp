@@ -19,11 +19,67 @@ bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 500;
 
+static bool telegram_send_once(const char* label,
+                               const String& command,
+                               JsonObject payload) {
+  client.stop();
+  String response = bot.sendPostToTelegram(command, payload);
+  client.stop();
+
+  if (response.length() == 0) {
+    Serial.printf("[telegram] %s send failed: empty response\n", label);
+    return false;
+  }
+
+  DynamicJsonDocument doc(512);
+  DeserializationError error = deserializeJson(doc, response);
+  if (error) {
+    Serial.printf("[telegram] %s send failed: %s\n", label, error.c_str());
+    return false;
+  }
+
+  bool ok = doc["ok"] | false;
+  Serial.printf("[telegram] %s send %s\n", label, ok ? "ok" : "not_ok");
+  return ok;
+}
+
+bool telegram_send_json_once(const String& command, JsonObject payload, const char* label) {
+  return telegram_send_once(label, command, payload);
+}
+
+bool telegram_send_text_once(const String& chatId, const String& text, const String& parse_mode) {
+  DynamicJsonDocument payload(1024);
+  payload["chat_id"] = chatId;
+  payload["text"] = text;
+  if (parse_mode.length() > 0) {
+    payload["parse_mode"] = parse_mode;
+  }
+  return telegram_send_once("sendMessage", bot.buildCommand("sendMessage"), payload.as<JsonObject>());
+}
+
+bool telegram_send_callback_answer_once(const String& query_id,
+                                        const String& text,
+                                        bool show_alert,
+                                        const String& url,
+                                        int cache_time) {
+  DynamicJsonDocument payload(256);
+  payload["callback_query_id"] = query_id;
+  payload["show_alert"] = show_alert;
+  payload["cache_time"] = cache_time;
+
+  if (text.length() > 0) payload["text"] = text;
+  if (url.length() > 0) payload["url"] = url;
+
+  return telegram_send_once("answerCallbackQuery",
+                            bot.buildCommand("answerCallbackQuery"),
+                            payload.as<JsonObject>());
+}
+
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
   bot.longPoll = 60;
-  bot.waitForResponse = 250;
+  bot.waitForResponse = 1500;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
   Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
@@ -55,7 +111,7 @@ static void handleCommand(String chatId, String text) {
 
   if (cmd == "/start" || cmd == "/help") {
     Serial.println("[telegram] /help reply start");
-    bot.sendMessage(chatId, menuText(), "Markdown");
+    telegram_send_text_once(chatId, menuText(), "Markdown");
     Serial.println("[telegram] /help reply done");
     return;
   }
@@ -71,7 +127,7 @@ static void handleCommand(String chatId, String text) {
     msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
 
     Serial.println("[telegram] /ping reply start");
-    bot.sendMessage(chatId, msg, "");
+    telegram_send_text_once(chatId, msg, "");
     Serial.println("[telegram] /ping reply done");
     return;
   }
@@ -92,7 +148,7 @@ static void handleCommand(String chatId, String text) {
     msg += "   IP: " + String(PC_IP) + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     Serial.println("[telegram] /status reply start");
-    bot.sendMessage(chatId, msg, "");
+    telegram_send_text_once(chatId, msg, "");
     Serial.println("[telegram] /status reply done");
     return;
   }
@@ -111,15 +167,14 @@ static void handleCommand(String chatId, String text) {
     no["text"] = "❌ No";
     no["callback_data"] = "wake_cancel";
     Serial.println("[telegram] /wake reply start");
-    bot.sendPostToTelegram(bot.buildCommand("sendMessage"), payload.as<JsonObject>());
-    client.stop();
+    telegram_send_json_once(bot.buildCommand("sendMessage"), payload.as<JsonObject>(), "sendMessage");
     Serial.println("[telegram] /wake reply done");
     return;
   }
 
   if (cmd == "/reboot") {
     Serial.println("[telegram] /reboot reply start");
-    bot.sendMessage(chatId, "🔄 Rebooting ESP32...", "");
+    telegram_send_text_once(chatId, "🔄 Rebooting ESP32...", "");
     Serial.println("[telegram] /reboot reply done");
     telegramRebootPending = true;
     return;
@@ -127,7 +182,7 @@ static void handleCommand(String chatId, String text) {
 
   // unknown command — show help hint
   Serial.println("[telegram] unknown command reply start");
-  bot.sendMessage(chatId, "Unknown command. Type /help for available commands.", "");
+  telegram_send_text_once(chatId, "Unknown command. Type /help for available commands.", "");
   Serial.println("[telegram] unknown command reply done");
 }
 
@@ -135,21 +190,23 @@ static void handleCallback(const telegramMessage& msg) {
   Serial.printf("[telegram] handleCallback chat=%s data=%s\n", msg.chat_id.c_str(), msg.text.c_str());
   if (msg.text == "wake_confirm") {
     Serial.println("[telegram] callback confirm start");
-    bot.answerCallbackQuery(msg.query_id, "", false, "", 0);
+    telegram_send_callback_answer_once(msg.query_id, "", false, "", 0);
     wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
     wake_start_polling(msg.chat_id, PC_NAME, PC_IP, PC_TCP_PORT);
-    bot.sendMessage(msg.chat_id, "⚡ Wake signal sent to " + String(PC_NAME)
+    telegram_send_text_once(msg.chat_id, "⚡ Wake signal sent to " + String(PC_NAME)
                     + " — waiting up to 90s for PC to respond...", "");
     Serial.println("[telegram] callback confirm done");
   } else if (msg.text == "wake_cancel") {
     Serial.println("[telegram] callback cancel start");
-    bot.answerCallbackQuery(msg.query_id, "Cancelled", false, "", 0);
+    telegram_send_callback_answer_once(msg.query_id, "Cancelled", false, "", 0);
     Serial.println("[telegram] callback cancel done");
   }
 }
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
+    // ponytail: stop any stale TLS connection before polling; getUpdates reconnects fresh.
+    client.stop();
     // Reset WDT before blocking getUpdates call (can block up to 60s).
     esp_task_wdt_reset();
 
@@ -161,7 +218,7 @@ void telegram_poll() {
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
-    // ponytail: reset longPoll after polling so sendMessage uses 250ms, not 60s.
+    // ponytail: reset longPoll after polling so send helpers don't inherit the 60s poll timeout.
     bot.longPoll = 0;
     Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
