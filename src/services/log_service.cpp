@@ -1,9 +1,8 @@
 #include <WiFi.h>
-#include <stdarg.h>
-#include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <stdarg.h>
 #include "config.h"
 #include "src/services/log_service.h"
 
@@ -11,6 +10,31 @@ static WiFiClientSecure logClient;
 static bool grafanaConfigured = false;
 static unsigned long lastHeartbeatMs = 0;
 const unsigned long HEARTBEAT_MS = 60000;
+
+static void escape_json(const char* in, char* out, size_t out_len) {
+  size_t pos = 0;
+  for (; *in && pos < out_len - 6; in++) {
+    char c = *in;
+    switch (c) {
+      case '"': out[pos++] = '\\'; out[pos++] = '"'; break;
+      case '\\': out[pos++] = '\\'; out[pos++] = '\\'; break;
+      case '\n': out[pos++] = '\\'; out[pos++] = 'n'; break;
+      case '\r': out[pos++] = '\\'; out[pos++] = 'r'; break;
+      case '\t': out[pos++] = '\\'; out[pos++] = 't'; break;
+      default: out[pos++] = c; break;
+    }
+  }
+  out[pos] = '\0';
+}
+
+static void make_ts(char* buf, size_t len) {
+  time_t now = time(nullptr);
+  if (now > 100000) {
+    snprintf(buf, len, "%llu", (unsigned long long)now * 1000000000ULL);
+  } else {
+    buf[0] = '\0';
+  }
+}
 
 static void send_loki_line(const char* log_line) {
   HTTPClient http;
@@ -25,31 +49,29 @@ static void send_loki_line(const char* log_line) {
   http.setAuthorization(GRAFANA_LOGS_USER, GRAFANA_LOGS_TOKEN);
   http.addHeader("Content-Type", "application/json");
 
-  DynamicJsonDocument payload(1024);
-  JsonArray streams = payload["streams"].to<JsonArray>();
-  JsonObject streamEntry = streams.add<JsonObject>();
-  JsonObject stream = streamEntry["stream"].to<JsonObject>();
-  stream["app"] = "esp32-pc-remote";
-
-  JsonArray values = streamEntry["values"].to<JsonArray>();
-  JsonArray entry = values.add<JsonArray>();
-  time_t now = time(nullptr);
   char ts[32];
-  if (now > 100000) {
-    snprintf(ts, sizeof(ts), "%llu", (unsigned long long)now * 1000000000ULL);
-  } else {
-    ts[0] = '\0';
+  make_ts(ts, sizeof(ts));
+
+  char* escaped_log = (char*)malloc(1024);
+  char* payload = (char*)malloc(2048);
+  if (!escaped_log || !payload) {
+    free(escaped_log);
+    free(payload);
+    return;
   }
-  entry.add(ts[0] ? ts : "0");
-  entry.add(log_line);
 
-  String payloadStr;
-  serializeJson(payload, payloadStr);
+  escape_json(log_line, escaped_log, 1024);
 
-  int code = http.POST((uint8_t*)payloadStr.c_str(), payloadStr.length());
+  int plen = snprintf(payload, 2048,
+    "{\"streams\":[{\"stream\":{\"app\":\"esp32-pc-remote\"},\"values\":[[\"%s\",\"%s\"]]}]}",
+    ts[0] ? ts : "0", escaped_log);
+
+  int code = http.POST((uint8_t*)payload, plen);
   http.end();
   // ponytail: ignore HTTP errors — best-effort logging
   (void)code;
+  free(escaped_log);
+  free(payload);
 }
 
 void log_init() {
@@ -73,26 +95,41 @@ void log_event(const char* level, const char* component,
                const char* event, const char* msg) {
   if (!grafanaConfigured) return;
 
-  DynamicJsonDocument lineDoc(512);
-  lineDoc["level"] = level;
-  lineDoc["component"] = component;
-  lineDoc["event"] = event;
-  lineDoc["msg"] = msg;
-  lineDoc["uptime_s"] = (unsigned long)(millis() / 1000);
-  lineDoc["heap"] = ESP.getFreeHeap();
+  char* escaped = (char*)malloc(1024);
+  char* log_line = (char*)malloc(1536);
+  if (!escaped || !log_line) {
+    free(escaped);
+    free(log_line);
+    return;
+  }
+  escape_json(msg, escaped, 1024);
 
+  String ipStr;
+  int rssi = 0;
   if (WiFi.status() == WL_CONNECTED) {
-    lineDoc["rssi"] = WiFi.RSSI();
-    lineDoc["ip"] = WiFi.localIP().toString();
+    ipStr = WiFi.localIP().toString();
+    rssi = WiFi.RSSI();
   }
 
-  String log_line;
-  serializeJson(lineDoc, log_line);
-  send_loki_line(log_line.c_str());
+  int needed = snprintf(log_line, 1536,
+    "{\"level\":\"%s\",\"component\":\"%s\",\"event\":\"%s\",\"msg\":\"%s\","
+    "\"uptime_s\":%lu,\"heap\":%u,\"rssi\":%d,\"ip\":\"%s\"}",
+    level, component, event, escaped,
+    (unsigned long)(millis() / 1000), ESP.getFreeHeap(),
+    rssi, ipStr.c_str());
+
+  if (needed > 0 && needed < 1536) {
+    send_loki_line(log_line);
+  } else {
+    log_print("[log] truncated line skipped (grafana)\n");
+  }
+
+  free(escaped);
+  free(log_line);
 }
 
 void log_print(const char* fmt, ...) {
-  char buf[256];
+  char buf[512];
   va_list args;
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);

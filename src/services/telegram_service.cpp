@@ -22,7 +22,8 @@ const unsigned long POLL_MS = 500;
 static bool telegram_send_once(const char* label,
                                const String& command,
                                JsonObject payload) {
-  client.stop();
+  // ponytail: no client.stop() before send — library reconnects if needed,
+  //           and the poll already kept the connection alive.
   String response = bot.sendPostToTelegram(command, payload);
   client.stop();
 
@@ -213,8 +214,11 @@ static void handleCallback(const telegramMessage& msg) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    // ponytail: stop any stale TLS connection before polling; getUpdates reconnects fresh.
-    client.stop();
+    // ponytail: keep the TLS connection alive if still fresh (<120s idle).
+    //           Reuse avoids the ~1-3s handshake on every poll.
+    if (!client.connected() || millis() - lastPoll > 120000) {
+      client.stop();
+    }
     // Reset WDT before blocking getUpdates call (can block up to 60s).
     esp_task_wdt_reset();
 
