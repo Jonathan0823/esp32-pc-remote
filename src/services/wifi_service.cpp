@@ -9,20 +9,20 @@ static const unsigned long RECONNECT_INTERVAL_MS = 10000;
 
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
-  Serial.printf("[wifi] connect ssid=%s\n", WIFI_SSID);
+  log_print("[wifi] connect ssid=%s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();
   uint32_t lastLog = start;
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     if (millis() - lastLog >= 5000) {
-      Serial.printf("[wifi] waiting %lus status=%d\n", (millis() - start) / 1000, WiFi.status());
+      log_print("[wifi] waiting %lus status=%d\n", (millis() - start) / 1000, WiFi.status());
       lastLog = millis();
     }
     Serial.print(".");
   }
 
-  Serial.printf("\n[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
+  log_print("[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
   wifiWasConnected = true;
   lastReconnectAttempt = 0;
@@ -32,7 +32,7 @@ void wifi_connect() {
 void wifi_ensure() {
   if (WiFi.status() == WL_CONNECTED) {
     if (!wifiWasConnected) {
-      Serial.printf("[wifi] restored uptime=%lus\n", millis() / 1000);
+      log_print("[wifi] restored uptime=%lus\n", millis() / 1000);
       log_event("info", "wifi", "restored", "WiFi restored");
     }
     wifiWasConnected = true;
@@ -42,8 +42,8 @@ void wifi_ensure() {
 
   if (wifiWasConnected) {
     wifiWasConnected = false;
-    Serial.printf("[wifi] lost uptime=%lus\n", millis() / 1000);
-    log_warn("wifi", "lost", "WiFi lost");
+    log_print("[wifi] lost uptime=%lus\n", millis() / 1000);
+    log_event("warn", "wifi", "lost", "WiFi lost");
   }
 
   unsigned long now = millis();
@@ -52,8 +52,8 @@ void wifi_ensure() {
     return;
   lastReconnectAttempt = now;
 
-  Serial.printf("[wifi] reconnect uptime=%lus\n", now / 1000);
-  log_warn("wifi", "reconnect", "WiFi reconnect attempt");
+  log_print("[wifi] reconnect uptime=%lus\n", now / 1000);
+  log_event("warn", "wifi", "reconnect", "WiFi reconnect attempt");
   WiFi.reconnect();
   delay(250);
 }

@@ -48,7 +48,7 @@ void wake_poll() {
 
   if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
     String warnMsg = "PC did not wake within " + String(WAKE_TIMEOUT_MS / 1000) + "s";
-    log_warn("wake", "timeout", warnMsg.c_str());
+    log_event("warn", "wake", "timeout", warnMsg.c_str());
     telegram_send_text_once(wakeChatId,
                             "⚠️ " + wakeDeviceName + " did not wake within "
                             + String(WAKE_TIMEOUT_MS / 1000)
@@ -74,19 +74,18 @@ void wake_send_magic(const String& mac, const String& bcast, int port) {
   wakeUdp.beginPacket(bcastAddr, port);
   wakeUdp.write(packet, 102);
   wakeUdp.endPacket();
-  Serial.println("WoL sent to " + mac + " via "
-                 + bcast + ":" + String(port));
+  log_print("WoL sent to %s via %s:%d\n", mac.c_str(), bcast.c_str(), port);
 }
 
 bool wake_is_pc_reachable(const String& ip, int port) {
   WiFiClient probe;
   uint32_t start = millis();
-  Serial.printf("[wake] probe %s:%d start\n", ip.c_str(), port);
+  log_print("[wake] probe %s:%d start\n", ip.c_str(), port);
   // ponytail: local network TCP connect should either succeed (<10ms)
   // or fail with RST (<100ms); 200ms is a safe ceiling
   bool r = probe.connect(ip.c_str(), port, 200);
   probe.stop();
-  Serial.printf("[wake] probe %s:%d %s in %lums\n",
+  log_print("[wake] probe %s:%d %s in %lums\n",
                 ip.c_str(),
                 port,
                 r ? "up" : "down",
@@ -102,5 +101,5 @@ void wake_start_polling(String chatId, const String& deviceName, const String& i
   wakeDeviceName = deviceName;
   wakeDeviceIp = ip;
   wakeDeviceProbePort = probePort;
-  Serial.printf("[wake] pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
+  log_print("[wake] pending target=%s chat=%s\n", deviceName.c_str(), chatId.c_str());
 }

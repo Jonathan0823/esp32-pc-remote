@@ -45,16 +45,16 @@ const char* current_reset_reason() {
 void setup() {
   Serial.begin(115200);
   delay(50);
-  Serial.println("\n=== ESP32 PC Remote ===");
-  Serial.printf("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
-  Serial.printf("[boot] target=%s\n", PC_NAME);
+  log_print("\n=== ESP32 PC Remote ===\n");
+  log_print("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
+  log_print("[boot] target=%s\n", PC_NAME);
   wifi_connect();
   telegram_setup();
   log_init();
 
   // log once if previous run was watchdog-triggered (WiFi is up after wifi_connect)
   if (esp_reset_reason() == ESP_RST_TASK_WDT) {
-    log_warn("wdt", "triggered", "Task watchdog triggered reset");
+    log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
   }
 
   // ponytail: Telegram long-poll blocks loopTask for ~60s.
@@ -63,7 +63,7 @@ void setup() {
   esp_task_wdt_config_t wdtConfig = {120000, 0, true};
   esp_task_wdt_init(&wdtConfig);
   esp_task_wdt_add(NULL);
-  Serial.println("[wdt] configured 120s");
+  log_print("[wdt] configured 120s\n");
 }
 
 void loop() {
