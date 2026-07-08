@@ -97,9 +97,9 @@ void telegram_setup() {
 }
 
 static String menuText() {
-  String msg = "🤖 *ESP32 PC Remote commands*\n\n";
+  String msg = "🤖 <b>ESP32 PC Remote commands</b>\n\n";
   msg += "/start /help — Show this menu\n";
-  msg += "/ping — Check bot health & diagnostics\n";
+  msg += "/ping — Check bot health &amp; diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
   msg += "/wake — Wake the selected PC (inline confirmation)\n";
   msg += "/reboot — Restart the ESP32\n\n";
@@ -119,13 +119,13 @@ static void handleCommand(String chatId, String text) {
 
   if (cmd == "/start" || cmd == "/help") {
     Serial.println("[telegram] /help reply start");
-    telegram_send_text_once(chatId, menuText(), "Markdown");
+    telegram_send_text_once(chatId, menuText(), "HTML");
     Serial.println("[telegram] /help reply done");
     return;
   }
 
   if (cmd == "/ping") {
-    String msg = "🤖 Bot alive\n";
+    String msg = "🤖 <b>Bot alive</b>\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
@@ -135,7 +135,7 @@ static void handleCommand(String chatId, String text) {
     msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
 
     Serial.println("[telegram] /ping reply start");
-    telegram_send_text_once(chatId, msg, "");
+    telegram_send_text_once(chatId, msg, "HTML");
     Serial.println("[telegram] /ping reply done");
     return;
   }
@@ -144,19 +144,19 @@ static void handleCommand(String chatId, String text) {
     Serial.println("[telegram] /status probe start");
     bool reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
     Serial.printf("[telegram] /status probe done reachable=%d\n", reachable);
-    String msg = "✅ ESP32 healthy\n";
+    String msg = "✅ <b>ESP32 healthy</b>\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
     msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n\n";
-    msg += "🖥 Target: " + String(PC_NAME) + "\n";
+    msg += "🖥 <b>Target: " + String(PC_NAME) + "</b>\n";
     msg += "   MAC: " + String(PC_MAC) + "\n";
     msg += "   IP: " + String(PC_IP) + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
     Serial.println("[telegram] /status reply start");
-    telegram_send_text_once(chatId, msg, "");
+    telegram_send_text_once(chatId, msg, "HTML");
     Serial.println("[telegram] /status reply done");
     return;
   }
