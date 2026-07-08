@@ -223,7 +223,12 @@ void telegram_poll() {
 
     // ponytail: while wake is pending, use 5s polls so wake detection
     // isn't delayed by the 60s long-poll
-    bot.longPoll = wake_is_pending() ? 5 : 60;
+    int effectiveLongPoll = wake_is_pending() ? 5 : 60;
+    bot.longPoll = effectiveLongPoll;
+    // ponytail: cap TCP socket timeout so a hung read doesn't stall past WDT.
+    //           getUpdates should return by Telegram's longPoll timeout
+    //           (60s), but a dropped TCP connection can hang forever.
+    client.setTimeout((effectiveLongPoll + 10) * 1000);
     uint32_t pollStart = millis();
     log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
@@ -253,6 +258,7 @@ void telegram_poll() {
                       String(bot.messages[i].text));
       }
       log_print("[telegram] update[%d] handled\n", i);
+      esp_task_wdt_reset();
     }
     if (newCount > 0) {
       telegramOffset = bot.last_message_received + 1;
