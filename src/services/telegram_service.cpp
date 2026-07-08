@@ -25,18 +25,44 @@ static long telegramOffset = 1;
 static bool telegramRebootPending = false;
 static unsigned long lastPoll = 0;
 static const unsigned long POLL_MS = 1000;
-static const int IDLE_LONG_POLL_S = 30;
+static const int IDLE_LONG_POLL_S = 15;
 static const int WAKE_LONG_POLL_S = 5;
 static int consecutiveFailures = 0;
 static const int MAX_BACKOFF_MS = 30000;
 static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
+static IPAddress telegramIP;
+static bool telegramIPValid = false;
+static unsigned long lastDNSRefresh = 0;
+static const unsigned long DNS_REFRESH_MS = 300000; // 5 minutes
 
 static void telegram_poll_task(void *pv);
 static void handleCommand(String chatId, String text);
 static void handleCallback(const TelegramUpdate &msg);
 
+static bool telegram_resolve_dns() {
+  if (telegramIPValid && millis() - lastDNSRefresh < DNS_REFRESH_MS) {
+    return true;
+  }
+
+  log_print("[telegram] resolving DNS for api.telegram.org\n");
+  if (WiFi.hostByName("api.telegram.org", telegramIP)) {
+    telegramIPValid = true;
+    lastDNSRefresh = millis();
+    log_print("[telegram] DNS resolved: %s\n", telegramIP.toString().c_str());
+    return true;
+  }
+
+  log_print("[telegram] DNS resolution failed\n");
+  telegramIPValid = false;
+  return false;
+}
+
 static String telegram_url(const String &method) {
+  // Use pre-resolved IP to avoid DNS failures
+  if (telegramIPValid) {
+    return String("https://") + telegramIP.toString() + "/bot" + BOT_TOKEN + "/" + method;
+  }
   return String("https://api.telegram.org/bot") + BOT_TOKEN + "/" + method;
 }
 
@@ -179,6 +205,9 @@ void telegram_setup() {
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
             telegramOffset);
+
+  // Pre-resolve DNS on setup
+  telegram_resolve_dns();
 
   if (telegramPollTaskHandle == nullptr) {
     BaseType_t ok = xTaskCreate(telegram_poll_task, "telegram_poll", 12288,
@@ -390,6 +419,14 @@ void telegram_poll() {
       return;
     }
     log_print("[telegram] WiFi reconnected\n");
+    telegramIPValid = false; // Force DNS refresh after reconnect
+  }
+
+  // DNS health check - refresh if stale
+  if (!telegram_resolve_dns()) {
+    log_print("[telegram] DNS failed, skipping poll\n");
+    lastPoll = millis();
+    return;
   }
 
   // Exponential backoff after failures (capped at 30s)
