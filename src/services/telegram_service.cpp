@@ -22,8 +22,9 @@ const unsigned long POLL_MS = 500;
 static bool telegram_send_once(const char* label,
                                const String& command,
                                JsonObject payload) {
-  // ponytail: no client.stop() before send — library reconnects if needed,
-  //           and the poll already kept the connection alive.
+  // ponytail: keep the existing socket for replies; only cap the read timeout
+  //           so a bad response can't hang the loop.
+  client.setTimeout(5000);
   String response = bot.sendPostToTelegram(command, payload);
 
   if (response.length() == 0) {
@@ -48,6 +49,7 @@ static bool telegram_send_once(const char* label,
   } else {
     log_print("[telegram] %s send ok\n", label);
   }
+  client.stop();
   return ok;
 }
 
@@ -86,6 +88,7 @@ bool telegram_send_callback_answer_once(const String& query_id,
 void telegram_setup() {
   // ponytail: setInsecure for local/MVP; add root CA cert for production use
   client.setInsecure();
+  client.setHandshakeTimeout(10000);
   bot.longPoll = 60;
   bot.waitForResponse = 1500;
   telegramPrefs.begin("telegram", false);
@@ -213,8 +216,7 @@ static void handleCallback(const telegramMessage& msg) {
 
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
-    // ponytail: keep the TLS connection alive if still fresh (<120s idle).
-    //           Reuse avoids the ~1-3s handshake on every poll.
+    // ponytail: keep the TLS socket unless it's stale.
     if (!client.connected() || millis() - lastPoll > 120000) {
       client.stop();
     }
