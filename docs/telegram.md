@@ -23,8 +23,7 @@ Search for the username you chose (e.g. `@MyPcRemoteBot`) and start a chat.
 | `/help` or `/start` | Show the menu |
 | `/ping` | ESP32 diagnostics — reset reason, heap, WiFi RSSI, poll health |
 | `/status` | ESP32 health + target PC online state |
-| `/wake` | Request wake confirmation for the target PC |
-| `/wakeconfirm <name>` | Confirm and send the Wake-on-LAN packet |
+| `/wake` | Request wake confirmation for the target PC (inline buttons) |
 | `/reboot` | Reboot the ESP32 |
 
 The bot only responds to the commands above. Anything else gets a "Unknown command" hint.

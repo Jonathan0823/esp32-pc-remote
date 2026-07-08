@@ -20,7 +20,7 @@ Send `/help` to your bot. That's it.
 
 ## What it does
 
-- **Wake your PC** from Telegram with confirmation (`/wake` → `/wakeconfirm <name>`)
+- **Wake your PC** from Telegram with confirmation (`/wake` → inline buttons)
 - **Check if it's online** via TCP probe (`/status`)
 - **Diagnose the ESP32** — reset reason, heap, WiFi RSSI, poll health (`/ping`)
 - **Auto-recover** — watchdog reboots on hang, WiFi reconnects with backoff

@@ -27,6 +27,7 @@ static unsigned long lastPoll = 0;
 static const unsigned long POLL_MS = 1000;
 static const int IDLE_LONG_POLL_S = 60;
 static const int WAKE_LONG_POLL_S = 5;
+static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
 
 
@@ -202,6 +203,8 @@ static void handleCommand(String chatId, String text) {
   int sp = text.indexOf(' ');
   String cmd = (sp >= 0) ? text.substring(0, sp) : text;
   cmd.toLowerCase();
+  int botName = cmd.indexOf('@');
+  if (botName >= 0) cmd = cmd.substring(0, botName);
 
   if (cmd == "/start" || cmd == "/help") {
     log_print("[telegram] /help reply start\n");
@@ -297,7 +300,7 @@ static void handleCallback(const TelegramUpdate& msg) {
 }
 
 static int parse_updates(const String& response, TelegramUpdate* updates, int maxUpdates, long* nextOffset) {
-  DynamicJsonDocument doc(8192);
+  DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     log_print("[telegram] getUpdates parse failed: %s\n", error.c_str());
@@ -328,6 +331,7 @@ static int parse_updates(const String& response, TelegramUpdate* updates, int ma
       count++;
     } else if (item.containsKey("message")) {
       JsonObject m = item["message"];
+      if (!m.containsKey("text")) continue;
       msg.type = "message";
       msg.text = m["text"].as<String>();
       msg.chat_id = m["chat"]["id"].as<String>();
@@ -343,7 +347,7 @@ void telegram_poll() {
   int effectiveLongPoll = wake_is_pending() ? WAKE_LONG_POLL_S : IDLE_LONG_POLL_S;
   DynamicJsonDocument payload(256);
   payload["offset"] = telegramOffset;
-  payload["limit"] = 10;
+  payload["limit"] = MAX_UPDATES;
   payload["timeout"] = effectiveLongPoll;
 
   esp_task_wdt_reset();
@@ -357,10 +361,10 @@ void telegram_poll() {
                                       (effectiveLongPoll + 10) * 1000);
   esp_task_wdt_reset();
 
-  TelegramUpdate updates[10];
+  TelegramUpdate updates[MAX_UPDATES];
   long nextOffset = telegramOffset;
   int newCount = response.length() > 0
-                   ? parse_updates(response, updates, 10, &nextOffset)
+                   ? parse_updates(response, updates, MAX_UPDATES, &nextOffset)
                    : -1;
 
   log_print("[telegram] getUpdates done updates=%d elapsed=%lums next=%ld\n",
