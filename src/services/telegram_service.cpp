@@ -24,7 +24,7 @@ static Preferences telegramPrefs;
 static long telegramOffset = 1;
 static bool telegramRebootPending = false;
 static unsigned long lastPoll = 0;
-static const unsigned long POLL_MS = 500;
+static const unsigned long POLL_MS = 1000;
 static const int IDLE_LONG_POLL_S = 60;
 static const int WAKE_LONG_POLL_S = 5;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
@@ -148,14 +148,13 @@ void telegram_setup() {
                 telegramOffset);
 
   if (telegramPollTaskHandle == nullptr) {
-    BaseType_t ok = xTaskCreatePinnedToCore(
+    BaseType_t ok = xTaskCreate(
       telegram_poll_task,
       "telegram_poll",
       12288,
       nullptr,
       1,
-      &telegramPollTaskHandle,
-      1);
+      &telegramPollTaskHandle);
     if (ok != pdPASS) {
       telegramPollTaskHandle = nullptr;
       log_print("[telegram] poll task start failed\n");
@@ -171,7 +170,7 @@ static void telegram_poll_task(void* pv) {
       telegram_poll();
     }
     esp_task_wdt_reset();
-    vTaskDelay(pdMS_TO_TICKS(20));
+    vTaskDelay(pdMS_TO_TICKS(POLL_MS));
   }
 }
 
