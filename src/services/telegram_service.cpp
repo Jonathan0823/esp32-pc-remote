@@ -1,7 +1,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <HTTPClient.h>
 #include <esp_task_wdt.h>
-#include <UniversalTelegramBot.h>
 #include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -13,25 +13,74 @@
 // Declared in esp32-pc-remote.ino
 extern const char* current_reset_reason();
 
-WiFiClientSecure client;
-UniversalTelegramBot bot(BOT_TOKEN, client);
-WiFiClientSecure pollClient;
-UniversalTelegramBot pollBot(BOT_TOKEN, pollClient);
-Preferences telegramPrefs;
-long telegramOffset = 1;
-bool telegramRebootPending = false;
-unsigned long lastPoll = 0;
-const unsigned long POLL_MS = 500;
+struct TelegramUpdate {
+  String type;
+  String text;
+  String chat_id;
+  String query_id;
+};
+
+static Preferences telegramPrefs;
+static long telegramOffset = 1;
+static bool telegramRebootPending = false;
+static unsigned long lastPoll = 0;
+static const unsigned long POLL_MS = 500;
+static const int IDLE_LONG_POLL_S = 60;
+static const int WAKE_LONG_POLL_S = 5;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
+
 static void telegram_poll_task(void* pv);
+static void handleCommand(String chatId, String text);
+static void handleCallback(const TelegramUpdate& msg);
+
+static String telegram_url(const String& method) {
+  return String("https://api.telegram.org/bot") + BOT_TOKEN + "/" + method;
+}
+
+static String method_name(const String& command) {
+  int slash = command.lastIndexOf('/');
+  return slash >= 0 ? command.substring(slash + 1) : command;
+}
+
+static String telegram_post_raw(const String& method,
+                                JsonObject payload,
+                                const char* label,
+                                uint16_t timeoutMs) {
+  WiFiClientSecure tls;
+  tls.setInsecure();
+  tls.setHandshakeTimeout(10); // seconds, not milliseconds
+
+  HTTPClient http;
+  http.setReuse(false);
+  http.setConnectTimeout(5000);
+  http.setTimeout(timeoutMs);
+
+  if (!http.begin(tls, telegram_url(method))) {
+    log_print("[telegram] %s http.begin failed\n", label);
+    return "";
+  }
+
+  String body;
+  serializeJson(payload, body);
+  http.addHeader("Content-Type", "application/json");
+
+  int code = http.POST(body);
+  String response = code > 0 ? http.getString() : "";
+  http.end();
+  tls.stop();
+
+  if (code <= 0) {
+    log_print("[telegram] %s HTTP failed code=%d\n", label, code);
+  }
+  return response;
+}
 
 static bool telegram_send_once(const char* label,
-                               const String& command,
+                               const String& method,
                                JsonObject payload) {
-  // ponytail: keep the existing socket for replies; only cap the read timeout
-  //           so a bad response can't hang the loop.
-  client.setTimeout(5000);
-  String response = bot.sendPostToTelegram(command, payload);
+  esp_task_wdt_reset();
+  String response = telegram_post_raw(method_name(method), payload, label, 8000);
+  esp_task_wdt_reset();
 
   if (response.length() == 0) {
     log_print("[telegram] %s send failed: empty response\n", label);
@@ -39,7 +88,7 @@ static bool telegram_send_once(const char* label,
     return false;
   }
 
-  DynamicJsonDocument doc(512);
+  DynamicJsonDocument doc(768);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     log_print("[telegram] %s send failed: %s\n", label, error.c_str());
@@ -55,7 +104,6 @@ static bool telegram_send_once(const char* label,
   } else {
     log_print("[telegram] %s send ok\n", label);
   }
-  client.stop();
   return ok;
 }
 
@@ -70,7 +118,7 @@ bool telegram_send_text_once(const String& chatId, const String& text, const Str
   if (parse_mode.length() > 0) {
     payload["parse_mode"] = parse_mode;
   }
-  return telegram_send_once("sendMessage", bot.buildCommand("sendMessage"), payload.as<JsonObject>());
+  return telegram_send_once("sendMessage", "sendMessage", payload.as<JsonObject>());
 }
 
 bool telegram_send_callback_answer_once(const String& query_id,
@@ -87,34 +135,22 @@ bool telegram_send_callback_answer_once(const String& query_id,
   if (url.length() > 0) payload["url"] = url;
 
   return telegram_send_once("answerCallbackQuery",
-                            bot.buildCommand("answerCallbackQuery"),
+                            "answerCallbackQuery",
                             payload.as<JsonObject>());
 }
 
 void telegram_setup() {
-  // ponytail: keep send and poll sockets separate so long-poll never blocks replies.
-  client.setInsecure();
-  client.setHandshakeTimeout(10000);
-  bot.longPoll = 0;
-  bot.waitForResponse = 1500;
-
-  pollClient.setInsecure();
-  pollClient.setHandshakeTimeout(10000);
-  pollBot.longPoll = 60;
-  pollBot.waitForResponse = 1500;
-
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
-  log_print("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
-                pollBot.longPoll,
-                pollBot.waitForResponse,
+  log_print("[telegram] setup longPoll=%d offset=%ld\n",
+                IDLE_LONG_POLL_S,
                 telegramOffset);
 
   if (telegramPollTaskHandle == nullptr) {
     BaseType_t ok = xTaskCreatePinnedToCore(
       telegram_poll_task,
       "telegram_poll",
-      8192,
+      12288,
       nullptr,
       1,
       &telegramPollTaskHandle,
@@ -154,7 +190,6 @@ static void handleCommand(String chatId, String text) {
   text.trim();
   log_print("[telegram] handleCommand chat=%s text=%s\n", chatId.c_str(), text.c_str());
 
-  // extract command prefix (first word) for case-insensitive matching
   int sp = text.indexOf(' ');
   String cmd = (sp >= 0) ? text.substring(0, sp) : text;
   cmd.toLowerCase();
@@ -217,7 +252,7 @@ static void handleCommand(String chatId, String text) {
     no["text"] = "❌ No";
     no["callback_data"] = "wake_cancel";
     log_print("[telegram] /wake reply start\n");
-    telegram_send_json_once(bot.buildCommand("sendMessage"), payload.as<JsonObject>(), "sendMessage");
+    telegram_send_json_once("sendMessage", payload.as<JsonObject>(), "sendMessage");
     log_print("[telegram] /wake reply done\n");
     return;
   }
@@ -230,13 +265,12 @@ static void handleCommand(String chatId, String text) {
     return;
   }
 
-  // unknown command — show help hint
   log_print("[telegram] unknown command reply start\n");
   telegram_send_text_once(chatId, "Unknown command. Type /help for available commands.", "");
   log_print("[telegram] unknown command reply done\n");
 }
 
-static void handleCallback(const telegramMessage& msg) {
+static void handleCallback(const TelegramUpdate& msg) {
   log_print("[telegram] handleCallback chat=%s data=%s\n", msg.chat_id.c_str(), msg.text.c_str());
   if (msg.text == "wake_confirm") {
     log_print("[telegram] callback confirm start\n");
@@ -253,64 +287,107 @@ static void handleCallback(const telegramMessage& msg) {
   }
 }
 
-void telegram_poll() {
-  if (millis() - lastPoll >= POLL_MS) {
-    // ponytail: keep the TLS socket unless it's stale.
-    if (!pollClient.connected() || millis() - lastPoll > 120000) {
-      pollClient.stop();
-    }
-    // Reset WDT before blocking getUpdates call (can block up to 60s).
-    esp_task_wdt_reset();
-
-    // ponytail: while wake is pending, use 5s polls so wake detection
-    // isn't delayed by the 60s long-poll
-    int effectiveLongPoll = wake_is_pending() ? 5 : 60;
-    pollBot.longPoll = effectiveLongPoll;
-    // ponytail: cap TCP socket timeout so a hung read doesn't stall past WDT.
-    //           getUpdates should return by Telegram's longPoll timeout
-    //           (60s), but a dropped TCP connection can hang forever.
-    pollClient.setTimeout((effectiveLongPoll + 10) * 1000);
-    uint32_t pollStart = millis();
-    log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
-                  telegramOffset,
-                  pollBot.longPoll);
-    int newCount = pollBot.getUpdates(telegramOffset);
-    // ponytail: reset longPoll after polling so send helpers don't inherit the 60s poll timeout.
-    pollBot.longPoll = 0;
-    log_print("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
-                  newCount,
-                  millis() - pollStart,
-                  pollBot.last_message_received + 1);
-
-    if (newCount < 0) {
-      log_print("[telegram] getUpdates failed\n");
-      log_event("error", "telegram", "getUpdates", "getUpdates failed");
-    }
-
-    for (int i = 0; i < newCount; i++) {
-      log_print("[telegram] update[%d] type=%s text=%s\n",
-                    i,
-                    pollBot.messages[i].type.c_str(),
-                    pollBot.messages[i].text.c_str());
-      if (pollBot.messages[i].type == "callback_query") {
-        handleCallback(pollBot.messages[i]);
-      } else {
-        handleCommand(String(pollBot.messages[i].chat_id),
-                      String(pollBot.messages[i].text));
-      }
-      log_print("[telegram] update[%d] handled\n", i);
-      esp_task_wdt_reset();
-    }
-    if (newCount > 0) {
-      telegramOffset = pollBot.last_message_received + 1;
-      telegramPrefs.putLong("offset", telegramOffset);
-    }
-    if (telegramRebootPending) {
-      telegramPrefs.putLong("offset", telegramOffset);
-      log_print("[telegram] reboot pending; offset=%ld\n", telegramOffset);
-      delay(100);
-      ESP.restart();
-    }
-    lastPoll = millis();
+static int parse_updates(const String& response, TelegramUpdate* updates, int maxUpdates, long* nextOffset) {
+  DynamicJsonDocument doc(8192);
+  DeserializationError error = deserializeJson(doc, response);
+  if (error) {
+    log_print("[telegram] getUpdates parse failed: %s\n", error.c_str());
+    return -1;
   }
+
+  if (!(doc["ok"] | false)) {
+    const char* desc = doc["description"] | "Telegram API returned ok=false";
+    log_print("[telegram] getUpdates not_ok: %s\n", desc);
+    return -1;
+  }
+
+  JsonArray result = doc["result"].as<JsonArray>();
+  int count = 0;
+  for (JsonObject item : result) {
+    long updateId = item["update_id"] | 0;
+    if (updateId >= *nextOffset) *nextOffset = updateId + 1;
+    if (count >= maxUpdates) continue;
+
+    TelegramUpdate& msg = updates[count];
+    msg = TelegramUpdate{};
+    if (item.containsKey("callback_query")) {
+      JsonObject cb = item["callback_query"];
+      msg.type = "callback_query";
+      msg.query_id = cb["id"].as<String>();
+      msg.text = cb["data"].as<String>();
+      msg.chat_id = cb["message"]["chat"]["id"].as<String>();
+      count++;
+    } else if (item.containsKey("message")) {
+      JsonObject m = item["message"];
+      msg.type = "message";
+      msg.text = m["text"].as<String>();
+      msg.chat_id = m["chat"]["id"].as<String>();
+      count++;
+    }
+  }
+  return count;
+}
+
+void telegram_poll() {
+  if (millis() - lastPoll < POLL_MS) return;
+
+  int effectiveLongPoll = wake_is_pending() ? WAKE_LONG_POLL_S : IDLE_LONG_POLL_S;
+  DynamicJsonDocument payload(256);
+  payload["offset"] = telegramOffset;
+  payload["limit"] = 10;
+  payload["timeout"] = effectiveLongPoll;
+
+  esp_task_wdt_reset();
+  uint32_t pollStart = millis();
+  log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
+                telegramOffset,
+                effectiveLongPoll);
+  String response = telegram_post_raw("getUpdates",
+                                      payload.as<JsonObject>(),
+                                      "getUpdates",
+                                      (effectiveLongPoll + 10) * 1000);
+  esp_task_wdt_reset();
+
+  TelegramUpdate updates[10];
+  long nextOffset = telegramOffset;
+  int newCount = response.length() > 0
+                   ? parse_updates(response, updates, 10, &nextOffset)
+                   : -1;
+
+  log_print("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
+                newCount,
+                millis() - pollStart,
+                nextOffset);
+
+  if (newCount < 0) {
+    log_event("error", "telegram", "getUpdates", "getUpdates failed");
+    lastPoll = millis();
+    return;
+  }
+
+  for (int i = 0; i < newCount; i++) {
+    log_print("[telegram] update[%d] type=%s text=%s\n",
+                  i,
+                  updates[i].type.c_str(),
+                  updates[i].text.c_str());
+    if (updates[i].type == "callback_query") {
+      handleCallback(updates[i]);
+    } else {
+      handleCommand(updates[i].chat_id, updates[i].text);
+    }
+    log_print("[telegram] update[%d] handled\n", i);
+    esp_task_wdt_reset();
+  }
+
+  if (nextOffset != telegramOffset) {
+    telegramOffset = nextOffset;
+    telegramPrefs.putLong("offset", telegramOffset);
+  }
+  if (telegramRebootPending) {
+    telegramPrefs.putLong("offset", telegramOffset);
+    log_print("[telegram] reboot pending; offset=%ld\n", telegramOffset);
+    delay(100);
+    ESP.restart();
+  }
+  lastPoll = millis();
 }
