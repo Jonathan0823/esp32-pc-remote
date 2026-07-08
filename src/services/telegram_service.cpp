@@ -22,7 +22,8 @@ const unsigned long POLL_MS = 500;
 static bool telegram_send_once(const char* label,
                                const String& command,
                                JsonObject payload) {
-  client.stop();
+  // ponytail: no client.stop() before send — library reconnects if needed,
+  //           and the poll already kept the connection alive.
   String response = bot.sendPostToTelegram(command, payload);
   client.stop();
 
