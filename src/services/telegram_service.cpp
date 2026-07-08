@@ -28,6 +28,7 @@ static bool telegram_send_once(const char* label,
 
   if (response.length() == 0) {
     Serial.printf("[telegram] %s send failed: empty response\n", label);
+    log_error("telegram", label, "empty response from Telegram");
     return false;
   }
 
@@ -35,11 +36,18 @@ static bool telegram_send_once(const char* label,
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
     Serial.printf("[telegram] %s send failed: %s\n", label, error.c_str());
+    log_error("telegram", label, error.c_str());
     return false;
   }
 
   bool ok = doc["ok"] | false;
-  Serial.printf("[telegram] %s send %s\n", label, ok ? "ok" : "not_ok");
+  if (!ok) {
+    const char* desc = doc["description"] | "Telegram API returned ok=false";
+    Serial.printf("[telegram] %s send not_ok: %s\n", label, desc);
+    log_error("telegram", label, desc);
+  } else {
+    Serial.printf("[telegram] %s send ok\n", label);
+  }
   return ok;
 }
 
@@ -227,6 +235,7 @@ void telegram_poll() {
 
     if (newCount < 0) {
       Serial.printf("[telegram] getUpdates failed\n");
+      log_error("telegram", "getUpdates", "getUpdates failed");
     }
 
     for (int i = 0; i < newCount; i++) {

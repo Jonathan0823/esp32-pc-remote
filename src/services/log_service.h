@@ -5,6 +5,8 @@
 
 void log_init();
 void log_event(const char* level, const char* component, const char* event, const char* msg);
+void log_warn(const char* component, const char* event, const char* msg);
+void log_error(const char* component, const char* event, const char* msg);
 void log_heartbeat(const String& targetName);
 
 #endif

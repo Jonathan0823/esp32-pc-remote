@@ -43,7 +43,7 @@ void wifi_ensure() {
   if (wifiWasConnected) {
     wifiWasConnected = false;
     Serial.printf("[wifi] lost uptime=%lus\n", millis() / 1000);
-    log_event("warn", "wifi", "lost", "WiFi lost");
+    log_warn("wifi", "lost", "WiFi lost");
   }
 
   unsigned long now = millis();
@@ -53,7 +53,7 @@ void wifi_ensure() {
   lastReconnectAttempt = now;
 
   Serial.printf("[wifi] reconnect uptime=%lus\n", now / 1000);
-  log_event("warn", "wifi", "reconnect", "WiFi reconnect attempt");
+  log_warn("wifi", "reconnect", "WiFi reconnect attempt");
   WiFi.reconnect();
   delay(250);
 }

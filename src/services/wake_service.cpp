@@ -3,6 +3,7 @@
 #include "config.h"
 #include "src/services/wake_service.h"
 #include "src/services/telegram_service.h"
+#include "src/services/log_service.h"
 
 static WiFiUDP wakeUdp;
 
@@ -46,6 +47,8 @@ void wake_poll() {
   }
 
   if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
+    String warnMsg = "PC did not wake within " + String(WAKE_TIMEOUT_MS / 1000) + "s";
+    log_warn("wake", "timeout", warnMsg.c_str());
     telegram_send_text_once(wakeChatId,
                             "⚠️ " + wakeDeviceName + " did not wake within "
                             + String(WAKE_TIMEOUT_MS / 1000)

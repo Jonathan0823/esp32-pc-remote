@@ -111,6 +111,14 @@ void log_event(const char* level, const char* component,
   free(log_line);
 }
 
+void log_warn(const char* component, const char* event, const char* msg) {
+  log_event("warn", component, event, msg);
+}
+
+void log_error(const char* component, const char* event, const char* msg) {
+  log_event("error", component, event, msg);
+}
+
 void log_heartbeat(const String& targetName) {
   if (!grafanaConfigured) return;
   if (millis() - lastHeartbeatMs < HEARTBEAT_MS) return;

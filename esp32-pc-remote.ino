@@ -54,7 +54,7 @@ void setup() {
 
   // log once if previous run was watchdog-triggered (WiFi is up after wifi_connect)
   if (esp_reset_reason() == ESP_RST_TASK_WDT) {
-    log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
+    log_warn("wdt", "triggered", "Task watchdog triggered reset");
   }
 
   // ponytail: Telegram long-poll blocks loopTask for ~60s.
