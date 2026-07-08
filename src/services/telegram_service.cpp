@@ -27,26 +27,26 @@ static bool telegram_send_once(const char* label,
   client.stop();
 
   if (response.length() == 0) {
-    Serial.printf("[telegram] %s send failed: empty response\n", label);
-    log_error("telegram", label, "empty response from Telegram");
+    log_print("[telegram] %s send failed: empty response\n", label);
+    log_event("error", "telegram", label, "empty response from Telegram");
     return false;
   }
 
   DynamicJsonDocument doc(512);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
-    Serial.printf("[telegram] %s send failed: %s\n", label, error.c_str());
-    log_error("telegram", label, error.c_str());
+    log_print("[telegram] %s send failed: %s\n", label, error.c_str());
+    log_event("error", "telegram", label, error.c_str());
     return false;
   }
 
   bool ok = doc["ok"] | false;
   if (!ok) {
     const char* desc = doc["description"] | "Telegram API returned ok=false";
-    Serial.printf("[telegram] %s send not_ok: %s\n", label, desc);
-    log_error("telegram", label, desc);
+    log_print("[telegram] %s send not_ok: %s\n", label, desc);
+    log_event("error", "telegram", label, desc);
   } else {
-    Serial.printf("[telegram] %s send ok\n", label);
+    log_print("[telegram] %s send ok\n", label);
   }
   return ok;
 }
@@ -110,7 +110,7 @@ static String menuText() {
 
 static void handleCommand(String chatId, String text) {
   text.trim();
-  Serial.printf("[telegram] handleCommand chat=%s text=%s\n", chatId.c_str(), text.c_str());
+  log_print("[telegram] handleCommand chat=%s text=%s\n", chatId.c_str(), text.c_str());
 
   // extract command prefix (first word) for case-insensitive matching
   int sp = text.indexOf(' ');
@@ -143,7 +143,7 @@ static void handleCommand(String chatId, String text) {
   if (cmd == "/status") {
     Serial.println("[telegram] /status probe start");
     bool reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
-    Serial.printf("[telegram] /status probe done reachable=%d\n", reachable);
+    log_print("[telegram] /status probe done reachable=%d\n", reachable);
     String msg = "✅ ESP32 healthy\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
@@ -195,7 +195,7 @@ static void handleCommand(String chatId, String text) {
 }
 
 static void handleCallback(const telegramMessage& msg) {
-  Serial.printf("[telegram] handleCallback chat=%s data=%s\n", msg.chat_id.c_str(), msg.text.c_str());
+  log_print("[telegram] handleCallback chat=%s data=%s\n", msg.chat_id.c_str(), msg.text.c_str());
   if (msg.text == "wake_confirm") {
     Serial.println("[telegram] callback confirm start");
     telegram_send_callback_answer_once(msg.query_id, "", false, "", 0);
@@ -222,24 +222,24 @@ void telegram_poll() {
     // isn't delayed by the 60s long-poll
     bot.longPoll = wake_is_pending() ? 5 : 60;
     uint32_t pollStart = millis();
-    Serial.printf("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
+    log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
                   bot.longPoll);
     int newCount = bot.getUpdates(telegramOffset);
     // ponytail: reset longPoll after polling so send helpers don't inherit the 60s poll timeout.
     bot.longPoll = 0;
-    Serial.printf("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
+    log_print("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
                   bot.last_message_received + 1);
 
     if (newCount < 0) {
-      Serial.printf("[telegram] getUpdates failed\n");
-      log_error("telegram", "getUpdates", "getUpdates failed");
+      log_print("[telegram] getUpdates failed\n");
+      log_event("error", "telegram", "getUpdates", "getUpdates failed");
     }
 
     for (int i = 0; i < newCount; i++) {
-      Serial.printf("[telegram] update[%d] type=%s text=%s\n",
+      log_print("[telegram] update[%d] type=%s text=%s\n",
                     i,
                     bot.messages[i].type.c_str(),
                     bot.messages[i].text.c_str());
@@ -249,7 +249,7 @@ void telegram_poll() {
         handleCommand(String(bot.messages[i].chat_id),
                       String(bot.messages[i].text));
       }
-      Serial.printf("[telegram] update[%d] handled\n", i);
+      log_print("[telegram] update[%d] handled\n", i);
     }
     if (newCount > 0) {
       telegramOffset = bot.last_message_received + 1;
@@ -257,7 +257,7 @@ void telegram_poll() {
     }
     if (telegramRebootPending) {
       telegramPrefs.putLong("offset", telegramOffset);
-      Serial.printf("[telegram] reboot pending; offset=%ld\n", telegramOffset);
+      log_print("[telegram] reboot pending; offset=%ld\n", telegramOffset);
       delay(100);
       ESP.restart();
     }
