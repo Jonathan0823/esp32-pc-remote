@@ -31,25 +31,11 @@ static int consecutiveFailures = 0;
 static const int MAX_BACKOFF_MS = 30000;
 static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
-static IPAddress cachedTelegramIP;
-static bool dnsWarm = false;
+static WiFiClientSecure tlsClient; // ponytail: single persistent client
 
 static void telegram_poll_task(void *pv);
 static void handleCommand(String chatId, String text);
 static void handleCallback(const TelegramUpdate &msg);
-
-// Warm DNS cache before HTTP request to prevent timeout on stale entry
-static void telegram_warm_dns() {
-  IPAddress ip;
-  if (WiFi.hostByName("api.telegram.org", ip)) {
-    cachedTelegramIP = ip;
-    dnsWarm = true;
-    log_print("[telegram] DNS warm: %s\n", ip.toString().c_str());
-  } else {
-    log_print("[telegram] DNS warm FAILED\n");
-    dnsWarm = false;
-  }
-}
 
 static String telegram_url(const String &method) {
   return String("https://api.telegram.org/bot") + BOT_TOKEN + "/" + method;
@@ -77,20 +63,20 @@ static void telegram_log_begin_failure(const char *label) {
 
 static String telegram_post_raw(const String &method, JsonObject payload,
                                 const char *label, uint32_t timeoutMs) {
-  // Warm DNS cache before each request to prevent stale entry failures
-  telegram_warm_dns();
-
   for (int attempt = 0; attempt < 2; attempt++) {
     esp_task_wdt_reset();
     if (attempt > 0) {
       log_print("[telegram] %s retry\n", label);
-      delay(500);
+      delay(1000); // ponytail: longer delay lets TCP stack clean up
       esp_task_wdt_reset();
     }
 
-    WiFiClientSecure tls;
-    tls.setInsecure();
-    tls.setHandshakeTimeout(10);
+    // Force clean close before each attempt
+    tlsClient.stop();
+    delay(10);
+
+    tlsClient.setInsecure();
+    tlsClient.setHandshakeTimeout(10);
 
     HTTPClient http;
     http.setReuse(false);
@@ -99,12 +85,12 @@ static String telegram_post_raw(const String &method, JsonObject payload,
     http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
     String url = telegram_url(method);
-    log_print("[telegram] %s connecting to: %s\n", label, url.c_str());
+    log_print("[telegram] %s attempt %d connecting\n", label, attempt);
 
-    if (!http.begin(tls, url)) {
+    if (!http.begin(tlsClient, url)) {
       telegram_log_begin_failure(label);
       http.end();
-      tls.stop();
+      tlsClient.stop();
       continue;
     }
 
@@ -118,20 +104,14 @@ static String telegram_post_raw(const String &method, JsonObject payload,
     esp_task_wdt_reset();
 
     http.end();
-    tls.stop();
 
-    log_print("[telegram] %s HTTP code=%d resp_len=%d WiFi=%d RSSI=%d\n", label, code,
-              response.length(), WiFi.status(), WiFi.RSSI());
-    if (response.length() > 0 && response.length() < 200) {
-      log_print("[telegram] %s response: %s\n", label, response.c_str());
-    }
+    log_print("[telegram] %s HTTP code=%d resp_len=%d\n", label, code,
+              response.length());
 
     if (code > 0)
       return response;
 
     telegram_log_http_failure(label, code);
-    log_print("[telegram] %s error=%d desc=%s\n", label, code,
-              HTTPClient::errorToString(code).c_str());
   }
 
   log_print("[telegram] %s failed after retry\n", label);
@@ -210,8 +190,8 @@ void telegram_setup() {
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
             telegramOffset);
 
-  // Warm DNS on setup
-  telegram_warm_dns();
+  tlsClient.setInsecure();
+  tlsClient.setHandshakeTimeout(10);
 
   if (telegramPollTaskHandle == nullptr) {
     BaseType_t ok = xTaskCreate(telegram_poll_task, "telegram_poll", 12288,
@@ -427,7 +407,7 @@ void telegram_poll() {
       return;
     }
     log_print("[telegram] WiFi reconnected\n");
-    dnsWarm = false; // Force DNS refresh after reconnect
+    tlsClient.stop(); // ponytail: force clean socket after reconnect
   }
 
   // Exponential backoff after failures (capped at 30s)
