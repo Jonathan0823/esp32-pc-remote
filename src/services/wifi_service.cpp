@@ -2,6 +2,7 @@
 #include "config.h"
 #include "src/services/log_service.h"
 #include <WiFi.h>
+#include <esp_task_wdt.h>
 
 static unsigned long lastReconnectAttempt = 0;
 static bool wifiWasConnected = false;
@@ -14,6 +15,7 @@ void wifi_connect() {
   uint32_t start = millis();
   uint32_t lastLog = start;
   while (WiFi.status() != WL_CONNECTED) {
+    esp_task_wdt_reset();
     delay(500);
     if (millis() - lastLog >= 5000) {
       log_print("[wifi] waiting %lus status=%d\n", (millis() - start) / 1000, WiFi.status());

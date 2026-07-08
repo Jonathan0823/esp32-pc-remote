@@ -47,6 +47,15 @@ void setup() {
   delay(50);
   log_print("\n=== ESP32 PC Remote ===\n");
   log_print("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
+  // ponytail: Telegram long-poll blocks loopTask for ~60s.
+  //           MUST reconfigure WDT before any blocking call (wifi_connect)
+  //           or the default 5s timeout will fire a boot-loop.
+  esp_task_wdt_deinit();
+  esp_task_wdt_config_t wdtConfig = {120000, 0, true};
+  esp_task_wdt_init(&wdtConfig);
+  esp_task_wdt_add(NULL);
+  log_print("[wdt] configured 120s\n");
+
   log_print("[boot] target=%s\n", PC_NAME);
   wifi_connect();
   telegram_setup();
@@ -56,14 +65,6 @@ void setup() {
   if (esp_reset_reason() == ESP_RST_TASK_WDT) {
     log_event("warn", "wdt", "triggered", "Task watchdog triggered reset");
   }
-
-  // ponytail: Telegram long-poll blocks loopTask for ~60s.
-  //           Deinit and reinit WDT with 120s timeout so it doesn't fire.
-  esp_task_wdt_deinit();
-  esp_task_wdt_config_t wdtConfig = {120000, 0, true};
-  esp_task_wdt_init(&wdtConfig);
-  esp_task_wdt_add(NULL);
-  log_print("[wdt] configured 120s\n");
 }
 
 void loop() {
