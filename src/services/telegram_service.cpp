@@ -155,7 +155,7 @@ void telegram_setup() {
       nullptr,
       1,
       &telegramPollTaskHandle,
-      0);
+      1);
     if (ok != pdPASS) {
       telegramPollTaskHandle = nullptr;
       log_print("[telegram] poll task start failed\n");
