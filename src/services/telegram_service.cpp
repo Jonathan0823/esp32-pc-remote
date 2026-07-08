@@ -31,38 +31,12 @@ static int consecutiveFailures = 0;
 static const int MAX_BACKOFF_MS = 30000;
 static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
-static IPAddress telegramIP;
-static bool telegramIPValid = false;
-static unsigned long lastDNSRefresh = 0;
-static const unsigned long DNS_REFRESH_MS = 300000; // 5 minutes
 
 static void telegram_poll_task(void *pv);
 static void handleCommand(String chatId, String text);
 static void handleCallback(const TelegramUpdate &msg);
 
-static bool telegram_resolve_dns() {
-  if (telegramIPValid && millis() - lastDNSRefresh < DNS_REFRESH_MS) {
-    return true;
-  }
-
-  log_print("[telegram] resolving DNS for api.telegram.org\n");
-  if (WiFi.hostByName("api.telegram.org", telegramIP)) {
-    telegramIPValid = true;
-    lastDNSRefresh = millis();
-    log_print("[telegram] DNS resolved: %s\n", telegramIP.toString().c_str());
-    return true;
-  }
-
-  log_print("[telegram] DNS resolution failed\n");
-  telegramIPValid = false;
-  return false;
-}
-
 static String telegram_url(const String &method) {
-  // Use pre-resolved IP to avoid DNS failures
-  if (telegramIPValid) {
-    return String("https://") + telegramIP.toString() + "/bot" + BOT_TOKEN + "/" + method;
-  }
   return String("https://api.telegram.org/bot") + BOT_TOKEN + "/" + method;
 }
 
@@ -123,6 +97,12 @@ static String telegram_post_raw(const String &method, JsonObject payload,
 
     http.end();
     tls.stop();
+
+    log_print("[telegram] %s HTTP code=%d resp_len=%d\n", label, code,
+              response.length());
+    if (response.length() > 0 && response.length() < 200) {
+      log_print("[telegram] %s response: %s\n", label, response.c_str());
+    }
 
     if (code > 0)
       return response;
@@ -205,9 +185,6 @@ void telegram_setup() {
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
             telegramOffset);
-
-  // Pre-resolve DNS on setup
-  telegram_resolve_dns();
 
   if (telegramPollTaskHandle == nullptr) {
     BaseType_t ok = xTaskCreate(telegram_poll_task, "telegram_poll", 12288,
@@ -359,6 +336,10 @@ static void handleCallback(const TelegramUpdate &msg) {
 
 static int parse_updates(const String &response, TelegramUpdate *updates,
                          int maxUpdates, long *nextOffset) {
+  log_print("[telegram] parse_updates len=%d\n", response.length());
+  if (response.length() > 0 && response.length() < 300) {
+    log_print("[telegram] raw: %s\n", response.c_str());
+  }
   DynamicJsonDocument doc(16384);
   DeserializationError error = deserializeJson(doc, response);
   if (error) {
@@ -419,14 +400,6 @@ void telegram_poll() {
       return;
     }
     log_print("[telegram] WiFi reconnected\n");
-    telegramIPValid = false; // Force DNS refresh after reconnect
-  }
-
-  // DNS health check - refresh if stale
-  if (!telegram_resolve_dns()) {
-    log_print("[telegram] DNS failed, skipping poll\n");
-    lastPoll = millis();
-    return;
   }
 
   // Exponential backoff after failures (capped at 30s)
