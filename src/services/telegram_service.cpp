@@ -45,7 +45,7 @@ static String method_name(const String& command) {
 static String telegram_post_raw(const String& method,
                                 JsonObject payload,
                                 const char* label,
-                                uint16_t timeoutMs) {
+                                uint32_t timeoutMs) {
   WiFiClientSecure tls;
   tls.setInsecure();
   tls.setHandshakeTimeout(10); // seconds, not milliseconds
@@ -53,7 +53,8 @@ static String telegram_post_raw(const String& method,
   HTTPClient http;
   http.setReuse(false);
   http.setConnectTimeout(5000);
-  http.setTimeout(timeoutMs);
+  // HTTPClient::setTimeout takes uint16_t; 70000 overflows to ~4.5s.
+  http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
   if (!http.begin(tls, telegram_url(method))) {
     log_print("[telegram] %s http.begin failed\n", label);
