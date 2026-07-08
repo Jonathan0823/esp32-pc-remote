@@ -25,8 +25,10 @@ static long telegramOffset = 1;
 static bool telegramRebootPending = false;
 static unsigned long lastPoll = 0;
 static const unsigned long POLL_MS = 1000;
-static const int IDLE_LONG_POLL_S = 60;
+static const int IDLE_LONG_POLL_S = 30;
 static const int WAKE_LONG_POLL_S = 5;
+static int consecutiveFailures = 0;
+static const int MAX_BACKOFF_MS = 30000;
 static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
 
@@ -76,12 +78,14 @@ static String telegram_post_raw(const String& method,
     tls.setHandshakeTimeout(10);
 
     HTTPClient http;
-    http.setReuse(true);
+    http.setReuse(false);
     http.setConnectTimeout(5000);
     http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
     if (!http.begin(tls, telegram_url(method))) {
       telegram_log_begin_failure(label);
+      http.end();
+      tls.stop();
       continue;
     }
 
@@ -91,6 +95,9 @@ static String telegram_post_raw(const String& method,
 
     int code = http.POST(body);
     String response = code > 0 ? http.getString() : "";
+
+    http.end();
+    tls.stop();
 
     if (code > 0) return response;
 
@@ -359,6 +366,27 @@ static int parse_updates(const String& response, TelegramUpdate* updates, int ma
 void telegram_poll() {
   if (millis() - lastPoll < POLL_MS) return;
 
+  // WiFi health check
+  if (WiFi.status() != WL_CONNECTED) {
+    log_print("[telegram] WiFi disconnected, attempting reconnect\n");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    delay(1000);
+    if (WiFi.status() != WL_CONNECTED) {
+      log_print("[telegram] WiFi reconnect failed, skipping poll\n");
+      lastPoll = millis();
+      return;
+    }
+    log_print("[telegram] WiFi reconnected\n");
+  }
+
+  // Exponential backoff after failures
+  if (consecutiveFailures > 0) {
+    int backoffMs = min(1000 * (1 << min(consecutiveFailures, 4)), MAX_BACKOFF_MS);
+    if (millis() - lastPoll < (uint32_t)backoffMs) return;
+    log_print("[telegram] backoff %dms after %d failures\n", backoffMs, consecutiveFailures);
+  }
+
   int effectiveLongPoll = wake_is_pending() ? WAKE_LONG_POLL_S : IDLE_LONG_POLL_S;
   DynamicJsonDocument payload(256);
   payload["offset"] = telegramOffset;
@@ -388,10 +416,14 @@ void telegram_poll() {
                 nextOffset);
 
   if (newCount < 0) {
+    consecutiveFailures++;
     log_event("error", "telegram", "getUpdates", "getUpdates failed");
     lastPoll = millis();
     return;
   }
+
+  // Success — reset failure counter
+  consecutiveFailures = 0;
 
   for (int i = 0; i < newCount; i++) {
     log_print("[telegram] update[%d] type=%s text=%s\n",
