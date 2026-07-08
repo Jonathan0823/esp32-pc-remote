@@ -4,7 +4,6 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <time.h>
-#include <esp_log.h>
 #include "config.h"
 #include "src/services/log_service.h"
 
@@ -98,10 +97,7 @@ void log_print(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-
-  size_t len = strlen(buf);
-  if (len > 0 && buf[len - 1] == '\n') buf[len - 1] = '\0';
-  ESP_LOGI("esp32-pc-remote", "%s", buf);
+  Serial.printf("[%lums] %s", millis(), buf);
 }
 
 void log_heartbeat(const String& targetName) {
