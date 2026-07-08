@@ -31,10 +31,25 @@ static int consecutiveFailures = 0;
 static const int MAX_BACKOFF_MS = 30000;
 static const int MAX_UPDATES = 1;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
+static IPAddress cachedTelegramIP;
+static bool dnsWarm = false;
 
 static void telegram_poll_task(void *pv);
 static void handleCommand(String chatId, String text);
 static void handleCallback(const TelegramUpdate &msg);
+
+// Warm DNS cache before HTTP request to prevent timeout on stale entry
+static void telegram_warm_dns() {
+  IPAddress ip;
+  if (WiFi.hostByName("api.telegram.org", ip)) {
+    cachedTelegramIP = ip;
+    dnsWarm = true;
+    log_print("[telegram] DNS warm: %s\n", ip.toString().c_str());
+  } else {
+    log_print("[telegram] DNS warm FAILED\n");
+    dnsWarm = false;
+  }
+}
 
 static String telegram_url(const String &method) {
   return String("https://api.telegram.org/bot") + BOT_TOKEN + "/" + method;
@@ -62,6 +77,9 @@ static void telegram_log_begin_failure(const char *label) {
 
 static String telegram_post_raw(const String &method, JsonObject payload,
                                 const char *label, uint32_t timeoutMs) {
+  // Warm DNS cache before each request to prevent stale entry failures
+  telegram_warm_dns();
+
   for (int attempt = 0; attempt < 2; attempt++) {
     esp_task_wdt_reset();
     if (attempt > 0) {
@@ -76,7 +94,7 @@ static String telegram_post_raw(const String &method, JsonObject payload,
 
     HTTPClient http;
     http.setReuse(false);
-    http.setConnectTimeout(3000);
+    http.setConnectTimeout(5000);
     http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
     if (!http.begin(tls, telegram_url(method))) {
@@ -185,6 +203,9 @@ void telegram_setup() {
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
             telegramOffset);
+
+  // Warm DNS on setup
+  telegram_warm_dns();
 
   if (telegramPollTaskHandle == nullptr) {
     BaseType_t ok = xTaskCreate(telegram_poll_task, "telegram_poll", 12288,
@@ -400,6 +421,7 @@ void telegram_poll() {
       return;
     }
     log_print("[telegram] WiFi reconnected\n");
+    dnsWarm = false; // Force DNS refresh after reconnect
   }
 
   // Exponential backoff after failures (capped at 30s)
