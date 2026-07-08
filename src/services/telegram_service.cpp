@@ -90,16 +90,16 @@ void telegram_setup() {
   bot.waitForResponse = 1500;
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
-  Serial.printf("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
+  log_print("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
                 bot.longPoll,
                 bot.waitForResponse,
                 telegramOffset);
 }
 
 static String menuText() {
-  String msg = "🤖 *ESP32 PC Remote commands*\n\n";
+  String msg = "🤖 <b>ESP32 PC Remote commands</b>\n\n";
   msg += "/start /help — Show this menu\n";
-  msg += "/ping — Check bot health & diagnostics\n";
+  msg += "/ping — Check bot health &amp; diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
   msg += "/wake — Wake the selected PC (inline confirmation)\n";
   msg += "/reboot — Restart the ESP32\n\n";
@@ -118,14 +118,14 @@ static void handleCommand(String chatId, String text) {
   cmd.toLowerCase();
 
   if (cmd == "/start" || cmd == "/help") {
-    Serial.println("[telegram] /help reply start");
-    telegram_send_text_once(chatId, menuText(), "Markdown");
-    Serial.println("[telegram] /help reply done");
+    log_print("[telegram] /help reply start\n");
+    telegram_send_text_once(chatId, menuText(), "HTML");
+    log_print("[telegram] /help reply done\n");
     return;
   }
 
   if (cmd == "/ping") {
-    String msg = "🤖 Bot alive\n";
+    String msg = "🤖 <b>Bot alive</b>\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
@@ -134,30 +134,30 @@ static void handleCommand(String chatId, String text) {
     msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n";
     msg += "🔄 Reset: " + String(current_reset_reason()) + "\n";
 
-    Serial.println("[telegram] /ping reply start");
-    telegram_send_text_once(chatId, msg, "");
-    Serial.println("[telegram] /ping reply done");
+    log_print("[telegram] /ping reply start\n");
+    telegram_send_text_once(chatId, msg, "HTML");
+    log_print("[telegram] /ping reply done\n");
     return;
   }
 
   if (cmd == "/status") {
-    Serial.println("[telegram] /status probe start");
+    log_print("[telegram] /status probe start\n");
     bool reachable = wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
     log_print("[telegram] /status probe done reachable=%d\n", reachable);
-    String msg = "✅ ESP32 healthy\n";
+    String msg = "✅ <b>ESP32 healthy</b>\n";
     msg += "📶 Wi-Fi: " + String(WiFi.status() == WL_CONNECTED
                                  ? "connected" : "disconnected") + "\n";
     msg += "📡 RSSI: " + String(WiFi.RSSI()) + " dBm\n";
     msg += "🌐 IP: " + WiFi.localIP().toString() + "\n";
     msg += "⏱ Uptime: " + String(millis() / 1000) + "s\n";
     msg += "💾 Heap: " + String(ESP.getFreeHeap() / 1024) + " KB free\n\n";
-    msg += "🖥 Target: " + String(PC_NAME) + "\n";
+    msg += "🖥 <b>Target: " + String(PC_NAME) + "</b>\n";
     msg += "   MAC: " + String(PC_MAC) + "\n";
     msg += "   IP: " + String(PC_IP) + "\n";
     msg += "   Status: " + String(reachable ? "online" : "offline / sleeping");
-    Serial.println("[telegram] /status reply start");
-    telegram_send_text_once(chatId, msg, "");
-    Serial.println("[telegram] /status reply done");
+    log_print("[telegram] /status reply start\n");
+    telegram_send_text_once(chatId, msg, "HTML");
+    log_print("[telegram] /status reply done\n");
     return;
   }
 
@@ -174,40 +174,40 @@ static void handleCommand(String chatId, String text) {
     JsonObject no = row.createNestedObject();
     no["text"] = "❌ No";
     no["callback_data"] = "wake_cancel";
-    Serial.println("[telegram] /wake reply start");
+    log_print("[telegram] /wake reply start\n");
     telegram_send_json_once(bot.buildCommand("sendMessage"), payload.as<JsonObject>(), "sendMessage");
-    Serial.println("[telegram] /wake reply done");
+    log_print("[telegram] /wake reply done\n");
     return;
   }
 
   if (cmd == "/reboot") {
-    Serial.println("[telegram] /reboot reply start");
+    log_print("[telegram] /reboot reply start\n");
     telegram_send_text_once(chatId, "🔄 Rebooting ESP32...", "");
-    Serial.println("[telegram] /reboot reply done");
+    log_print("[telegram] /reboot reply done\n");
     telegramRebootPending = true;
     return;
   }
 
   // unknown command — show help hint
-  Serial.println("[telegram] unknown command reply start");
+  log_print("[telegram] unknown command reply start\n");
   telegram_send_text_once(chatId, "Unknown command. Type /help for available commands.", "");
-  Serial.println("[telegram] unknown command reply done");
+  log_print("[telegram] unknown command reply done\n");
 }
 
 static void handleCallback(const telegramMessage& msg) {
   log_print("[telegram] handleCallback chat=%s data=%s\n", msg.chat_id.c_str(), msg.text.c_str());
   if (msg.text == "wake_confirm") {
-    Serial.println("[telegram] callback confirm start");
+    log_print("[telegram] callback confirm start\n");
     telegram_send_callback_answer_once(msg.query_id, "", false, "", 0);
     wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
     wake_start_polling(msg.chat_id, PC_NAME, PC_IP, PC_TCP_PORT);
     telegram_send_text_once(msg.chat_id, "⚡ Wake signal sent to " + String(PC_NAME)
                     + " — waiting up to 90s for PC to respond...", "");
-    Serial.println("[telegram] callback confirm done");
+    log_print("[telegram] callback confirm done\n");
   } else if (msg.text == "wake_cancel") {
-    Serial.println("[telegram] callback cancel start");
+    log_print("[telegram] callback cancel start\n");
     telegram_send_callback_answer_once(msg.query_id, "Cancelled", false, "", 0);
-    Serial.println("[telegram] callback cancel done");
+    log_print("[telegram] callback cancel done\n");
   }
 }
 
