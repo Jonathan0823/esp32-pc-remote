@@ -25,7 +25,6 @@ static bool telegram_send_once(const char* label,
   // ponytail: no client.stop() before send — library reconnects if needed,
   //           and the poll already kept the connection alive.
   String response = bot.sendPostToTelegram(command, payload);
-  client.stop();
 
   if (response.length() == 0) {
     log_print("[telegram] %s send failed: empty response\n", label);
