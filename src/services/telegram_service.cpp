@@ -3,6 +3,8 @@
 #include <esp_task_wdt.h>
 #include <UniversalTelegramBot.h>
 #include <Preferences.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "config.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
@@ -13,11 +15,15 @@ extern const char* current_reset_reason();
 
 WiFiClientSecure client;
 UniversalTelegramBot bot(BOT_TOKEN, client);
+WiFiClientSecure pollClient;
+UniversalTelegramBot pollBot(BOT_TOKEN, pollClient);
 Preferences telegramPrefs;
 long telegramOffset = 1;
 bool telegramRebootPending = false;
 unsigned long lastPoll = 0;
 const unsigned long POLL_MS = 500;
+static TaskHandle_t telegramPollTaskHandle = nullptr;
+static void telegram_poll_task(void* pv);
 
 static bool telegram_send_once(const char* label,
                                const String& command,
@@ -86,17 +92,50 @@ bool telegram_send_callback_answer_once(const String& query_id,
 }
 
 void telegram_setup() {
-  // ponytail: setInsecure for local/MVP; add root CA cert for production use
+  // ponytail: keep send and poll sockets separate so long-poll never blocks replies.
   client.setInsecure();
   client.setHandshakeTimeout(10000);
-  bot.longPoll = 60;
+  bot.longPoll = 0;
   bot.waitForResponse = 1500;
+
+  pollClient.setInsecure();
+  pollClient.setHandshakeTimeout(10000);
+  pollBot.longPoll = 60;
+  pollBot.waitForResponse = 1500;
+
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d wait=%u offset=%ld\n",
-                bot.longPoll,
-                bot.waitForResponse,
+                pollBot.longPoll,
+                pollBot.waitForResponse,
                 telegramOffset);
+
+  if (telegramPollTaskHandle == nullptr) {
+    BaseType_t ok = xTaskCreatePinnedToCore(
+      telegram_poll_task,
+      "telegram_poll",
+      8192,
+      nullptr,
+      1,
+      &telegramPollTaskHandle,
+      0);
+    if (ok != pdPASS) {
+      telegramPollTaskHandle = nullptr;
+      log_print("[telegram] poll task start failed\n");
+    }
+  }
+}
+
+static void telegram_poll_task(void* pv) {
+  (void)pv;
+  esp_task_wdt_add(NULL);
+  for (;;) {
+    if (WiFi.status() == WL_CONNECTED) {
+      telegram_poll();
+    }
+    esp_task_wdt_reset();
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
 }
 
 static String menuText() {
@@ -217,8 +256,8 @@ static void handleCallback(const telegramMessage& msg) {
 void telegram_poll() {
   if (millis() - lastPoll >= POLL_MS) {
     // ponytail: keep the TLS socket unless it's stale.
-    if (!client.connected() || millis() - lastPoll > 120000) {
-      client.stop();
+    if (!pollClient.connected() || millis() - lastPoll > 120000) {
+      pollClient.stop();
     }
     // Reset WDT before blocking getUpdates call (can block up to 60s).
     esp_task_wdt_reset();
@@ -226,22 +265,22 @@ void telegram_poll() {
     // ponytail: while wake is pending, use 5s polls so wake detection
     // isn't delayed by the 60s long-poll
     int effectiveLongPoll = wake_is_pending() ? 5 : 60;
-    bot.longPoll = effectiveLongPoll;
+    pollBot.longPoll = effectiveLongPoll;
     // ponytail: cap TCP socket timeout so a hung read doesn't stall past WDT.
     //           getUpdates should return by Telegram's longPoll timeout
     //           (60s), but a dropped TCP connection can hang forever.
-    client.setTimeout((effectiveLongPoll + 10) * 1000);
+    pollClient.setTimeout((effectiveLongPoll + 10) * 1000);
     uint32_t pollStart = millis();
     log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
                   telegramOffset,
-                  bot.longPoll);
-    int newCount = bot.getUpdates(telegramOffset);
+                  pollBot.longPoll);
+    int newCount = pollBot.getUpdates(telegramOffset);
     // ponytail: reset longPoll after polling so send helpers don't inherit the 60s poll timeout.
-    bot.longPoll = 0;
+    pollBot.longPoll = 0;
     log_print("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
                   newCount,
                   millis() - pollStart,
-                  bot.last_message_received + 1);
+                  pollBot.last_message_received + 1);
 
     if (newCount < 0) {
       log_print("[telegram] getUpdates failed\n");
@@ -251,19 +290,19 @@ void telegram_poll() {
     for (int i = 0; i < newCount; i++) {
       log_print("[telegram] update[%d] type=%s text=%s\n",
                     i,
-                    bot.messages[i].type.c_str(),
-                    bot.messages[i].text.c_str());
-      if (bot.messages[i].type == "callback_query") {
-        handleCallback(bot.messages[i]);
+                    pollBot.messages[i].type.c_str(),
+                    pollBot.messages[i].text.c_str());
+      if (pollBot.messages[i].type == "callback_query") {
+        handleCallback(pollBot.messages[i]);
       } else {
-        handleCommand(String(bot.messages[i].chat_id),
-                      String(bot.messages[i].text));
+        handleCommand(String(pollBot.messages[i].chat_id),
+                      String(pollBot.messages[i].text));
       }
       log_print("[telegram] update[%d] handled\n", i);
       esp_task_wdt_reset();
     }
     if (newCount > 0) {
-      telegramOffset = bot.last_message_received + 1;
+      telegramOffset = pollBot.last_message_received + 1;
       telegramPrefs.putLong("offset", telegramOffset);
     }
     if (telegramRebootPending) {
