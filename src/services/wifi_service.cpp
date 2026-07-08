@@ -10,6 +10,7 @@ static const unsigned long RECONNECT_INTERVAL_MS = 10000;
 
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false);
   log_print("[wifi] connect ssid=%s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();

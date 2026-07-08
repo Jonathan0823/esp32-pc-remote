@@ -29,6 +29,7 @@ static const int IDLE_LONG_POLL_S = 60;
 static const int WAKE_LONG_POLL_S = 5;
 static TaskHandle_t telegramPollTaskHandle = nullptr;
 
+
 static void telegram_poll_task(void* pv);
 static void handleCommand(String chatId, String text);
 static void handleCallback(const TelegramUpdate& msg);
@@ -59,7 +60,7 @@ static String telegram_post_raw(const String& method,
     tls.setHandshakeTimeout(10);
 
     HTTPClient http;
-    http.setReuse(false);
+    http.setReuse(true);
     http.setConnectTimeout(5000);
     http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
@@ -74,8 +75,6 @@ static String telegram_post_raw(const String& method,
 
     int code = http.POST(body);
     String response = code > 0 ? http.getString() : "";
-    http.end();
-    tls.stop();
 
     if (code > 0) return response;
 
@@ -341,19 +340,21 @@ static int parse_updates(const String& response, TelegramUpdate* updates, int ma
 void telegram_poll() {
   if (millis() - lastPoll < POLL_MS) return;
 
+  int effectiveLongPoll = wake_is_pending() ? WAKE_LONG_POLL_S : IDLE_LONG_POLL_S;
   DynamicJsonDocument payload(256);
   payload["offset"] = telegramOffset;
   payload["limit"] = 10;
-  payload["timeout"] = 0;
+  payload["timeout"] = effectiveLongPoll;
 
   esp_task_wdt_reset();
   uint32_t pollStart = millis();
-  log_print("[telegram] getUpdates offset=%ld\n",
-                telegramOffset);
+  log_print("[telegram] getUpdates offset=%ld longPoll=%d\n",
+                telegramOffset,
+                effectiveLongPoll);
   String response = telegram_post_raw("getUpdates",
                                       payload.as<JsonObject>(),
                                       "getUpdates",
-                                      5000);
+                                      (effectiveLongPoll + 10) * 1000);
   esp_task_wdt_reset();
 
   TelegramUpdate updates[10];

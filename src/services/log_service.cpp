@@ -6,7 +6,6 @@
 #include "config.h"
 #include "src/services/log_service.h"
 
-static WiFiClientSecure logClient;
 static bool grafanaConfigured = false;
 static unsigned long lastHeartbeatMs = 0;
 const unsigned long HEARTBEAT_MS = 60000;
@@ -37,12 +36,13 @@ static void make_ts(char* buf, size_t len) {
 }
 
 static void send_loki_line(const char* log_line) {
+  WiFiClientSecure client;
+  client.setInsecure();
   HTTPClient http;
   String endpoint = String(GRAFANA_LOGS_URL) + "/loki/api/v1/push";
-  if (!http.begin(logClient, endpoint)) return;
+  if (!http.begin(client, endpoint)) return;
 
   // ponytail: Grafana logging is best-effort; cap wait so it can't stall the bot.
-  logClient.setTimeout(2000);
   http.setConnectTimeout(2000);
   http.setTimeout(2000);
   http.setReuse(false);
@@ -85,7 +85,6 @@ void log_init() {
     return;
   }
 
-  logClient.setInsecure();
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
   log_print("[log] init NTP + Grafana Cloud logging\n");
   log_event("info", "boot", "start", "ESP32 PC Remote started");
