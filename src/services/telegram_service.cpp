@@ -96,8 +96,12 @@ static String telegram_post_raw(const String &method, JsonObject payload,
     http.setReuse(false);
     http.setConnectTimeout(5000);
     http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
+    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
-    if (!http.begin(tls, telegram_url(method))) {
+    String url = telegram_url(method);
+    log_print("[telegram] %s connecting to: %s\n", label, url.c_str());
+
+    if (!http.begin(tls, url)) {
       telegram_log_begin_failure(label);
       http.end();
       tls.stop();
@@ -116,8 +120,8 @@ static String telegram_post_raw(const String &method, JsonObject payload,
     http.end();
     tls.stop();
 
-    log_print("[telegram] %s HTTP code=%d resp_len=%d\n", label, code,
-              response.length());
+    log_print("[telegram] %s HTTP code=%d resp_len=%d WiFi=%d RSSI=%d\n", label, code,
+              response.length(), WiFi.status(), WiFi.RSSI());
     if (response.length() > 0 && response.length() < 200) {
       log_print("[telegram] %s response: %s\n", label, response.c_str());
     }
@@ -126,6 +130,8 @@ static String telegram_post_raw(const String &method, JsonObject payload,
       return response;
 
     telegram_log_http_failure(label, code);
+    log_print("[telegram] %s error=%d desc=%s\n", label, code,
+              HTTPClient::errorToString(code).c_str());
   }
 
   log_print("[telegram] %s failed after retry\n", label);
