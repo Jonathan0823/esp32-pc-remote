@@ -46,34 +46,44 @@ static String telegram_post_raw(const String& method,
                                 JsonObject payload,
                                 const char* label,
                                 uint32_t timeoutMs) {
-  WiFiClientSecure tls;
-  tls.setInsecure();
-  tls.setHandshakeTimeout(10); // seconds, not milliseconds
+  for (int attempt = 0; attempt < 2; attempt++) {
+    esp_task_wdt_reset();
+    if (attempt > 0) {
+      log_print("[telegram] %s retry\n", label);
+      delay(500);
+      esp_task_wdt_reset();
+    }
 
-  HTTPClient http;
-  http.setReuse(false);
-  http.setConnectTimeout(5000);
-  // HTTPClient::setTimeout takes uint16_t; 70000 overflows to ~4.5s.
-  http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
+    WiFiClientSecure tls;
+    tls.setInsecure();
+    tls.setHandshakeTimeout(10);
 
-  if (!http.begin(tls, telegram_url(method))) {
-    log_print("[telegram] %s http.begin failed\n", label);
-    return "";
-  }
+    HTTPClient http;
+    http.setReuse(false);
+    http.setConnectTimeout(5000);
+    http.setTimeout((uint16_t)min<uint32_t>(timeoutMs, 65000));
 
-  String body;
-  serializeJson(payload, body);
-  http.addHeader("Content-Type", "application/json");
+    if (!http.begin(tls, telegram_url(method))) {
+      log_print("[telegram] %s http.begin failed\n", label);
+      continue;
+    }
 
-  int code = http.POST(body);
-  String response = code > 0 ? http.getString() : "";
-  http.end();
-  tls.stop();
+    String body;
+    serializeJson(payload, body);
+    http.addHeader("Content-Type", "application/json");
 
-  if (code <= 0) {
+    int code = http.POST(body);
+    String response = code > 0 ? http.getString() : "";
+    http.end();
+    tls.stop();
+
+    if (code > 0) return response;
+
     log_print("[telegram] %s HTTP failed code=%d\n", label, code);
   }
-  return response;
+
+  log_print("[telegram] %s failed after retry\n", label);
+  return "";
 }
 
 static bool telegram_send_once(const char* label,
@@ -331,21 +341,19 @@ static int parse_updates(const String& response, TelegramUpdate* updates, int ma
 void telegram_poll() {
   if (millis() - lastPoll < POLL_MS) return;
 
-  int effectiveLongPoll = wake_is_pending() ? WAKE_LONG_POLL_S : IDLE_LONG_POLL_S;
   DynamicJsonDocument payload(256);
   payload["offset"] = telegramOffset;
   payload["limit"] = 10;
-  payload["timeout"] = effectiveLongPoll;
+  payload["timeout"] = 0;
 
   esp_task_wdt_reset();
   uint32_t pollStart = millis();
-  log_print("[telegram] getUpdates mode=idle offset=%ld longPoll=%d\n",
-                telegramOffset,
-                effectiveLongPoll);
+  log_print("[telegram] getUpdates offset=%ld\n",
+                telegramOffset);
   String response = telegram_post_raw("getUpdates",
                                       payload.as<JsonObject>(),
                                       "getUpdates",
-                                      (effectiveLongPoll + 10) * 1000);
+                                      5000);
   esp_task_wdt_reset();
 
   TelegramUpdate updates[10];
@@ -354,7 +362,7 @@ void telegram_poll() {
                    ? parse_updates(response, updates, 10, &nextOffset)
                    : -1;
 
-  log_print("[telegram] getUpdates done mode=idle updates=%d elapsed=%lums next=%ld\n",
+  log_print("[telegram] getUpdates done updates=%d elapsed=%lums next=%ld\n",
                 newCount,
                 millis() - pollStart,
                 nextOffset);
