@@ -8,6 +8,18 @@ static unsigned long lastReconnectAttempt = 0;
 static bool wifiWasConnected = false;
 static const unsigned long RECONNECT_INTERVAL_MS = 10000;
 
+static void wifi_force_ipv4_dns() {
+  IPAddress dns1(1, 1, 1, 1);
+  IPAddress dns2(8, 8, 8, 8);
+  // ponytail: pin IPv4 DNS to dodge ESP32 core 3.x IPv6/DNS regressions.
+  if (WiFi.setDNS(dns1, dns2)) {
+    log_print("[wifi] DNS forced to %s / %s\n", dns1.toString().c_str(),
+              dns2.toString().c_str());
+  } else {
+    log_print("[wifi] DNS override failed\n");
+  }
+}
+
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
@@ -25,6 +37,7 @@ void wifi_connect() {
     Serial.print(".");
   }
 
+  wifi_force_ipv4_dns();
   log_print("[wifi] connected in %lums ip=%s rssi=%d\n", millis() - start,
                 WiFi.localIP().toString().c_str(), WiFi.RSSI());
   wifiWasConnected = true;
@@ -37,6 +50,7 @@ void wifi_ensure() {
     if (!wifiWasConnected) {
       log_print("[wifi] restored uptime=%lus\n", millis() / 1000);
       log_event("info", "wifi", "restored", "WiFi restored");
+      wifi_force_ipv4_dns();
     }
     wifiWasConnected = true;
     lastReconnectAttempt = 0;
