@@ -23,6 +23,7 @@ struct TelegramUpdate {
 static Preferences telegramPrefs;
 static long telegramOffset = 1;
 static bool telegramRebootPending = false;
+static bool telegramConfigured = false;
 static unsigned long lastPoll = 0;
 static const unsigned long POLL_MS = 1000;
 static const int IDLE_LONG_POLL_S = 15;
@@ -120,6 +121,7 @@ static String telegram_post_raw(const String &method, JsonObject payload,
 
 static bool telegram_send_once(const char *label, const String &method,
                                JsonObject payload) {
+  if (!telegramConfigured) return false;
   esp_task_wdt_reset();
   String response =
       telegram_post_raw(method_name(method), payload, label, 8000);
@@ -185,6 +187,12 @@ bool telegram_send_callback_answer_once(const String &query_id,
 }
 
 void telegram_setup() {
+  telegramConfigured = strlen(BOT_TOKEN) > 0;
+  if (!telegramConfigured) {
+    log_print("[telegram] BOT_TOKEN not configured — skipping\n");
+    return;
+  }
+
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
@@ -392,6 +400,7 @@ static int parse_updates(const String &response, TelegramUpdate *updates,
 }
 
 void telegram_poll() {
+  if (!telegramConfigured) return;
   if (millis() - lastPoll < POLL_MS)
     return;
 

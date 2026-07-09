@@ -5,7 +5,7 @@
 
 #define WIFI_SSID     "your-wifi-ssid"
 #define WIFI_PASS     "your-wifi-password"
-#define BOT_TOKEN     "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+#define BOT_TOKEN     ""                                     // optional; leave blank to disable Telegram
 
 // Wake-on-LAN
 #define PC_NAME     "your-pc-hostname"          // optional, for display

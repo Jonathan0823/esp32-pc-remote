@@ -7,7 +7,7 @@
  *
  * Setup:
  *   1. Copy config.example.h → config.h
- *   2. Fill in WIFI_SSID, WIFI_PASS, BOT_TOKEN
+ *   2. Fill in WIFI_SSID, WIFI_PASS, BOT_TOKEN and/or MQTT settings
  *   3. Compile & upload:
  *      arduino-cli compile --fqbn esp32:esp32:esp32 .
  *      arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .

@@ -16,7 +16,7 @@ arduino-cli compile --fqbn esp32:esp32:esp32 .
 arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
 ```
 
-Send `/help` to your bot. That's it.
+If using Telegram, send `/help` to your bot. That's it.
 
 ## What it does
 
@@ -38,6 +38,7 @@ Send `/help` to your bot. That's it.
 | `/reboot` | Reboot the ESP32 |
 
 See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting your token.
+Leave `BOT_TOKEN` blank to disable Telegram and use MQTT only.
 
 ## MQTT (optional)
 
@@ -68,14 +69,16 @@ Example `wake_request` payload:
 {"id":"wake-001","cmd":"wake_request","target":"desktop-pc","expires_in_s":30,"ts":1783586658}
 ```
 
+Leave `BOT_TOKEN` blank to disable Telegram.
+
 If both Telegram and MQTT are configured, MQTT is primary and Telegram still works.
 
 ## Requirements
 
 - Any ESP32 board
 - [Arduino CLI](https://arduino.github.io/arduino-cli/) with `esp32:esp32` core
-- `UniversalTelegramBot` library
-- `PubSubClient` library
+- `UniversalTelegramBot` library (only needed if Telegram is enabled)
+- `PubSubClient` library (only needed if MQTT is enabled)
 - A PC with [Wake-on-LAN configured](docs/wake-on-lan.md) (BIOS + OS + NIC)
 - A TCP port on the PC for online probing (e.g. 47989 for Moonlight)
 
@@ -92,7 +95,7 @@ If both Telegram and MQTT are configured, MQTT is primary and Telegram still wor
 
 **Bot doesn't respond**
 - Check WiFi: does `/ping` show an IP?
-- Check the bot token in `config.h`
+- If using Telegram, check the bot token in `config.h`
 
 **MQTT doesn't connect**
 - Check `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASS`, and `MQTT_BASE_TOPIC`
