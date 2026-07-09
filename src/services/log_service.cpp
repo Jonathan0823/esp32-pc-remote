@@ -9,6 +9,7 @@
 static bool grafanaConfigured = false;
 static unsigned long lastHeartbeatMs = 0;
 const unsigned long HEARTBEAT_MS = 60000;
+static log_callback_t externalLogCb = NULL;
 
 static void escape_json(const char* in, char* out, size_t out_len) {
   size_t pos = 0;
@@ -134,6 +135,13 @@ void log_print(const char* fmt, ...) {
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
   Serial.printf("[%lums] %s", millis(), buf);
+  if (externalLogCb) {
+    externalLogCb(buf);
+  }
+}
+
+void log_set_callback(log_callback_t cb) {
+  externalLogCb = cb;
 }
 
 void log_heartbeat(const String& targetName) {
