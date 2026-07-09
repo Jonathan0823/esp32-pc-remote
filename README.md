@@ -6,12 +6,12 @@
 
 Wake your PC from anywhere — no static IP, no port forwarding, no cloud subscription.
 
-Just an ESP32, a Telegram bot, and a WiFi connection. Send `/wake`, the ESP32 sends a Wake-on-LAN magic packet on your LAN.
+Just an ESP32, a Telegram bot, and/or an MQTT broker. Send `/wake` or publish an MQTT command, and the ESP32 sends a Wake-on-LAN magic packet on your LAN.
 
 ## Quickstart
 
 ```bash
-cp config.example.h config.h   # fill in WiFi + bot token + PC MAC
+cp config.example.h config.h   # fill in WiFi + bot token and/or MQTT settings + PC MAC
 arduino-cli compile --fqbn esp32:esp32:esp32 .
 arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
 ```
@@ -24,6 +24,7 @@ Send `/help` to your bot. That's it.
 - **Check if it's online** via TCP probe (`/status`)
 - **Diagnose the ESP32** — reset reason, heap, WiFi RSSI, poll health (`/ping`)
 - **Auto-recover** — watchdog reboots on hang, WiFi reconnects with backoff
+- **Control via MQTT** (optional) — TLS broker support with retained state, replies, and events
 - **Grafana Cloud logging** (optional) — uptime + alert-only events
 
 ## Commands
@@ -38,11 +39,43 @@ Send `/help` to your bot. That's it.
 
 See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting your token.
 
+## MQTT (optional)
+
+Fill these in `config.h` to enable MQTT over TLS (port 8883):
+
+- `MQTT_BROKER`
+- `MQTT_PORT`
+- `MQTT_USER`
+- `MQTT_PASS`
+- `MQTT_BASE_TOPIC` (e.g. `ejo-pc-remote-8f3k29/desktop-01`)
+
+Topics under `MQTT_BASE_TOPIC`:
+
+| Topic | Retain | Purpose |
+|-------|--------|---------|
+| `/availability` | Yes | ESP32 online/offline |
+| `/state` | Yes | Latest status |
+| `/cmd` | No | Action commands |
+| `/reply` | No | Command replies |
+| `/event` | No | One-time events |
+| `/log` | No | Live debug logs |
+
+Commands on `/cmd`: `ping`, `wake_request`, `wake_confirm`, `reboot_request`, `reboot_confirm`.
+
+Example `wake_request` payload:
+
+```json
+{"id":"wake-001","cmd":"wake_request","target":"desktop-pc","expires_in_s":30,"ts":1783586658}
+```
+
+If both Telegram and MQTT are configured, MQTT is primary and Telegram still works.
+
 ## Requirements
 
 - Any ESP32 board
 - [Arduino CLI](https://arduino.github.io/arduino-cli/) with `esp32:esp32` core
 - `UniversalTelegramBot` library
+- `PubSubClient` library
 - A PC with [Wake-on-LAN configured](docs/wake-on-lan.md) (BIOS + OS + NIC)
 - A TCP port on the PC for online probing (e.g. 47989 for Moonlight)
 
@@ -60,6 +93,10 @@ See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting 
 **Bot doesn't respond**
 - Check WiFi: does `/ping` show an IP?
 - Check the bot token in `config.h`
+
+**MQTT doesn't connect**
+- Check `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASS`, and `MQTT_BASE_TOPIC`
+- Confirm the broker accepts TLS on port 8883
 
 ## Grafana Cloud logging (optional)
 
