@@ -20,7 +20,7 @@ If using Telegram, send `/help` to your bot. That's it.
 
 ## What it does
 
-- **Wake your PC** from Telegram with confirmation (`/wake` → inline buttons)
+- **Wake your PC** from Telegram with confirmation or force (`/wake` → inline buttons, `/wake force`)
 - **Check if it's online** via TCP probe (`/status`)
 - **Diagnose the ESP32** — reset reason, heap, WiFi RSSI, poll health (`/ping`)
 - **Auto-recover** — watchdog reboots on hang, WiFi reconnects with backoff
@@ -35,6 +35,7 @@ If using Telegram, send `/help` to your bot. That's it.
 | `/ping` | ESP32 health: reset reason, heap, RSSI, poll stats |
 | `/status` | ESP32 health + target PC online status |
 | `/wake` | Ask for wake confirmation |
+| `/wake force` | Wake immediately without confirmation |
 | `/reboot` | Reboot the ESP32 |
 
 See [Telegram bot setup →](docs/telegram.md) for creating the bot and getting your token.
@@ -63,15 +64,19 @@ Topics under `MQTT_BASE_TOPIC`:
 
 Commands on `/cmd`: `ping`, `wake_request`, `wake_confirm`, `reboot_request`, `reboot_confirm`.
 
+`wake_request` accepts `force: true` to skip confirmation.
+
 `/state` is refreshed on changes and every 60s, and includes `pc_online` / `pc_status`.
 
 Example `wake_request` payload:
 
 ```json
-{"id":"wake-001","cmd":"wake_request","target":"desktop-pc","expires_in_s":30,"ts":1783586658}
+{"id":"wake-001","cmd":"wake_request","target":"desktop-pc","force":true,"expires_in_s":30,"ts":1783586658}
 ```
 
 Leave `BOT_TOKEN` blank to disable Telegram.
+
+Telegram `/wake force` skips confirmation too.
 
 If both Telegram and MQTT are configured, MQTT is primary and Telegram still works.
 

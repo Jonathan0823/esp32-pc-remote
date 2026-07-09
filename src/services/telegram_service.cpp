@@ -229,6 +229,7 @@ static String menuText() {
   msg += "/ping — Check bot health &amp; diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
   msg += "/wake — Wake the selected PC (inline confirmation)\n";
+  msg += "/wake force — Wake the selected PC immediately\n";
   msg += "/reboot — Restart the ESP32\n\n";
   msg += "Current target: ";
   msg += PC_NAME;
@@ -242,7 +243,9 @@ static void handleCommand(String chatId, String text) {
 
   int sp = text.indexOf(' ');
   String cmd = (sp >= 0) ? text.substring(0, sp) : text;
+  String args = (sp >= 0) ? text.substring(sp + 1) : "";
   cmd.toLowerCase();
+  args.toLowerCase();
   int botName = cmd.indexOf('@');
   if (botName >= 0)
     cmd = cmd.substring(0, botName);
@@ -296,6 +299,20 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/wake") {
+    bool forceWake = args.indexOf("force") >= 0 || args.indexOf("--force") >= 0 ||
+                     args.indexOf("-f") >= 0;
+    if (forceWake) {
+      log_print("[telegram] /wake force start\n");
+      wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+      wake_start_polling(chatId, PC_NAME, PC_IP, PC_TCP_PORT);
+      telegram_send_text_once(chatId,
+                              "⚡ Wake signal sent to " + String(PC_NAME) +
+                                  " — waiting up to 90s for PC to respond...",
+                              "");
+      log_print("[telegram] /wake force done\n");
+      return;
+    }
+
     DynamicJsonDocument payload(1024);
     payload["chat_id"] = chatId;
     payload["text"] = "Wake " + String(PC_NAME) + "?";

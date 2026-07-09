@@ -169,9 +169,43 @@ static void handle_ping(const String& reqId) {
   log_print("[mqtt] cmd ping handled\n");
 }
 
+static void mqtt_begin_wake(const char* target, const String& reqId,
+                            const char* cmdName, bool forced) {
+  wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+
+  lastWakeResult = "wol_sent";
+  lastWakeAt = millis() / 1000;
+
+  mqttWakePending = true;
+  wakeStartMs = millis();
+  lastWakeCheckMs = millis();
+  wakeTarget = target;
+  wakeTargetIp = PC_IP;
+  wakeProbePort = PC_TCP_PORT;
+  wakeConfirmToken = "";
+  wakeConfirmExpiresMs = 0;
+
+  DynamicJsonDocument extra(128);
+  extra["target"] = target;
+  extra["result"] = "wol_sent";
+  if (forced) {
+    extra["forced"] = true;
+  }
+  mqtt_publish_reply(reqId, cmdName, true, extra);
+  mqtt_publish_state(true);
+  mqtt_publish_event("wol_sent", target);
+  log_print("[mqtt] wake sent target=%s forced=%d\n", target, forced);
+}
+
 static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
   const char* target = doc["target"] | "";
   unsigned long expiresIn = doc["expires_in_s"] | 30;
+  bool forceWake = doc["force"] | false;
+
+  if (forceWake) {
+    mqtt_begin_wake(target, reqId, "wake_request", true);
+    return;
+  }
 
   if (mqttWakePending) {
     DynamicJsonDocument extra(64);
@@ -226,27 +260,7 @@ static void handle_wake_confirm(const String& reqId, DynamicJsonDocument& doc) {
   }
 
   // Token valid — send WoL
-  wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
-
-  lastWakeResult = "wol_sent";
-  lastWakeAt = millis() / 1000;
-
-  DynamicJsonDocument extra(128);
-  extra["result"] = "wol_sent";
-  extra["target"] = target;
-  mqtt_publish_reply(reqId, "wake_confirm", true, extra);
-
-  // Start MQTT-side wake polling
-  mqttWakePending = true;
-  wakeStartMs = millis();
-  lastWakeCheckMs = millis();
-  wakeTarget = target;
-  wakeTargetIp = PC_IP;
-  wakeProbePort = PC_TCP_PORT;
-  wakeConfirmToken = "";
-
-  mqtt_publish_state(true);
-  mqtt_publish_event("wol_sent", target);
+  mqtt_begin_wake(target, reqId, "wake_confirm", false);
   log_print("[mqtt] wake confirmed WOL sent target=%s\n", target);
 }
 
