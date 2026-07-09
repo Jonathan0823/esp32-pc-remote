@@ -15,6 +15,13 @@
 #define WOL_PORT    9                            // WoL port (usually 7 or 9)
 #define PC_TCP_PORT  47989                         // TCP port for /status probe
 
+// MQTT (optional — leave blank to skip MQTT)
+#define MQTT_BROKER     ""                                     // e.g. "mqtt.example.com"
+#define MQTT_PORT       8883                                    // TLS port
+#define MQTT_USER       ""                                     // MQTT username
+#define MQTT_PASS       ""                                     // MQTT password
+#define MQTT_BASE_TOPIC ""                                     // e.g. "ejo-pc-remote-8f3k29/desktop-01"
+
 // Grafana Cloud Loki (optional — leave blank to skip cloud logging)
 #define GRAFANA_LOGS_URL   ""                                 // e.g. "https://<instance>.grafana.net"
 #define GRAFANA_LOGS_USER  ""                                 // Logs instance ID (username)
