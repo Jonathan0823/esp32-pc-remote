@@ -55,13 +55,15 @@ Topics under `MQTT_BASE_TOPIC`:
 | Topic | Retain | Purpose |
 |-------|--------|---------|
 | `/availability` | Yes | ESP32 online/offline |
-| `/state` | Yes | Latest status |
+| `/state` | Yes | Latest status + PC online/offline |
 | `/cmd` | No | Action commands |
 | `/reply` | No | Command replies |
 | `/event` | No | One-time events |
 | `/log` | No | Live debug logs |
 
 Commands on `/cmd`: `ping`, `wake_request`, `wake_confirm`, `reboot_request`, `reboot_confirm`.
+
+`/state` is refreshed on changes and every 60s, and includes `pc_online` / `pc_status`.
 
 Example `wake_request` payload:
 

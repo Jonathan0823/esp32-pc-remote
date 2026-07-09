@@ -51,6 +51,10 @@ static unsigned long rebootConfirmExpiresMs = 0;
 // --- State tracking ---
 static String lastWakeResult = "";
 static unsigned long lastWakeAt = 0;
+static bool lastPcOnline = false;
+static bool havePcOnline = false;
+static unsigned long lastStatePublishMs = 0;
+static const unsigned long STATE_PUBLISH_MS = 60000;
 
 // --- Topic helpers ---
 
@@ -85,14 +89,26 @@ static void mqtt_publish_availability(bool online, const char* reason) {
   log_print("[mqtt] availability online=%d reason=%s\n", online, reason);
 }
 
-static void mqtt_publish_state() {
+static bool mqtt_probe_pc_online() {
+  if (WiFi.status() != WL_CONNECTED) return false;
+  return wake_is_pc_reachable(PC_IP, PC_TCP_PORT);
+}
+
+static void mqtt_publish_state(bool probePc = false) {
   if (!mqttClient.connected()) return;
+  if (probePc) {
+    lastPcOnline = mqtt_probe_pc_online();
+    havePcOnline = true;
+  }
+
   DynamicJsonDocument doc(256);
   doc["online"] = true;
   doc["ip"] = WiFi.localIP().toString();
   doc["rssi"] = WiFi.RSSI();
   doc["heap"] = ESP.getFreeHeap();
   doc["uptime_s"] = (unsigned long)(millis() / 1000);
+  doc["pc_online"] = havePcOnline ? lastPcOnline : false;
+  doc["pc_status"] = (havePcOnline && lastPcOnline) ? "online" : "offline";
   if (lastWakeResult.length() > 0) {
     doc["last_wake_result"] = lastWakeResult;
   }
@@ -104,6 +120,7 @@ static void mqtt_publish_state() {
   String payload;
   serializeJson(doc, payload);
   mqttClient.publish(stateTopic().c_str(), payload.c_str(), true);
+  lastStatePublishMs = millis();
 }
 
 static void mqtt_publish_event(const char* event, const char* target) {
@@ -148,7 +165,7 @@ static void handle_ping(const String& reqId) {
   extra["reset_reason"] = current_reset_reason();
   mqtt_publish_reply(reqId, "ping", true, extra);
   // ponytail: ping also updates state so frontend gets fresh data
-  mqtt_publish_state();
+  mqtt_publish_state(true);
   log_print("[mqtt] cmd ping handled\n");
 }
 
@@ -174,7 +191,7 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
   extra["confirm_token"] = wakeConfirmToken;
   extra["expires_at"] = (unsigned long)((millis() + expiresIn * 1000) / 1000);
   mqtt_publish_reply(reqId, "wake_request", true, extra);
-  mqtt_publish_state();
+  mqtt_publish_state(true);
   log_print("[mqtt] wake_request target=%s token=%s expires=%lus\n",
             target, wakeConfirmToken.c_str(), expiresIn);
 }
@@ -228,7 +245,7 @@ static void handle_wake_confirm(const String& reqId, DynamicJsonDocument& doc) {
   wakeProbePort = PC_TCP_PORT;
   wakeConfirmToken = "";
 
-  mqtt_publish_state();
+  mqtt_publish_state(true);
   mqtt_publish_event("wol_sent", target);
   log_print("[mqtt] wake confirmed WOL sent target=%s\n", target);
 }
@@ -239,7 +256,7 @@ static void handle_wake_cancel(const String& reqId) {
   DynamicJsonDocument extra(64);
   extra["status"] = "cancelled";
   mqtt_publish_reply(reqId, "wake_cancel", true, extra);
-  mqtt_publish_state();
+  mqtt_publish_state(true);
   log_print("[mqtt] wake cancelled\n");
 }
 
@@ -420,7 +437,7 @@ static void mqtt_connect() {
   mqtt_publish_availability(true, "mqtt_connected");
 
   // Publish initial state (retained)
-  mqtt_publish_state();
+  mqtt_publish_state(true);
 
   // Publish boot event
   mqtt_publish_event("boot", "");
@@ -509,6 +526,10 @@ void mqtt_loop() {
   // Process MQTT incoming messages
   mqttClient.loop();
 
+  if (millis() - lastStatePublishMs >= STATE_PUBLISH_MS) {
+    mqtt_publish_state(true);
+  }
+
   // Handle MQTT wake polling
   if (mqttWakePending) {
     if (millis() - lastWakeCheckMs < WAKE_RETRY_MS) {
@@ -521,7 +542,7 @@ void mqtt_loop() {
       mqttWakePending = false;
       lastWakeResult = "pc_online";
       lastWakeAt = millis() / 1000;
-      mqtt_publish_state();
+      mqtt_publish_state(true);
       mqtt_publish_event("pc_online", wakeTarget.c_str());
       log_print("[mqtt] wake complete: %s online in %lums\n",
                 wakeTarget.c_str(), millis() - wakeStartMs);
@@ -530,7 +551,7 @@ void mqtt_loop() {
       mqttWakePending = false;
       lastWakeResult = "timeout";
       lastWakeAt = millis() / 1000;
-      mqtt_publish_state();
+      mqtt_publish_state(true);
       mqtt_publish_event("pc_timeout", wakeTarget.c_str());
       log_print("[mqtt] wake timeout: %s not online after %lums\n",
                 wakeTarget.c_str(), WAKE_TIMEOUT_MS);
