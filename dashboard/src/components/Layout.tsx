@@ -26,10 +26,8 @@ const STATIC_DEVICE: DeviceData = {
   uptime: '10m 08s',
   freeHeap: '204 KB',
   mqttStatus: 'Connected',
-  grafanaStatus: '—',
   broker: 'HiveMQ Cloud',
   signalQuality: 82,
-  pcOnline: false,
   lastWake: 'Today 15:44',
   lastWakeStatus: 'WOL packet sent',
 }
@@ -73,12 +71,8 @@ export default function Layout() {
       uptime: typeof s?.uptime_s === 'number' ? formatDuration(s.uptime_s) : STATIC_DEVICE.uptime,
       freeHeap: typeof s?.heap === 'number' ? `${Math.round(s.heap / 1024)} KB` : STATIC_DEVICE.freeHeap,
       mqttStatus: espOnline ? 'Connected' : 'Disconnected',
-      grafanaStatus: typeof s?.grafana_last_sent_at === 'number'
-        ? `Last sent: ${formatAgo(s.grafana_last_sent_at)}`
-        : STATIC_DEVICE.grafanaStatus,
       broker: BROKER_URL ? formatBroker(BROKER_URL) : STATIC_DEVICE.broker,
       signalQuality: typeof s?.rssi === 'number' ? signalQuality(s.rssi) : STATIC_DEVICE.signalQuality,
-      pcOnline: espOnline && s?.pc_online === true,
       lastWake: s?.last_wake_at ? formatAgo(s.last_wake_at) : STATIC_DEVICE.lastWake,
       lastWakeStatus: s?.last_wake_result || STATIC_DEVICE.lastWakeStatus,
     }

@@ -9,10 +9,8 @@ export interface DeviceData {
   uptime: string
   freeHeap: string
   mqttStatus: string
-  grafanaStatus: string
   broker: string
   signalQuality: number
-  pcOnline: boolean
   lastWake: string
   lastWakeStatus: string
 }
