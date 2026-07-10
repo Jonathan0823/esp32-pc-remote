@@ -15,20 +15,20 @@ vi.mock('../mqtt/useMqtt', () => ({
 }))
 
 describe('App', () => {
-  it('renders the header', () => {
+  it('renders the command deck shell', () => {
     render(<App />)
-    expect(screen.getByText('ESP32 PC Remote')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /command deck/i })).toBeInTheDocument()
   })
 
-  it('shows disconnected state', () => {
+  it('shows the primary controls', () => {
     render(<App />)
-    expect(screen.getByText(/Error/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /wake pc/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ping esp32/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reboot esp32/i })).toBeInTheDocument()
   })
 
-  it('renders action buttons', () => {
+  it('shows the mqtt setup error', () => {
     render(<App />)
-    expect(screen.getByText('Ping')).toBeInTheDocument()
-    expect(screen.getByText('Force Wake')).toBeInTheDocument()
-    expect(screen.getByText('Reboot ESP32')).toBeInTheDocument()
+    expect(screen.getAllByText(/VITE_MQTT_BROKER_URL is not set/i)[0]).toBeInTheDocument()
   })
 })
