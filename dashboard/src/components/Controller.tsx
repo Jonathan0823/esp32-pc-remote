@@ -24,10 +24,10 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center gap-3 text-xs">
+    <div className="flex items-center gap-3 text-xs min-w-0">
       <Icon className="text-muted-foreground size-4 shrink-0" />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground ml-auto font-medium">{value}</span>
+      <span className="text-muted-foreground shrink-0 whitespace-nowrap">{label}</span>
+      <span className="text-foreground min-w-0 flex-1 truncate text-right font-medium">{value}</span>
     </div>
   )
 }

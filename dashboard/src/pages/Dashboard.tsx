@@ -182,7 +182,9 @@ export default function Dashboard() {
           onPing={handlePing}
           onReboot={startReboot}
         />
-        <Controller device={device} />
+        <div className="min-w-0">
+          <Controller device={device} />
+        </div>
         <div className="col-span-2 min-h-0 h-full">
           <LogReplies />
         </div>
