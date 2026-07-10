@@ -10,19 +10,19 @@ import {
   MonitorIcon,
 } from '@phosphor-icons/react'
 
-interface ControllerProps {
+type ControllerProps = Readonly<{
   device: DeviceData
-}
+}>
 
 function InfoRow({
   icon: Icon,
   label,
   value,
-}: {
+}: Readonly<{
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
-}) {
+}>) {
   return (
     <div className="flex min-w-0 items-center gap-3 text-xs">
       <Icon className="text-muted-foreground size-4 shrink-0" />

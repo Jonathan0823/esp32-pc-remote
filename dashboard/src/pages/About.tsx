@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -94,6 +94,43 @@ const markdownComponents: Components = {
   td: ({ children }) => <td className="py-3 pr-4 align-top">{children}</td>,
 }
 
+type MarkdownLinkProps = Readonly<{
+  href?: string
+  children?: ReactNode
+  sourceDir: string
+  onLocalLinkClick: (href: string) => void
+}>
+
+function MarkdownLink({ href, children, sourceDir, onLocalLinkClick }: MarkdownLinkProps) {
+  const resolvedHref = href ? resolveAboutHref(sourceDir, href) : href
+  const safeExternal =
+    !!resolvedHref &&
+    (resolvedHref.startsWith('http://') ||
+      resolvedHref.startsWith('https://') ||
+      resolvedHref.startsWith('//'))
+
+  return (
+    <a
+      href={resolvedHref}
+      target={safeExternal ? '_blank' : undefined}
+      rel={safeExternal ? 'noopener noreferrer' : undefined}
+      onClick={() => {
+        if (resolvedHref?.startsWith('#')) onLocalLinkClick(resolvedHref)
+      }}
+      className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
+    >
+      {children}
+    </a>
+  )
+}
+
+function createMarkdownComponents(sourceDir: string, onLocalLinkClick: (href: string) => void): Components {
+  return {
+    ...markdownComponents,
+    a: (props) => <MarkdownLink {...props} sourceDir={sourceDir} onLocalLinkClick={onLocalLinkClick} />,
+  }
+}
+
 function DocSection({
   title,
   sourcePath,
@@ -101,14 +138,14 @@ function DocSection({
   sourceDir,
   markdown,
   onLocalLinkClick,
-}: {
+}: Readonly<{
   title: string
   sourcePath: string
   slug: string
   sourceDir: string
   markdown: string
   onLocalLinkClick: (href: string) => void
-}) {
+}>) {
   return (
     <Card id={slug} className="scroll-mt-6 overflow-hidden">
       <CardHeader className="space-y-2 pb-2">
@@ -123,34 +160,7 @@ function DocSection({
           className="space-y-4 text-[15px] leading-7"
           style={{ fontFamily: githubMarkdownFont }}
         >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              ...markdownComponents,
-              a: ({ href, children }) => {
-                const resolvedHref = href ? resolveAboutHref(sourceDir, href) : href
-                const safeExternal =
-                  !!resolvedHref &&
-                  (resolvedHref.startsWith('http://') ||
-                    resolvedHref.startsWith('https://') ||
-                    resolvedHref.startsWith('//'))
-
-                return (
-                  <a
-                    href={resolvedHref}
-                    target={safeExternal ? '_blank' : undefined}
-                    rel={safeExternal ? 'noopener noreferrer' : undefined}
-                    onClick={() => {
-                      if (resolvedHref?.startsWith('#')) onLocalLinkClick(resolvedHref)
-                    }}
-                    className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
-                  >
-                    {children}
-                  </a>
-                )
-              },
-            }}
-          >
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={createMarkdownComponents(sourceDir, onLocalLinkClick)}>
             {markdown}
           </ReactMarkdown>
         </article>
@@ -221,8 +231,8 @@ export default function About() {
           key={doc.sourcePath}
           {...doc}
           onLocalLinkClick={(href) => {
-            setBackTarget({ href: window.location.hash || '#about-top', label: 'Back' })
-            window.location.hash = href
+            setBackTarget({ href: globalThis.location.hash || '#about-top', label: 'Back' })
+            globalThis.location.hash = href
           }}
         />
       ))}

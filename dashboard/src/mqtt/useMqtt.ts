@@ -126,7 +126,7 @@ export function useMqtt(): UseMqttReturn {
 
   const send = useCallback((cmdName: string, extra: Record<string, unknown> = {}) => {
     const client = clientRef.current
-    if (!client || !client.connected) return
+    if (!client?.connected) return
 
     const baseTopic = getEnv('VITE_MQTT_BASE_TOPIC', 'esp-32-remote')
     const id =

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { useLayoutContext } from '@/components/Layout'
 import { toast } from 'sonner'
 import PCControl from '@/components/PCControl'
@@ -26,6 +26,82 @@ import {
 } from '@/components/ui/alert-dialog'
 
 type WakePhase = 'initial' | 'waiting' | 'confirm' | 'success'
+
+type DashboardReply = ReturnType<typeof useLayoutContext>['replies'][number]
+
+type ReplyHandlerContext = Readonly<{
+  deviceName: string
+  setWakePhase: Dispatch<SetStateAction<WakePhase>>
+  setWakeToken: Dispatch<SetStateAction<string | null>>
+  setWakeExpiresAt: Dispatch<SetStateAction<number | null>>
+  setRebootOpen: Dispatch<SetStateAction<boolean>>
+}>
+
+function handleWakeRequestReply(last: DashboardReply, ctx: ReplyHandlerContext) {
+  const token = readText(last.confirm_token)
+  ctx.setWakePhase(last.ok ? 'confirm' : 'initial')
+  if (last.ok) {
+    ctx.setWakeToken(token)
+    ctx.setWakeExpiresAt(resolveExpiresAt(last, 30))
+    toast('Confirmation ready', { description: 'The controller issued a wake token.' })
+  } else {
+    toast.error(readText(last.message) || 'Wake request failed')
+  }
+}
+
+function handleWakeConfirmReply(last: DashboardReply, ctx: ReplyHandlerContext) {
+  ctx.setWakePhase(last.ok ? 'success' : 'confirm')
+  if (last.ok) {
+    toast.success('Wake packet sent to ' + ctx.deviceName)
+  } else {
+    toast.error(readText(last.message) || 'Wake confirm failed')
+  }
+}
+
+function handlePingReply(last: DashboardReply) {
+  const latency = readNumber(last.latencyMs) ?? readNumber(last.rtt_ms)
+  if (last.ok) {
+    toast.success(latency ? `ESP32 replied in ${latency} ms` : 'ESP32 replied')
+  } else {
+    toast.error(readText(last.message) || 'Ping failed')
+  }
+}
+
+function handleRebootRequestReply(last: DashboardReply, ctx: ReplyHandlerContext) {
+  if (!last.ok) {
+    toast.error(readText(last.message) || 'Reboot request failed')
+    ctx.setRebootOpen(false)
+  }
+}
+
+function handleRebootConfirmReply(last: DashboardReply, ctx: ReplyHandlerContext) {
+  if (last.ok) {
+    toast.success('ESP32 rebooting')
+    ctx.setRebootOpen(false)
+  }
+}
+
+function handleLatestReply(last: DashboardReply, ctx: ReplyHandlerContext) {
+  if (last.cmd === 'wake_request') {
+    handleWakeRequestReply(last, ctx)
+    return
+  }
+  if (last.cmd === 'wake_confirm') {
+    handleWakeConfirmReply(last, ctx)
+    return
+  }
+  if (last.cmd === 'ping') {
+    handlePingReply(last)
+    return
+  }
+  if (last.cmd === 'reboot_request') {
+    handleRebootRequestReply(last, ctx)
+    return
+  }
+  if (last.cmd === 'reboot_confirm') {
+    handleRebootConfirmReply(last, ctx)
+  }
+}
 
 export default function Dashboard() {
   const { device, state, connected, send, replies } = useLayoutContext()
@@ -75,55 +151,14 @@ export default function Dashboard() {
   // MQTT reply listener
   useEffect(() => {
     const last = replies.at(-1)
-    if (!last) return
-
-    if (last.cmd === 'wake_request' && last.ok) {
-      const token = readText(last.confirm_token)
-      setWakePhase('confirm')
-      setWakeToken(token)
-      setWakeExpiresAt(resolveExpiresAt(last, 30))
-      toast('Confirmation ready', { description: 'The controller issued a wake token.' })
-      return
-    }
-
-    if (last.cmd === 'wake_request' && !last.ok) {
-      setWakePhase('initial')
-      toast.error(readText(last.message) || 'Wake request failed')
-      return
-    }
-
-    if (last.cmd === 'wake_confirm' && last.ok) {
-      setWakePhase('success')
-      toast.success('Wake packet sent to ' + device.name)
-      return
-    }
-
-    if (last.cmd === 'wake_confirm' && !last.ok) {
-      setWakePhase('confirm')
-      toast.error(readText(last.message) || 'Wake confirm failed')
-      return
-    }
-
-    if (last.cmd === 'ping') {
-      const latency = readNumber(last.latencyMs) ?? readNumber(last.rtt_ms)
-      if (last.ok) {
-        toast.success(latency ? `ESP32 replied in ${latency} ms` : 'ESP32 replied')
-      } else {
-        toast.error(readText(last.message) || 'Ping failed')
-      }
-      return
-    }
-
-    if (last.cmd === 'reboot_request' && !last.ok) {
-      toast.error(readText(last.message) || 'Reboot request failed')
-      setRebootOpen(false)
-      return
-    }
-
-    if (last.cmd === 'reboot_confirm' && last.ok) {
-      toast.success('ESP32 rebooting')
-      setRebootOpen(false)
-      return
+    if (last) {
+      handleLatestReply(last, {
+        deviceName: device.name,
+        setWakePhase,
+        setWakeToken,
+        setWakeExpiresAt,
+        setRebootOpen,
+      })
     }
   }, [replies, device.name])
 
