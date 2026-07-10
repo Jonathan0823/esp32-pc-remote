@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
-import { PaperPlaneRight, Pulse, Heart, WifiHigh, Cloud, Bell } from '@phosphor-icons/react'
+import { PaperPlaneRightIcon, PulseIcon, HeartIcon, WifiHighIcon, CloudIcon, BellIcon } from '@phosphor-icons/react'
 
 interface EventItem {
   time: string
@@ -22,12 +22,12 @@ const EVENTS: EventItem[] = [
 
 function EventIcon({ name }: { name: string }) {
   switch (name) {
-    case 'Send': return <PaperPlaneRight className="size-4 text-muted-foreground shrink-0" />
-    case 'Activity': return <Pulse className="size-4 text-muted-foreground shrink-0" />
-    case 'Heart': return <Heart className="size-4 text-muted-foreground shrink-0" />
-    case 'Wifi': return <WifiHigh className="size-4 text-muted-foreground shrink-0" />
-    case 'Cloud': return <Cloud className="size-4 text-muted-foreground shrink-0" />
-    default: return <Bell className="size-4 text-muted-foreground shrink-0" />
+    case 'Send': return <PaperPlaneRightIcon className="size-4 text-muted-foreground shrink-0" />
+    case 'Activity': return <PulseIcon className="size-4 text-muted-foreground shrink-0" />
+    case 'Heart': return <HeartIcon className="size-4 text-muted-foreground shrink-0" />
+    case 'Wifi': return <WifiHighIcon className="size-4 text-muted-foreground shrink-0" />
+    case 'Cloud': return <CloudIcon className="size-4 text-muted-foreground shrink-0" />
+    default: return <BellIcon className="size-4 text-muted-foreground shrink-0" />
   }
 }
 

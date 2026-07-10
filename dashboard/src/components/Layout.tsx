@@ -10,8 +10,8 @@ import type { DeviceData } from '@/lib/types'
 import { PC_NAME, BROKER_URL } from '@/lib/types'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
 import {
-  Monitor, Layout as LayoutIcon, Bell, FileText, Gear, Question,
-  WifiHigh, ChartBar, Clock, Sun, Moon,
+  MonitorIcon, LayoutIcon, BellIcon, FileTextIcon, GearIcon, QuestionIcon,
+  WifiHighIcon, ChartBarIcon, ClockIcon, SunIcon, MoonIcon,
 } from '@phosphor-icons/react'
 
 const STATIC_DEVICE: DeviceData = {
@@ -90,7 +90,7 @@ export default function Layout() {
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="p-4 pt-6">
           <div className="flex items-center gap-3">
-            <Monitor className="size-10 text-foreground" weight="light" />
+            <MonitorIcon className="size-10 text-foreground" weight="light" />
             <div className="grid gap-0.5">
               <span className="text-sm font-semibold leading-none text-sidebar-foreground">PC Remote</span>
               <span className="text-xs text-sidebar-foreground/60">Control Panel</span>
@@ -101,10 +101,10 @@ export default function Layout() {
         <SidebarContent>
           <SidebarMenu>
             <NavItem icon={LayoutIcon} label="Dashboard" active={active === '/'} onClick={() => navTo('/')} />
-            <NavItem icon={Bell} label="Events" active={active === '/events'} onClick={() => navTo('/events')} />
-            <NavItem icon={FileText} label="Logs" active={active === '/logs'} onClick={() => navTo('/logs')} />
-            <NavItem icon={Gear} label="Settings" active={active === '/settings'} onClick={() => navTo('/settings')} />
-            <NavItem icon={Question} label="About" active={active === '/about'} onClick={() => navTo('/about')} />
+            <NavItem icon={BellIcon} label="Events" active={active === '/events'} onClick={() => navTo('/events')} />
+            <NavItem icon={FileTextIcon} label="Logs" active={active === '/logs'} onClick={() => navTo('/logs')} />
+            <NavItem icon={GearIcon} label="Settings" active={active === '/settings'} onClick={() => navTo('/settings')} />
+            <NavItem icon={QuestionIcon} label="About" active={active === '/about'} onClick={() => navTo('/about')} />
           </SidebarMenu>
         </SidebarContent>
 
@@ -112,7 +112,7 @@ export default function Layout() {
           <div className="sidebar-footer-card">
             <Card size="sm">
               <CardHeader className="flex flex-row items-center gap-2">
-                <WifiHigh className="size-4 text-sidebar-foreground/70" />
+                <WifiHighIcon className="size-4 text-sidebar-foreground/70" />
                 <CardTitle className="text-xs text-sidebar-foreground/70">Connection</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-1.5">
@@ -157,15 +157,15 @@ export default function Layout() {
 
           <div className="hidden md:flex items-center gap-4">
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <WifiHigh className="size-4" />
+              <WifiHighIcon className="size-4" />
               <span>{device.rssi} dBm</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ChartBar className="size-4" />
+              <ChartBarIcon className="size-4" />
               <span>{device.signalQuality}%</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-[116px] justify-end">
-              <Clock className="size-4" />
+              <ClockIcon className="size-4" />
               <ClockTimer />
             </div>
             <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -182,9 +182,9 @@ export default function Layout() {
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t border-border bg-background/90 backdrop-blur-sm">
         <div className="flex items-center justify-around h-[68px] px-4">
           <MobileNavItem icon={LayoutIcon} label="Dashboard" active={active === '/'} onClick={() => navTo('/')} />
-          <MobileNavItem icon={Bell} label="Events" active={active === '/events'} onClick={() => navTo('/events')} />
-          <MobileNavItem icon={FileText} label="Logs" active={active === '/logs'} onClick={() => navTo('/logs')} />
-          <MobileNavItem icon={Gear} label="Settings" active={active === '/settings'} onClick={() => navTo('/settings')} />
+          <MobileNavItem icon={BellIcon} label="Events" active={active === '/events'} onClick={() => navTo('/events')} />
+          <MobileNavItem icon={FileTextIcon} label="Logs" active={active === '/logs'} onClick={() => navTo('/logs')} />
+          <MobileNavItem icon={GearIcon} label="Settings" active={active === '/settings'} onClick={() => navTo('/settings')} />
           <MobileThemeToggle theme={theme} setTheme={setTheme} />
         </div>
       </nav>
@@ -211,7 +211,7 @@ function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) =
       className="flex items-center justify-center size-8 rounded-none text-muted-foreground hover:text-foreground transition-colors"
       aria-label={`Switch to ${next} theme`}
     >
-      {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+      {theme === 'dark' ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
     </button>
   )
 }
@@ -224,7 +224,7 @@ function MobileThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Th
       className="flex flex-col items-center gap-1 py-2 px-3 text-[10px] font-medium text-muted-foreground transition-colors"
       aria-label={`Switch to ${next} theme`}
     >
-      {theme === 'dark' ? <Sun className="size-5" /> : <Moon className="size-5" />}
+      {theme === 'dark' ? <SunIcon className="size-5" /> : <MoonIcon className="size-5" />}
     </button>
   )
 }
