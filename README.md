@@ -3,10 +3,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![ESP32](https://img.shields.io/badge/Board-ESP32-green)](https://www.espressif.com/)
 [![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-0088cc)](https://core.telegram.org/bots)
+[![Dashboard](https://img.shields.io/badge/Dashboard-React%20%2B%20Vite-61dafb)](dashboard/README.md)
 
 Wake your PC from anywhere — no static IP, no port forwarding, no cloud subscription.
 
 Just an ESP32, a Telegram bot, and/or an MQTT broker. Send `/wake` or publish an MQTT command, and the ESP32 sends a Wake-on-LAN magic packet on your LAN.
+
+This repo also includes a private web dashboard in `dashboard/` for browser control over MQTT.
 
 ## Quickstart
 
@@ -25,6 +28,7 @@ If using Telegram, send `/help` to your bot. That's it.
 - **Diagnose the ESP32** — reset reason, heap, WiFi RSSI, poll health (`/ping`)
 - **Auto-recover** — watchdog reboots on hang, WiFi reconnects with backoff
 - **Control via MQTT** (optional) — TLS broker support with retained state, replies, and events
+- **Private web dashboard** (optional) — React/Vite frontend over MQTT WebSocket, deployable to Cloudflare Pages + Access
 - **Grafana Cloud logging** (optional) — uptime + alert-only events
 
 ## Commands
@@ -79,6 +83,31 @@ Leave `BOT_TOKEN` blank to disable Telegram.
 Telegram `/wake force` skips confirmation too.
 
 If both Telegram and MQTT are configured, MQTT is primary and Telegram still works.
+
+## Web dashboard (optional)
+
+A browser UI lives in `dashboard/`.
+
+- **Stack:** React + Vite + TypeScript
+- **Transport:** MQTT over WebSocket
+- **Deploy:** Cloudflare Pages
+- **Private access:** Cloudflare Access with GitHub login
+
+Run locally:
+
+```bash
+cd dashboard
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Build:
+
+```bash
+cd dashboard
+npm run build
+```
 
 ## Requirements
 
