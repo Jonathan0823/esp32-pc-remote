@@ -38,16 +38,18 @@ describe('App', () => {
 
   it('shows the primary controls', () => {
     render(<App />)
-    expect(screen.getByRole('button', { name: /wake pc/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /ping esp32/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /reboot esp32/i })).toBeInTheDocument()
+    // two copies: desktop + mobile layout
+    expect(screen.getAllByRole('button', { name: /wake pc/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /ping esp32/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /reboot esp32/i })).toHaveLength(2)
   })
 
   it('shows the dashboard cards', () => {
     render(<App />)
-    expect(screen.getByText('PC Control')).toBeInTheDocument()
-    expect(screen.getByText('Device Status')).toBeInTheDocument()
-    expect(screen.getByText('Activity')).toBeInTheDocument()
-    expect(screen.getByText('Connection Health')).toBeInTheDocument()
+    // two copies: desktop + mobile layout
+    expect(screen.getAllByText('PC Control')).toHaveLength(2)
+    expect(screen.getAllByText('Device Status')).toHaveLength(2)
+    expect(screen.getAllByText('Activity')).toHaveLength(2)
+    expect(screen.getAllByText('Connection Health')).toHaveLength(2)
   })
 })

@@ -162,7 +162,19 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px] items-start">
+      {/* Desktop: two independent flex columns */}
+      <div className="hidden lg:flex gap-[18px]">
+        <div className="flex flex-col gap-[18px] flex-1">
+          <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
+          <LogReplies />
+        </div>
+        <div className="flex flex-col gap-[18px] flex-1">
+          <DeviceStatus device={device} />
+          <ConnectionHealth device={device} />
+        </div>
+      </div>
+      {/* Mobile: single column */}
+      <div className="flex flex-col lg:hidden gap-[18px]">
         <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
         <DeviceStatus device={device} />
         <LogReplies />
