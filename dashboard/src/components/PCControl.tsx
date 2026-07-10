@@ -8,12 +8,13 @@ import { MonitorIcon, ClockIcon, CheckCircleIcon, PowerIcon, PulseIcon, ArrowClo
 interface PCControlProps {
   device: DeviceData
   connected: boolean
+  wakePending: boolean
   onWake: () => void
   onPing: () => void
   onReboot: () => void
 }
 
-export default function PCControl({ device, connected, onWake, onPing, onReboot }: PCControlProps) {
+export default function PCControl({ device, connected, wakePending, onWake, onPing, onReboot }: PCControlProps) {
   return (
     <Card>
       <CardHeader>
@@ -57,7 +58,7 @@ export default function PCControl({ device, connected, onWake, onPing, onReboot 
           </div>
         </div>
 
-        <Button variant="default" size="lg" className="w-full h-14 text-sm font-bold gap-2" disabled={!connected} onClick={onWake}>
+        <Button variant="default" size="lg" className="w-full h-14 text-sm font-bold gap-2" disabled={!connected || wakePending} onClick={onWake}>
           <PowerIcon className="size-5" />
           WAKE PC
         </Button>

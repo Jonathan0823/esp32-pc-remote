@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ui/theme-provider'
 import type { DeviceData } from '@/lib/types'
 import { PC_NAME, BROKER_URL } from '@/lib/types'
+import type { EspState } from '@/mqtt/types'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
 import {
   MonitorIcon, LayoutIcon, BellIcon, FileTextIcon, GearIcon, QuestionIcon,
@@ -24,17 +25,18 @@ const STATIC_DEVICE: DeviceData = {
   ipAddress: '192.168.100.17',
   uptime: '10m 08s',
   freeHeap: '204 KB',
-  cpuTemp: '34.2 °C',
   mqttStatus: 'Connected',
-  grafanaStatus: 'Last sent: 1m ago',
+  grafanaStatus: '—',
   broker: 'HiveMQ Cloud',
   signalQuality: 82,
+  pcOnline: false,
   lastWake: 'Today 15:44',
   lastWakeStatus: 'WOL packet sent',
 }
 
 export interface LayoutContext {
   device: DeviceData
+  state: EspState | null
   connected: boolean
   connection: ReturnType<typeof useMqtt>['connection']
   send: (cmd: string, payload?: Record<string, unknown>) => void
@@ -58,21 +60,24 @@ export default function Layout() {
 
   const device: DeviceData = useMemo(() => {
     const s = state
+    const espOnline = s?.online === true
     return {
       name: PC_NAME,
       controllerLabel: 'ESP32 Controller',
-      online: s?.online ?? STATIC_DEVICE.online,
-      ready: Boolean(s?.online && s?.mqtt_connected),
+      online: espOnline,
+      ready: espOnline && s?.pc_online === true,
       lastUpdateAgo: s?.ts ? formatAgo(s.ts) : STATIC_DEVICE.lastUpdateAgo,
       rssi: typeof s?.rssi === 'number' ? s.rssi : STATIC_DEVICE.rssi,
       ipAddress: s?.ip || STATIC_DEVICE.ipAddress,
       uptime: typeof s?.uptime_s === 'number' ? formatDuration(s.uptime_s) : STATIC_DEVICE.uptime,
       freeHeap: typeof s?.heap === 'number' ? `${Math.round(s.heap / 1024)} KB` : STATIC_DEVICE.freeHeap,
-      cpuTemp: STATIC_DEVICE.cpuTemp,
-      mqttStatus: s?.mqtt_connected ? 'Connected' : 'Disconnected',
-      grafanaStatus: STATIC_DEVICE.grafanaStatus,
+      mqttStatus: espOnline ? 'Connected' : 'Disconnected',
+      grafanaStatus: typeof s?.grafana_last_sent_at === 'number'
+        ? `Last sent: ${formatAgo(s.grafana_last_sent_at)}`
+        : STATIC_DEVICE.grafanaStatus,
       broker: BROKER_URL ? formatBroker(BROKER_URL) : STATIC_DEVICE.broker,
       signalQuality: typeof s?.rssi === 'number' ? signalQuality(s.rssi) : STATIC_DEVICE.signalQuality,
+      pcOnline: espOnline && s?.pc_online === true,
       lastWake: s?.last_wake_at ? formatAgo(s.last_wake_at) : STATIC_DEVICE.lastWake,
       lastWakeStatus: s?.last_wake_result || STATIC_DEVICE.lastWakeStatus,
     }
@@ -174,7 +179,7 @@ export default function Layout() {
 
         {/* Page content via router outlet */}
         <div className="flex-1 overflow-auto p-5">
-          <Outlet context={{ device, connected, connection, send, replies } satisfies LayoutContext} />
+          <Outlet context={{ device, state, connected, connection, send, replies } satisfies LayoutContext} />
         </div>
       </div>
 

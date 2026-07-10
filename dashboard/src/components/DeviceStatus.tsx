@@ -1,7 +1,7 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { DeviceData } from '@/lib/types'
-import { ComputerTowerIcon, WifiHighIcon, GlobeSimpleIcon, ClockIcon, MemoryIcon, ThermometerIcon, CloudIcon } from '@phosphor-icons/react'
+import { ComputerTowerIcon, WifiHighIcon, GlobeSimpleIcon, ClockIcon, MemoryIcon, CloudIcon, CheckCircleIcon, XCircleIcon } from '@phosphor-icons/react'
 
 interface DeviceStatusProps {
   device: DeviceData
@@ -34,7 +34,7 @@ export default function DeviceStatus({ device }: DeviceStatusProps) {
         <Separator />
         <StatusRow icon={MemoryIcon} label="Free Heap" value={device.freeHeap} />
         <Separator />
-        <StatusRow icon={ThermometerIcon} label="CPU Temp" value={device.cpuTemp} />
+        <StatusRow icon={device.pcOnline ? CheckCircleIcon : XCircleIcon} label="PC Online" value={device.pcOnline ? 'Online' : 'Offline'} />
         <Separator />
         <StatusRow icon={CloudIcon} label="MQTT" value={device.mqttStatus} />
       </CardContent>

@@ -18,7 +18,7 @@ import {
 type WakePhase = 'initial' | 'waiting' | 'confirm' | 'success'
 
 export default function Dashboard() {
-  const { device, connected, send, replies } = useLayoutContext()
+  const { device, state, connected, send, replies } = useLayoutContext()
 
   const [wakeOpen, setWakeOpen] = useState(false)
   const [wakePhase, setWakePhase] = useState<WakePhase>('initial')
@@ -163,7 +163,7 @@ export default function Dashboard() {
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
-        <PCControl device={device} connected={connected} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
+        <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
         <DeviceStatus device={device} />
         <RecentEvents />
         <ConnectionHealth device={device} />
