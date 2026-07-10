@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
@@ -98,12 +100,14 @@ function DocSection({
   slug,
   sourceDir,
   markdown,
+  onLocalLinkClick,
 }: {
   title: string
   sourcePath: string
   slug: string
   sourceDir: string
   markdown: string
+  onLocalLinkClick: (href: string) => void
 }) {
   return (
     <Card id={slug} className="scroll-mt-6 overflow-hidden">
@@ -136,6 +140,9 @@ function DocSection({
                     href={resolvedHref}
                     target={safeExternal ? '_blank' : undefined}
                     rel={safeExternal ? 'noopener noreferrer' : undefined}
+                    onClick={() => {
+                      if (resolvedHref?.startsWith('#')) onLocalLinkClick(resolvedHref)
+                    }}
                     className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
                   >
                     {children}
@@ -153,6 +160,8 @@ function DocSection({
 }
 
 export default function About() {
+  const [backTarget, setBackTarget] = useState<{ href: string; label: string } | null>(null)
+
   return (
     <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
       <Card className="overflow-hidden">
@@ -208,17 +217,29 @@ export default function About() {
       </Card>
 
       {ABOUT_DOCS.map((doc) => (
-        <DocSection key={doc.sourcePath} {...doc} />
+        <DocSection
+          key={doc.sourcePath}
+          {...doc}
+          onLocalLinkClick={(href) => {
+            setBackTarget({ href: window.location.hash || '#about-top', label: 'Back' })
+            window.location.hash = href
+          }}
+        />
       ))}
 
-      <div className="flex justify-end">
-        <a
-          href="#about-top"
-          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-fit')}
-        >
-          Back to top
-        </a>
-      </div>
+      <a
+        href={backTarget?.href ?? '#about-top'}
+        onClick={() => setBackTarget(null)}
+        className={cn(
+          buttonVariants({ variant: 'default', size: 'lg' }),
+          'shadow-primary/30 fixed right-4 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
+        )}
+        aria-label={backTarget?.label ?? 'Top'}
+        title={backTarget?.label ?? 'Top'}
+      >
+        {backTarget ? <ArrowLeftIcon className="size-5" /> : <ArrowUpIcon className="size-5" />}
+        <span>{backTarget?.label ?? 'Top'}</span>
+      </a>
     </div>
   )
 }
