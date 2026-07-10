@@ -173,7 +173,7 @@ export default function Dashboard() {
   return (
     <>
       {/* Desktop: grid with Activity spanning full width */}
-      <div className="hidden min-h-full grid-cols-2 grid-rows-[auto_1fr] gap-[18px] lg:grid">
+      <div className="hidden h-full grid-cols-2 grid-rows-[auto_minmax(0,1fr)] gap-[18px] lg:grid">
         <PCControl
           device={device}
           connected={connected}
@@ -183,7 +183,7 @@ export default function Dashboard() {
           onReboot={startReboot}
         />
         <Controller device={device} />
-        <div className="col-span-2 min-h-0">
+        <div className="col-span-2 min-h-0 h-full">
           <LogReplies />
         </div>
       </div>

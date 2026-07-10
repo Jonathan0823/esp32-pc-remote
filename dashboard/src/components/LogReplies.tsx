@@ -41,7 +41,7 @@ export default function LogReplies() {
   const [tab, setTab] = useState<Tab>('replies')
 
   return (
-    <Card className="flex max-h-[360px] min-h-[240px] flex-col lg:h-full lg:max-h-none lg:min-h-0">
+    <Card className="flex max-h-[360px] min-h-[240px] flex-col lg:h-full lg:max-h-full lg:min-h-0">
       <CardHeader className="pb-0">
         <div className="flex items-center justify-between">
           <CardTitle>Activity</CardTitle>
