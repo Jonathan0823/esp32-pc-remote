@@ -192,7 +192,11 @@ function FilterButton({
   )
 }
 
-function CopyMenu({ summary, json, label }: Readonly<{ summary: string; json: string; label: string }>) {
+function CopyMenu({
+  summary,
+  json,
+  label,
+}: Readonly<{ summary: string; json: string; label: string }>) {
   const onCopySummary = async () => {
     const ok = await copyText(summary)
     toast[ok ? 'success' : 'error'](ok ? `${label} summary copied` : `Copy failed`)

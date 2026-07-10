@@ -124,10 +124,15 @@ function MarkdownLink({ href, children, sourceDir, onLocalLinkClick }: MarkdownL
   )
 }
 
-function createMarkdownComponents(sourceDir: string, onLocalLinkClick: (href: string) => void): Components {
+function createMarkdownComponents(
+  sourceDir: string,
+  onLocalLinkClick: (href: string) => void,
+): Components {
   return {
     ...markdownComponents,
-    a: (props) => <MarkdownLink {...props} sourceDir={sourceDir} onLocalLinkClick={onLocalLinkClick} />,
+    a: (props) => (
+      <MarkdownLink {...props} sourceDir={sourceDir} onLocalLinkClick={onLocalLinkClick} />
+    ),
   }
 }
 
@@ -160,7 +165,10 @@ function DocSection({
           className="space-y-4 text-[15px] leading-7"
           style={{ fontFamily: githubMarkdownFont }}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={createMarkdownComponents(sourceDir, onLocalLinkClick)}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={createMarkdownComponents(sourceDir, onLocalLinkClick)}
+          >
             {markdown}
           </ReactMarkdown>
         </article>
