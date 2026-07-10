@@ -1,13 +1,13 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 
-export default function Logs() {
+export default function Activity() {
   return (
     <Card className="h-full">
       <CardHeader>
-        <CardTitle>Logs</CardTitle>
+        <CardTitle>Activity</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-muted-foreground text-xs">System logs coming soon.</p>
+        <p className="text-muted-foreground text-xs">Activity feed coming soon.</p>
       </CardContent>
     </Card>
   )

@@ -4,8 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
-import Events from '@/pages/Events'
-import Logs from '@/pages/Logs'
+import Activity from '@/pages/Activity'
 import Settings from '@/pages/Settings'
 import About from '@/pages/About'
 import './App.css'
@@ -18,8 +17,7 @@ function AppWrapper() {
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
-              <Route path="events" element={<Events />} />
-              <Route path="logs" element={<Logs />} />
+              <Route path="activity" element={<Activity />} />
               <Route path="settings" element={<Settings />} />
               <Route path="about" element={<About />} />
             </Route>

@@ -23,7 +23,6 @@ import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/he
 import {
   MonitorIcon,
   LayoutIcon,
-  BellIcon,
   FileTextIcon,
   GearIcon,
   QuestionIcon,
@@ -149,16 +148,10 @@ export default function Layout() {
               onClick={() => navTo('/')}
             />
             <NavItem
-              icon={BellIcon}
-              label="Events"
-              active={active === '/events'}
-              onClick={() => navTo('/events')}
-            />
-            <NavItem
               icon={FileTextIcon}
-              label="Logs"
-              active={active === '/logs'}
-              onClick={() => navTo('/logs')}
+              label="Activity"
+              active={active === '/activity'}
+              onClick={() => navTo('/activity')}
             />
             <NavItem
               icon={GearIcon}
