@@ -7,7 +7,7 @@
  *
  * Setup:
  *   1. Copy config.example.h → config.h
- *   2. Fill in WIFI_SSID, WIFI_PASS, BOT_TOKEN
+ *   2. Fill in WIFI_SSID, WIFI_PASS, BOT_TOKEN and/or MQTT settings
  *   3. Compile & upload:
  *      arduino-cli compile --fqbn esp32:esp32:esp32 .
  *      arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
@@ -20,6 +20,7 @@
 #include "src/services/wifi_service.h"
 #include "src/services/telegram_service.h"
 #include "src/services/wake_service.h"
+#include "src/services/mqtt_service.h"
 #include "src/services/log_service.h"
 
 const char* reset_reason_label(esp_reset_reason_t reason) {
@@ -59,6 +60,7 @@ void setup() {
   log_print("[boot] target=%s\n", PC_NAME);
   wifi_connect();
   telegram_setup();
+  mqtt_setup();
   log_init();
 
   // log once if previous run was watchdog-triggered (WiFi is up after wifi_connect)
@@ -72,6 +74,7 @@ void loop() {
   log_heartbeat(PC_NAME);
 
   if (WiFi.status() == WL_CONNECTED) {
+    mqtt_loop();
     wake_poll();
   }
 

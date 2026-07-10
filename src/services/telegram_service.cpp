@@ -23,6 +23,7 @@ struct TelegramUpdate {
 static Preferences telegramPrefs;
 static long telegramOffset = 1;
 static bool telegramRebootPending = false;
+static bool telegramConfigured = false;
 static unsigned long lastPoll = 0;
 static const unsigned long POLL_MS = 1000;
 static const int IDLE_LONG_POLL_S = 15;
@@ -120,6 +121,7 @@ static String telegram_post_raw(const String &method, JsonObject payload,
 
 static bool telegram_send_once(const char *label, const String &method,
                                JsonObject payload) {
+  if (!telegramConfigured) return false;
   esp_task_wdt_reset();
   String response =
       telegram_post_raw(method_name(method), payload, label, 8000);
@@ -185,6 +187,12 @@ bool telegram_send_callback_answer_once(const String &query_id,
 }
 
 void telegram_setup() {
+  telegramConfigured = strlen(BOT_TOKEN) > 0;
+  if (!telegramConfigured) {
+    log_print("[telegram] BOT_TOKEN not configured — skipping\n");
+    return;
+  }
+
   telegramPrefs.begin("telegram", false);
   telegramOffset = telegramPrefs.getLong("offset", 1);
   log_print("[telegram] setup longPoll=%d offset=%ld\n", IDLE_LONG_POLL_S,
@@ -221,6 +229,7 @@ static String menuText() {
   msg += "/ping — Check bot health &amp; diagnostics\n";
   msg += "/status — ESP32 health + target PC state\n";
   msg += "/wake — Wake the selected PC (inline confirmation)\n";
+  msg += "/wake force — Wake the selected PC immediately\n";
   msg += "/reboot — Restart the ESP32\n\n";
   msg += "Current target: ";
   msg += PC_NAME;
@@ -234,7 +243,9 @@ static void handleCommand(String chatId, String text) {
 
   int sp = text.indexOf(' ');
   String cmd = (sp >= 0) ? text.substring(0, sp) : text;
+  String args = (sp >= 0) ? text.substring(sp + 1) : "";
   cmd.toLowerCase();
+  args.toLowerCase();
   int botName = cmd.indexOf('@');
   if (botName >= 0)
     cmd = cmd.substring(0, botName);
@@ -288,6 +299,20 @@ static void handleCommand(String chatId, String text) {
   }
 
   if (cmd == "/wake") {
+    bool forceWake = args.indexOf("force") >= 0 || args.indexOf("--force") >= 0 ||
+                     args.indexOf("-f") >= 0;
+    if (forceWake) {
+      log_print("[telegram] /wake force start\n");
+      wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+      wake_start_polling(chatId, PC_NAME, PC_IP, PC_TCP_PORT);
+      telegram_send_text_once(chatId,
+                              "⚡ Wake signal sent to " + String(PC_NAME) +
+                                  " — waiting up to 90s for PC to respond...",
+                              "");
+      log_print("[telegram] /wake force done\n");
+      return;
+    }
+
     DynamicJsonDocument payload(1024);
     payload["chat_id"] = chatId;
     payload["text"] = "Wake " + String(PC_NAME) + "?";
@@ -392,6 +417,7 @@ static int parse_updates(const String &response, TelegramUpdate *updates,
 }
 
 void telegram_poll() {
+  if (!telegramConfigured) return;
   if (millis() - lastPoll < POLL_MS)
     return;
 
