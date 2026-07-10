@@ -36,22 +36,9 @@ export default function PCControl({
   onReboot,
 }: PCControlProps) {
   return (
-    <Card className="gap-1">
+    <Card>
       <CardHeader>
         <CardTitle>PC Control</CardTitle>
-        <CardAction>
-          <DropdownMenu>
-            <DropdownMenuTrigger>
-              <Button variant="ghost" size="icon-sm">
-                <DotsThreeIcon className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>Refresh</DropdownMenuItem>
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </CardAction>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[auto_1fr]">
