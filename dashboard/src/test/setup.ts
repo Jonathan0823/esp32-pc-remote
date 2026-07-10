@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-Object.defineProperty(window, 'matchMedia', {
+Object.defineProperty(globalThis, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({
     matches: false,
@@ -16,12 +16,20 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 class ResizeObserver {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
+  observe() {
+    return undefined
+  }
+
+  unobserve() {
+    return undefined
+  }
+
+  disconnect() {
+    return undefined
+  }
 }
 
-Object.defineProperty(window, 'ResizeObserver', {
+Object.defineProperty(globalThis, 'ResizeObserver', {
   writable: true,
   value: ResizeObserver,
 })

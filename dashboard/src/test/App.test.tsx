@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import App from '../App'
 
 beforeAll(() => {
-  Object.defineProperty(window, 'matchMedia', {
+  Object.defineProperty(globalThis, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
       matches: false,

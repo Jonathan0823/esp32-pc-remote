@@ -11,14 +11,14 @@ import {
   ArrowClockwiseIcon,
 } from '@phosphor-icons/react'
 
-interface PCControlProps {
+type PCControlProps = Readonly<{
   device: DeviceData
   connected: boolean
   wakePending: boolean
   onWake: () => void
   onPing: () => void
   onReboot: () => void
-}
+}>
 
 export default function PCControl({
   device,

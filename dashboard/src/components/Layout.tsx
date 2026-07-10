@@ -252,7 +252,7 @@ function ClockTimer() {
   )
 }
 
-function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
+function ThemeToggle({ theme, setTheme }: Readonly<{ theme: Theme; setTheme: (t: Theme) => void }>) {
   const next = theme === 'dark' ? 'light' : 'dark'
   return (
     <button
@@ -270,12 +270,12 @@ function NavItem({
   label,
   active,
   onClick,
-}: {
+}: Readonly<{
   icon: React.ComponentType<{ className?: string }>
   label: string
   active?: boolean
   onClick?: () => void
-}) {
+}>) {
   return (
     <SidebarMenuItem>
       <SidebarMenuButton isActive={active} tooltip={label} onClick={onClick}>

@@ -52,7 +52,7 @@ vi.mock('../mqtt/useMqtt', () => ({
 }))
 
 beforeEach(() => {
-  window.history.pushState({}, '', '/activity')
+  globalThis.history.pushState({}, '', '/activity')
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: clipboardWriteText },

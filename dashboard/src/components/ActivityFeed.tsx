@@ -28,9 +28,9 @@ import {
 type ActivityTab = 'replies' | 'events' | 'logs'
 type ReplyStatusFilter = 'all' | 'ok' | 'fail'
 
-export type ActivityFeedProps = {
+export type ActivityFeedProps = Readonly<{
   compact?: boolean
-}
+}>
 
 const TAB_ORDER: ActivityTab[] = ['replies', 'events', 'logs']
 
@@ -45,7 +45,7 @@ function stringify(value: unknown): string {
   try {
     return JSON.stringify(value)
   } catch {
-    return String(value)
+    return '[unserializable]'
   }
 }
 
@@ -124,7 +124,7 @@ function fieldEntries(reply: CommandReply): Array<[string, unknown]> {
   const core = ['id', 'cmd', 'ok', 'ts']
   const extras = Object.keys(reply)
     .filter((key) => !core.includes(key))
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
   return [...core, ...extras].map((key) => [key, reply[key]])
 }
 
@@ -154,11 +154,11 @@ function TabButton({
   active,
   onClick,
   children,
-}: {
+}: Readonly<{
   active: boolean
   onClick: () => void
   children: ReactNode
-}) {
+}>) {
   return (
     <Button
       variant={active ? 'default' : 'ghost'}
@@ -175,11 +175,11 @@ function FilterButton({
   active,
   onClick,
   children,
-}: {
+}: Readonly<{
   active: boolean
   onClick: () => void
   children: ReactNode
-}) {
+}>) {
   return (
     <Button
       variant={active ? 'default' : 'outline'}
@@ -192,7 +192,7 @@ function FilterButton({
   )
 }
 
-function CopyMenu({ summary, json, label }: { summary: string; json: string; label: string }) {
+function CopyMenu({ summary, json, label }: Readonly<{ summary: string; json: string; label: string }>) {
   const onCopySummary = async () => {
     const ok = await copyText(summary)
     toast[ok ? 'success' : 'error'](ok ? `${label} summary copied` : `Copy failed`)
@@ -219,7 +219,7 @@ function CopyMenu({ summary, json, label }: { summary: string; json: string; lab
   )
 }
 
-function ReplyDetails({ reply }: { reply: CommandReply }) {
+function ReplyDetails({ reply }: Readonly<{ reply: CommandReply }>) {
   return (
     <div className="border-border/50 bg-background/40 mt-2 border p-2 dark:border-slate-800 dark:bg-slate-900/60">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -247,12 +247,12 @@ function ReplyRow({
   expanded,
   onToggle,
   detail,
-}: {
+}: Readonly<{
   reply: CommandReply
   expanded?: boolean
   onToggle?: () => void
   detail: boolean
-}) {
+}>) {
   const summary = formatReplySummary(reply)
   const json = JSON.stringify(reply, null, 2)
   const result = readText(reply.message) ?? (reply.ok ? 'ok' : 'failed')
@@ -323,7 +323,7 @@ function ReplyRow({
   )
 }
 
-function EventRow({ event }: { event: EspEvent }) {
+function EventRow({ event }: Readonly<{ event: EspEvent }>) {
   const summary = formatEventSummary(event)
   const json = JSON.stringify(event, null, 2)
 
@@ -349,7 +349,7 @@ function EventRow({ event }: { event: EspEvent }) {
   )
 }
 
-function LogRow({ line }: { line: string }) {
+function LogRow({ line }: Readonly<{ line: string }>) {
   return (
     <div className="border-border/20 flex items-start gap-2 border-b py-1.5 text-xs last:border-0 dark:border-slate-800">
       <TerminalIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
@@ -378,7 +378,7 @@ function LogRow({ line }: { line: string }) {
   )
 }
 
-function EmptyState({ label }: { label: string }) {
+function EmptyState({ label }: Readonly<{ label: string }>) {
   return <p className="text-muted-foreground py-2 text-xs">No {label} yet.</p>
 }
 
@@ -436,6 +436,13 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
     setLogQuery('')
   }
 
+  const toggleReplyExpanded = (replyId: string) => {
+    setExpandedReplies((current) => ({
+      ...current,
+      [replyId]: !current[replyId],
+    }))
+  }
+
   const renderTabContent = () => {
     if (activeTab === 'replies') {
       return filteredReplies.length === 0 ? (
@@ -447,15 +454,7 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
             reply={reply}
             detail={!compact}
             expanded={Boolean(expandedReplies[reply.id])}
-            onToggle={
-              compact
-                ? undefined
-                : () =>
-                    setExpandedReplies((current) => ({
-                      ...current,
-                      [reply.id]: !current[reply.id],
-                    }))
-            }
+            onToggle={compact ? undefined : () => toggleReplyExpanded(reply.id)}
           />
         ))
       )
@@ -532,9 +531,11 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Input
-            value={
-              activeTab === 'replies' ? replyQuery : activeTab === 'events' ? eventQuery : logQuery
-            }
+            value={(() => {
+              if (activeTab === 'replies') return replyQuery
+              if (activeTab === 'events') return eventQuery
+              return logQuery
+            })()}
             onChange={(event) => {
               const value = event.target.value
               if (activeTab === 'replies') setReplyQuery(value)
