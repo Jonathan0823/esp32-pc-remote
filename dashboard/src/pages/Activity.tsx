@@ -1,14 +1,9 @@
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import ActivityFeed from '@/components/ActivityFeed'
 
 export default function Activity() {
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle>Activity</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-muted-foreground text-xs">Activity feed coming soon.</p>
-      </CardContent>
-    </Card>
+    <div className="h-full min-h-0">
+      <ActivityFeed />
+    </div>
   )
 }

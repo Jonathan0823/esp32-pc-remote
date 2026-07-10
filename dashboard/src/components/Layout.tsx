@@ -58,6 +58,7 @@ export interface LayoutContext {
   connection: ReturnType<typeof useMqtt>['connection']
   send: (cmd: string, payload?: Record<string, unknown>) => void
   replies: ReturnType<typeof useMqtt>['replies']
+  events: ReturnType<typeof useMqtt>['events']
   logs: string[]
 }
 
@@ -68,7 +69,7 @@ export function useLayoutContext(): LayoutContext {
 }
 
 export default function Layout() {
-  const { connection, state, replies, logs, send } = useMqtt()
+  const { connection, state, replies, events, logs, send } = useMqtt()
 
   const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
@@ -236,6 +237,7 @@ export default function Layout() {
                 connection,
                 send,
                 replies,
+                events,
                 logs,
               } satisfies LayoutContext
             }
