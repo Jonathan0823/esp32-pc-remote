@@ -54,7 +54,9 @@ export default function Dashboard() {
   }
 
   const cancelWake = () => {
-    send('wake_cancel')
+    if (wakePhase === 'waiting' || wakePhase === 'confirm') {
+      send('wake_cancel')
+    }
     setWakeOpen(false)
     setWakePhase('initial')
     setWakeToken(null)
