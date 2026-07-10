@@ -41,6 +41,7 @@ export interface LayoutContext {
   connection: ReturnType<typeof useMqtt>['connection']
   send: (cmd: string, payload?: Record<string, unknown>) => void
   replies: ReturnType<typeof useMqtt>['replies']
+  logs: string[]
 }
 
 export function useLayoutContext(): LayoutContext {
@@ -50,7 +51,7 @@ export function useLayoutContext(): LayoutContext {
 }
 
 export default function Layout() {
-  const { connection, state, replies, send } = useMqtt()
+  const { connection, state, replies, logs, send } = useMqtt()
 
   const { theme, setTheme } = useTheme()
   const location = useLocation()
@@ -179,7 +180,7 @@ export default function Layout() {
 
         {/* Page content via router outlet */}
         <div className="flex-1 overflow-auto p-5">
-          <Outlet context={{ device, state, connected, connection, send, replies } satisfies LayoutContext} />
+          <Outlet context={{ device, state, connected, connection, send, replies, logs } satisfies LayoutContext} />
         </div>
       </div>
 

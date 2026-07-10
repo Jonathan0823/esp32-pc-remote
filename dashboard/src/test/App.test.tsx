@@ -47,7 +47,7 @@ describe('App', () => {
     render(<App />)
     expect(screen.getByText('PC Control')).toBeInTheDocument()
     expect(screen.getByText('Device Status')).toBeInTheDocument()
-    expect(screen.getByText('Recent Events')).toBeInTheDocument()
+    expect(screen.getByText('Activity')).toBeInTheDocument()
     expect(screen.getByText('Connection Health')).toBeInTheDocument()
   })
 })

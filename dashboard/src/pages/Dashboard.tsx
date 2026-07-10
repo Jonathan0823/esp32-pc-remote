@@ -3,7 +3,7 @@ import { useLayoutContext } from '@/components/Layout'
 import { toast } from 'sonner'
 import PCControl from '@/components/PCControl'
 import DeviceStatus from '@/components/DeviceStatus'
-import RecentEvents from '@/components/RecentEvents'
+import LogReplies from '@/components/LogReplies'
 import ConnectionHealth from '@/components/ConnectionHealth'
 import { readText, readNumber, resolveExpiresAt } from '@/lib/helpers'
 import { Button } from '@/components/ui/button'
@@ -165,7 +165,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
         <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
         <DeviceStatus device={device} />
-        <RecentEvents />
+        <LogReplies />
         <ConnectionHealth device={device} />
       </div>
 
