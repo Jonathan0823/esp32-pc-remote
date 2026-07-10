@@ -13,5 +13,7 @@ compile_commands.json
 dashboard/dist
 dashboard/node_modules
 dashboard/.env
+.pi/
+.scannerwork/
 
 
