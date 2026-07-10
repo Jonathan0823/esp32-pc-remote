@@ -9,3 +9,5 @@
 
 name = "esp32-pc-remote-dashboard"
 compatibility_date = "2026-07-10"
+[assets]
+directory = "./dist"
