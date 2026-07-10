@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useLayoutContext } from '@/components/Layout'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
+
 import type { CommandReply } from '@/mqtt/types'
 import { PulseIcon, CheckCircleIcon, XCircleIcon, TerminalIcon } from '@phosphor-icons/react'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 type Tab = 'logs' | 'replies'
 
@@ -40,7 +41,7 @@ export default function LogReplies() {
   const [tab, setTab] = useState<Tab>('replies')
 
   return (
-    <Card className="flex flex-col min-h-[240px] max-h-[360px] lg:min-h-0 lg:max-h-[420px]">
+    <Card className="flex max-h-[360px] min-h-[240px] flex-col lg:max-h-[420px] lg:min-h-0">
       <CardHeader className="pb-0">
         <div className="flex items-center justify-between">
           <CardTitle>Activity</CardTitle>
@@ -66,28 +67,34 @@ export default function LogReplies() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 p-0 pt-3">
-        <ScrollArea className="h-full min-h-0">
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 pt-3">
+        <ScrollArea className="min-h-0 flex-1 overflow-auto">
           <div className="px-(--card-spacing)">
             {tab === 'replies' &&
               (replies.length === 0 ? (
                 <p className="text-muted-foreground py-2 text-xs">No replies yet.</p>
               ) : (
-                replies.map((r, i) => <ReplyRow key={r.id || i} reply={r} />)
+                replies
+                  .slice()
+                  .reverse()
+                  .map((r, i) => <ReplyRow key={r.id || i} reply={r} />)
               ))}
             {tab === 'logs' &&
               (logs.length === 0 ? (
                 <p className="text-muted-foreground py-2 text-xs">No logs yet.</p>
               ) : (
-                <div className="min-w-full w-max">
-                  {logs.slice().reverse().map((line, i) => (
-                    <div
-                      key={i}
-                      className="text-muted-foreground border-border/20 border-b py-0.5 font-mono text-xs whitespace-pre last:border-0"
-                    >
-                      {line}
-                    </div>
-                  ))}
+                <div className="w-max min-w-full">
+                  {logs
+                    .slice()
+                    .reverse()
+                    .map((line, i) => (
+                      <div
+                        key={i}
+                        className="text-muted-foreground border-border/20 border-b py-0.5 font-mono text-xs whitespace-pre last:border-0"
+                      >
+                        {line}
+                      </div>
+                    ))}
                 </div>
               ))}
           </div>
