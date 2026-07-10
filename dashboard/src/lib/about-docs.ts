@@ -5,6 +5,7 @@ export type AboutDoc = {
   title: string
   sourcePath: string
   sourceDir: string
+  slug: string
   markdown: string
 }
 
@@ -19,33 +20,40 @@ export const ABOUT_DOCS: AboutDoc[] = [
     title: 'Repository README',
     sourcePath: 'README.md',
     sourceDir: '',
+    slug: 'repository-readme',
     markdown: rootReadme,
   },
   {
     title: 'Dashboard README',
     sourcePath: 'dashboard/README.md',
     sourceDir: 'dashboard',
+    slug: 'dashboard-readme',
     markdown: dashboardReadme,
   },
   {
     title: 'Wake-on-LAN setup',
     sourcePath: 'docs/wake-on-lan.md',
     sourceDir: 'docs',
+    slug: 'wake-on-lan-setup',
     markdown: wakeOnLanDoc,
   },
   {
     title: 'Telegram bot setup',
     sourcePath: 'docs/telegram.md',
     sourceDir: 'docs',
+    slug: 'telegram-bot-setup',
     markdown: telegramDoc,
   },
   {
     title: 'Grafana Cloud logging',
     sourcePath: 'docs/grafana.md',
     sourceDir: 'docs',
+    slug: 'grafana-cloud-logging',
     markdown: grafanaDoc,
   },
 ]
+
+const ABOUT_DOC_PATH_TO_SLUG = new Map(ABOUT_DOCS.map((doc) => [doc.sourcePath, doc.slug]))
 
 function normalizeRelativePath(baseDir: string, relativePath: string) {
   const parts = `${baseDir}/${relativePath}`.split('/')
@@ -69,5 +77,8 @@ export function resolveAboutHref(sourceDir: string, href: string) {
   }
 
   const normalizedPath = normalizeRelativePath(sourceDir, href.replace(/^\//, ''))
+  const slug = ABOUT_DOC_PATH_TO_SLUG.get(normalizedPath)
+  if (slug) return `#${slug}`
+
   return `${ABOUT_REPO_BLOB_URL}/${normalizedPath}`
 }

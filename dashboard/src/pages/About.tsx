@@ -5,6 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
 
+const githubMarkdownFont =
+  'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
+
 const markdownComponents: Components = {
   h1: ({ children }) => (
     <h1 className="text-foreground text-2xl leading-tight font-semibold tracking-tight">
@@ -87,6 +90,66 @@ const markdownComponents: Components = {
   td: ({ children }) => <td className="py-3 pr-4 align-top">{children}</td>,
 }
 
+function DocSection({
+  title,
+  sourcePath,
+  slug,
+  sourceDir,
+  markdown,
+}: {
+  title: string
+  sourcePath: string
+  slug: string
+  sourceDir: string
+  markdown: string
+}) {
+  return (
+    <Card id={slug} className="scroll-mt-6 overflow-hidden">
+      <CardHeader className="space-y-2 pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-xl">{title}</CardTitle>
+          <Badge variant="secondary">{sourcePath}</Badge>
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="pt-6">
+        <article
+          className="space-y-4 text-[15px] leading-7"
+          style={{ fontFamily: githubMarkdownFont }}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              ...markdownComponents,
+              a: ({ href, children }) => {
+                const resolvedHref = href ? resolveAboutHref(sourceDir, href) : href
+                const safeExternal =
+                  !!resolvedHref &&
+                  (resolvedHref.startsWith('http://') ||
+                    resolvedHref.startsWith('https://') ||
+                    resolvedHref.startsWith('//'))
+
+                return (
+                  <a
+                    href={resolvedHref}
+                    target={safeExternal ? '_blank' : undefined}
+                    rel={safeExternal ? 'noopener noreferrer' : undefined}
+                    className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
+                  >
+                    {children}
+                  </a>
+                )
+              },
+            }}
+          >
+            {markdown}
+          </ReactMarkdown>
+        </article>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function About() {
   return (
     <div className="mx-auto grid max-w-5xl gap-5">
@@ -108,13 +171,28 @@ export default function About() {
             </p>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-3 text-sm leading-6">
+        <CardContent className="grid gap-4 text-sm leading-6">
           <ul className="text-muted-foreground list-disc space-y-2 pl-6">
             <li>Wake your PC with confirmation or force mode.</li>
             <li>Check online status, ping health, and reboot the controller.</li>
             <li>Use MQTT over WebSocket for the dashboard, or Telegram for command control.</li>
             <li>See the setup notes for Wake-on-LAN, MQTT access control, and optional logging.</li>
           </ul>
+          <Separator />
+          <div className="grid gap-2 text-sm">
+            <span className="text-muted-foreground text-xs tracking-wide uppercase">Jump to</span>
+            <div className="flex flex-wrap gap-2">
+              {ABOUT_DOCS.map((doc) => (
+                <a
+                  key={doc.sourcePath}
+                  href={`#${doc.slug}`}
+                  className="bg-muted text-foreground hover:bg-muted/80 rounded-md border px-3 py-1.5 text-xs font-medium no-underline transition-colors"
+                >
+                  {doc.title}
+                </a>
+              ))}
+            </div>
+          </div>
           <Separator />
           <a
             href={ABOUT_REPO_URL}
@@ -128,49 +206,7 @@ export default function About() {
       </Card>
 
       {ABOUT_DOCS.map((doc) => (
-        <Card key={doc.sourcePath} className="overflow-hidden">
-          <CardHeader className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-xl">{doc.title}</CardTitle>
-              <Badge variant="secondary">{doc.sourcePath}</Badge>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Rendered from the committed markdown at build time.
-            </p>
-          </CardHeader>
-          <Separator />
-          <CardContent className="pt-6">
-            <article className="space-y-4">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  ...markdownComponents,
-                  a: ({ href, children }) => {
-                    const resolvedHref = href ? resolveAboutHref(doc.sourceDir, href) : href
-                    const safeExternal =
-                      !!resolvedHref &&
-                      (resolvedHref.startsWith('http://') ||
-                        resolvedHref.startsWith('https://') ||
-                        resolvedHref.startsWith('//'))
-
-                    return (
-                      <a
-                        href={resolvedHref}
-                        target={safeExternal ? '_blank' : undefined}
-                        rel={safeExternal ? 'noopener noreferrer' : undefined}
-                        className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
-                      >
-                        {children}
-                      </a>
-                    )
-                  },
-                }}
-              >
-                {doc.markdown}
-              </ReactMarkdown>
-            </article>
-          </CardContent>
-        </Card>
+        <DocSection key={doc.sourcePath} {...doc} />
       ))}
     </div>
   )
