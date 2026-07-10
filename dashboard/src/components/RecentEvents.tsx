@@ -33,7 +33,7 @@ function EventIcon({ name }: { name: string }) {
 
 export default function RecentEvents() {
   return (
-    <Card className="[grid-area:recentEvents]">
+    <Card>
       <CardHeader>
         <CardTitle>Recent Events</CardTitle>
         <CardAction>

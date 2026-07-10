@@ -15,7 +15,7 @@ interface PCControlProps {
 
 export default function PCControl({ device, connected, onWake, onPing, onReboot }: PCControlProps) {
   return (
-    <Card className="[grid-area:pcControl]">
+    <Card>
       <CardHeader>
         <CardTitle>PC Control</CardTitle>
         <CardAction>

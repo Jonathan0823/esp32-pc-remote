@@ -18,7 +18,7 @@ function HealthRow({ label, value }: { label: string; value: string }) {
 
 export default function ConnectionHealth({ device }: ConnectionHealthProps) {
   return (
-    <Card className="[grid-area:connectionHealth]">
+    <Card>
       <CardHeader>
         <CardTitle>Connection Health</CardTitle>
       </CardHeader>

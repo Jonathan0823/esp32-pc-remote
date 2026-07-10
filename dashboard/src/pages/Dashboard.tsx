@@ -162,7 +162,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-dashboard gap-[18px] h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-[18px]">
         <PCControl device={device} connected={connected} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
         <DeviceStatus device={device} />
         <RecentEvents />

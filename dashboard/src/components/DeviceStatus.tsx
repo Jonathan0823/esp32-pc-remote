@@ -19,7 +19,7 @@ function StatusRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ c
 
 export default function DeviceStatus({ device }: DeviceStatusProps) {
   return (
-    <Card className="[grid-area:deviceStatus]">
+    <Card>
       <CardHeader>
         <CardTitle>Device Status</CardTitle>
       </CardHeader>
