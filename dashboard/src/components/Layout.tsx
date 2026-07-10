@@ -76,24 +76,16 @@ export default function Layout() {
   const navigate = useNavigate()
 
   // Wall clock receipt time for last update / wake
-  const lastUpdateWall = useRef(Date.now())
-  const bootOffsetMs = useRef<number | null>(null)
-  useEffect(() => {
-    if (!state) return
-    lastUpdateWall.current = Date.now()
-    if (bootOffsetMs.current === null && typeof state.ts === 'number') {
-      bootOffsetMs.current = Date.now() - state.ts * 1000
-    }
-  }, [state])
-
   const device: DeviceData = useMemo(() => {
     const s = state
     const espOnline = s?.online === true
+    const now = Date.now()
 
     // Convert firmware relative timestamps (seconds since boot) to wall clock
     let lastWakeFormatted = STATIC_DEVICE.lastWake
-    if (bootOffsetMs.current !== null && s?.last_wake_at) {
-      const absMs = bootOffsetMs.current + s.last_wake_at * 1000
+    if (typeof s?.ts === 'number' && typeof s?.last_wake_at === 'number') {
+      const bootOffset = now - s.ts * 1000
+      const absMs = bootOffset + s.last_wake_at * 1000
       lastWakeFormatted = formatAgo(absMs)
     }
 
@@ -102,7 +94,7 @@ export default function Layout() {
       controllerLabel: 'ESP32 Controller',
       online: espOnline,
       ready: espOnline && s?.pc_online === true,
-      lastUpdateAgo: formatAgo(lastUpdateWall.current),
+      lastUpdateAgo: formatAgo(now),
       rssi: typeof s?.rssi === 'number' ? s.rssi : STATIC_DEVICE.rssi,
       ipAddress: s?.ip || STATIC_DEVICE.ipAddress,
       uptime: typeof s?.uptime_s === 'number' ? formatDuration(s.uptime_s) : STATIC_DEVICE.uptime,
