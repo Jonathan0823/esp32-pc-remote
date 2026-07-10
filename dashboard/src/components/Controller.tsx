@@ -5,6 +5,8 @@ import {
   ChartBarIcon,
   ClockIcon,
   MemoryIcon,
+  ComputerTowerIcon,
+  GlobeSimpleIcon,
   MonitorIcon,
 } from '@phosphor-icons/react'
 
@@ -12,11 +14,20 @@ interface ControllerProps {
   device: DeviceData
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}) {
   return (
-    <div className="flex items-center justify-between py-2 text-xs">
+    <div className="flex items-center gap-3 py-2 text-xs">
+      <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground font-medium">{value}</span>
+      <span className="text-foreground ml-auto font-medium">{value}</span>
     </div>
   )
 }
@@ -56,15 +67,15 @@ export default function Controller({ device }: ControllerProps) {
         </div>
 
         <div>
-          <div className="border-border/30 flex items-center gap-2 border-b py-2 text-xs">
-            <MonitorIcon className="text-muted-foreground size-4" />
-            <span className="text-foreground font-medium">{device.controllerLabel}</span>
-          </div>
-          <InfoRow label="Status" value={device.online ? 'Online' : 'Offline'} />
-          <InfoRow label="IP Address" value={device.ipAddress} />
-          <InfoRow label="Last Update" value={device.lastUpdateAgo} />
-          <InfoRow label="MQTT" value={device.mqttStatus} />
-          <InfoRow label="Broker" value={device.broker} />
+          <InfoRow
+            icon={ComputerTowerIcon}
+            label="Status"
+            value={device.online ? 'Online' : 'Offline'}
+          />
+          <InfoRow icon={GlobeSimpleIcon} label="IP Address" value={device.ipAddress} />
+          <InfoRow icon={ClockIcon} label="Last Update" value={device.lastUpdateAgo} />
+          <InfoRow icon={WifiHighIcon} label="MQTT" value={device.mqttStatus} />
+          <InfoRow icon={MonitorIcon} label="Broker" value={device.broker} />
         </div>
       </CardContent>
     </Card>
