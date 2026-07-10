@@ -3,6 +3,8 @@ import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
 
 const githubMarkdownFont =
@@ -152,7 +154,7 @@ function DocSection({
 
 export default function About() {
   return (
-    <div className="mx-auto grid max-w-5xl gap-5">
+    <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
       <Card className="overflow-hidden">
         <CardHeader className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -208,6 +210,15 @@ export default function About() {
       {ABOUT_DOCS.map((doc) => (
         <DocSection key={doc.sourcePath} {...doc} />
       ))}
+
+      <div className="flex justify-end">
+        <a
+          href="#about-top"
+          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-fit')}
+        >
+          Back to top
+        </a>
+      </div>
     </div>
   )
 }
