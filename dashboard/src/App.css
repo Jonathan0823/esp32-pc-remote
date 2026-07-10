@@ -52,6 +52,10 @@
 /* Layout utilities the design.json needs that Tailwind can't express inline */
 .grid-cols-dashboard {
   grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.82fr);
+  grid-template-areas:
+    "pcControl deviceStatus"
+    "recentEvents connectionHealth";
 }
 
 /* Sidebar footer card fits within sidebar padding */
