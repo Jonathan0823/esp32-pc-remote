@@ -18,12 +18,13 @@ import {
 type WakePhase = 'initial' | 'waiting' | 'confirm' | 'success'
 
 export default function Dashboard() {
-  const { device, connected, send, replies, now } = useLayoutContext()
+  const { device, connected, send, replies } = useLayoutContext()
 
   const [wakeOpen, setWakeOpen] = useState(false)
   const [wakePhase, setWakePhase] = useState<WakePhase>('initial')
   const [wakeToken, setWakeToken] = useState<string | null>(null)
   const [wakeExpiresAt, setWakeExpiresAt] = useState<number | null>(null)
+  const [countdown, setCountdown] = useState(0)
   const [rebootOpen, setRebootOpen] = useState(false)
 
   const startWake = () => {
@@ -48,6 +49,7 @@ export default function Dashboard() {
     setWakePhase('initial')
     setWakeToken(null)
     setWakeExpiresAt(null)
+    setCountdown(0)
   }
 
   const handlePing = () => send('ping')
@@ -121,21 +123,42 @@ export default function Dashboard() {
       setWakePhase('initial')
       setWakeToken(null)
       setWakeExpiresAt(null)
+      setCountdown(0)
     }, 2000)
     return () => clearTimeout(t)
   }, [wakePhase])
 
-  // Expire wake confirmation
+  // Expire wake confirmation via setTimeout (one shot, no polling)
   useEffect(() => {
     if (wakePhase !== 'confirm' || !wakeExpiresAt) return
-    if (now < wakeExpiresAt) return
-    setWakePhase('initial')
-    setWakeToken(null)
-    setWakeExpiresAt(null)
-    toast.error('Wake confirmation expired')
-  }, [now, wakePhase, wakeExpiresAt])
+    const remaining = wakeExpiresAt - Date.now()
+    if (remaining <= 0) {
+      setWakePhase('initial')
+      setWakeToken(null)
+      setWakeExpiresAt(null)
+      setCountdown(0)
+      toast.error('Wake confirmation expired')
+      return
+    }
+    setCountdown(Math.ceil(remaining / 1000))
+    const t = setTimeout(() => {
+      setWakePhase('initial')
+      setWakeToken(null)
+      setWakeExpiresAt(null)
+      setCountdown(0)
+      toast.error('Wake confirmation expired')
+    }, remaining)
+    return () => clearTimeout(t)
+  }, [wakePhase, wakeExpiresAt])
 
-  const secsLeft = wakeExpiresAt ? Math.max(0, Math.ceil((wakeExpiresAt - now) / 1000)) : 0
+  // Local countdown tick during confirm phase
+  useEffect(() => {
+    if (wakePhase !== 'confirm' || !wakeExpiresAt) return
+    const tick = setInterval(() => {
+      setCountdown(Math.max(0, Math.ceil((wakeExpiresAt - Date.now()) / 1000)))
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [wakePhase, wakeExpiresAt])
 
   return (
     <>
@@ -159,7 +182,7 @@ export default function Dashboard() {
             <DialogDescription>
               {wakePhase === 'initial' && 'Request confirmation from the ESP32 before sending the Wake-on-LAN packet.'}
               {wakePhase === 'waiting' && 'Requesting a temporary confirmation token from ' + device.name + '.'}
-              {wakePhase === 'confirm' && `The request expires in ${secsLeft} seconds.`}
+              {wakePhase === 'confirm' && `The request expires in ${countdown} seconds.`}
               {wakePhase === 'success' && device.name + ' sent the Wake-on-LAN packet.'}
             </DialogDescription>
           </DialogHeader>

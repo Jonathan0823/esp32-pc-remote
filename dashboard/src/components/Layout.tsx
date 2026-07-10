@@ -39,7 +39,6 @@ export interface LayoutContext {
   connection: ReturnType<typeof useMqtt>['connection']
   send: (cmd: string, payload?: Record<string, unknown>) => void
   replies: ReturnType<typeof useMqtt>['replies']
-  now: number
 }
 
 export function useLayoutContext(): LayoutContext {
@@ -50,16 +49,12 @@ export function useLayoutContext(): LayoutContext {
 
 export default function Layout() {
   const { connection, state, replies, send } = useMqtt()
-  const [now, setNow] = useState(() => Date.now())
 
   const { theme, setTheme } = useTheme()
   const location = useLocation()
   const navigate = useNavigate()
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
+
 
   const device: DeviceData = useMemo(() => {
     const s = state
@@ -171,7 +166,7 @@ export default function Layout() {
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground w-[116px] justify-end">
               <Clock className="size-4" />
-              <span>{new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)}</span>
+              <ClockTimer />
             </div>
             <ThemeToggle theme={theme} setTheme={setTheme} />
           </div>
@@ -179,7 +174,7 @@ export default function Layout() {
 
         {/* Page content via router outlet */}
         <div className="flex-1 overflow-auto p-5">
-          <Outlet context={{ device, connected, connection, send, replies, now } satisfies LayoutContext} />
+          <Outlet context={{ device, connected, connection, send, replies } satisfies LayoutContext} />
         </div>
       </div>
 
@@ -198,6 +193,15 @@ export default function Layout() {
 }
 
 /* ─── Sub-components ─── */
+
+function ClockTimer() {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  return <span>{new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(now)}</span>
+}
 
 function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
   const next = theme === 'dark' ? 'light' : 'dark'
