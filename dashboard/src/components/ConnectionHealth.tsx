@@ -8,16 +8,18 @@ interface ConnectionHealthProps {
 
 function HealthRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 py-[12.5px] text-xs">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-[12.5px] text-xs">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground text-right font-medium break-words">{value}</span>
+      <div className="min-w-0 overflow-hidden">
+        <span className="text-foreground block text-right font-medium break-words">{value}</span>
+      </div>
     </div>
   )
 }
 
 export default function ConnectionHealth({ device }: ConnectionHealthProps) {
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
         <CardTitle>Connection Health</CardTitle>
       </CardHeader>
