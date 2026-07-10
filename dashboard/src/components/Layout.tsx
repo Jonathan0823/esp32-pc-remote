@@ -207,6 +207,10 @@ export default function Layout() {
             </div>
           </div>
 
+          <div className="md:hidden">
+            <ThemeToggle theme={theme} setTheme={setTheme} />
+          </div>
+
           <div className="hidden items-center gap-4 md:flex">
             <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <WifiHighIcon className="size-4" />
