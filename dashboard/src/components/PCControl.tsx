@@ -36,7 +36,7 @@ export default function PCControl({
   onReboot,
 }: PCControlProps) {
   return (
-    <Card>
+    <Card className="gap-1">
       <CardHeader>
         <CardTitle>PC Control</CardTitle>
         <CardAction>
@@ -53,11 +53,11 @@ export default function PCControl({
           </DropdownMenu>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid gap-5">
+      <CardContent className="grid gap-3">
         <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[auto_1fr]">
           <div className="flex items-center justify-center justify-self-center sm:justify-self-auto">
             <MonitorIcon
-              className="text-muted-foreground/40 size-[80px] sm:size-[132px]"
+              className="text-muted-foreground/40 size-[80px] sm:size-[100px]"
               weight="thin"
             />
           </div>
