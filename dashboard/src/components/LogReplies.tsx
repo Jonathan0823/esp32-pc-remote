@@ -40,7 +40,7 @@ export default function LogReplies() {
   const [tab, setTab] = useState<Tab>('replies')
 
   return (
-    <Card>
+    <Card className="flex flex-col min-h-[240px] max-h-[360px] lg:min-h-0 lg:max-h-[420px]">
       <CardHeader className="pb-0">
         <div className="flex items-center justify-between">
           <CardTitle>Activity</CardTitle>
@@ -66,8 +66,8 @@ export default function LogReplies() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-0 pt-3">
-        <ScrollArea className="max-h-[360px] min-h-[240px] lg:max-h-[420px] lg:min-h-0">
+      <CardContent className="min-h-0 flex-1 p-0 pt-3">
+        <ScrollArea className="h-full">
           <div className="px-(--card-spacing)">
             {tab === 'replies' &&
               (replies.length === 0 ? (
