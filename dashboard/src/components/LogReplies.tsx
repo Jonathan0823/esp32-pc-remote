@@ -63,7 +63,7 @@ export default function LogReplies() {
         </div>
       </CardHeader>
       <CardContent className="p-0 pt-3">
-        <ScrollArea className="h-[180px]">
+        <ScrollArea>
           <div className="px-(--card-spacing)">
             {tab === 'replies' && (
               replies.length === 0
