@@ -15,6 +15,7 @@ import {
 import type { Theme } from '@/components/ui/theme-provider'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ui/theme-provider'
+import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
 import { PC_NAME, BROKER_URL } from '@/lib/types'
 import type { EspState } from '@/mqtt/types'
@@ -71,6 +72,7 @@ export default function Layout() {
   const { connection, state, replies, logs, send } = useMqtt()
 
   const { theme, setTheme } = useTheme()
+  const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -220,10 +222,12 @@ export default function Layout() {
               <ChartBarIcon className="size-4" />
               <span>{device.signalQuality}%</span>
             </div>
-            <div className="text-muted-foreground flex w-[116px] items-center justify-end gap-1.5 text-xs">
-              <ClockIcon className="size-4" />
-              <ClockTimer />
-            </div>
+            {!isMobile && (
+              <div className="text-muted-foreground flex w-[116px] items-center justify-end gap-1.5 text-xs">
+                <ClockIcon className="size-4" />
+                <ClockTimer />
+              </div>
+            )}
             <ThemeToggle theme={theme} setTheme={setTheme} />
           </div>
         </header>
