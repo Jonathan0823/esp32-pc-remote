@@ -105,13 +105,13 @@ export function useMqtt(): UseMqttReturn {
             setEvents((prev) => append(prev, parsed as EspEvent, MAX_EVENTS))
             break
           case 'log':
-            setLogs((prev) => append(prev, str, MAX_LOGS))
+            setLogs((prev) => append(prev, `[${new Date().toLocaleTimeString()}] ${str}`, MAX_LOGS))
             break
         }
       } catch {
         // non-JSON payload on log topic is fine
         if (relTopic === 'log') {
-          setLogs((prev) => append(prev, str, MAX_LOGS))
+          setLogs((prev) => append(prev, `[${new Date().toLocaleTimeString()}] ${str}`, MAX_LOGS))
         }
       }
     })
