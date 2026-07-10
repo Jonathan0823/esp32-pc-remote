@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { useLayoutContext } from '@/components/Layout'
 import { toast } from 'sonner'
 import PCControl from '@/components/PCControl'
-import DeviceStatus from '@/components/DeviceStatus'
+import Controller from '@/components/Controller'
 import LogReplies from '@/components/LogReplies'
-import ConnectionHealth from '@/components/ConnectionHealth'
 import { readText, readNumber, resolveExpiresAt } from '@/lib/helpers'
 import { Button } from '@/components/ui/button'
 import {
@@ -173,26 +172,8 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* Desktop: grid for equal column widths, flex inside for natural heights */}
-      <div className="hidden grid-cols-2 gap-[18px] lg:grid">
-        <div className="flex flex-1 flex-col gap-[18px]">
-          <PCControl
-            device={device}
-            connected={connected}
-            wakePending={state?.wake_pending ?? false}
-            onWake={startWake}
-            onPing={handlePing}
-            onReboot={startReboot}
-          />
-          <LogReplies />
-        </div>
-        <div className="flex flex-1 flex-col gap-[18px]">
-          <DeviceStatus device={device} />
-          <ConnectionHealth device={device} />
-        </div>
-      </div>
-      {/* Mobile: single column */}
-      <div className="flex flex-col gap-[18px] lg:hidden">
+      {/* Desktop: grid with Activity spanning full width */}
+      <div className="hidden min-h-full grid-cols-2 grid-rows-[auto_1fr] gap-[18px] lg:grid">
         <PCControl
           device={device}
           connected={connected}
@@ -201,9 +182,25 @@ export default function Dashboard() {
           onPing={handlePing}
           onReboot={startReboot}
         />
-        <DeviceStatus device={device} />
-        <LogReplies />
-        <ConnectionHealth device={device} />
+        <Controller device={device} />
+        <div className="col-span-2 min-h-0">
+          <LogReplies />
+        </div>
+      </div>
+      {/* Mobile: single column, Activity fills remaining */}
+      <div className="flex min-h-full flex-col gap-[18px] lg:hidden">
+        <PCControl
+          device={device}
+          connected={connected}
+          wakePending={state?.wake_pending ?? false}
+          onWake={startWake}
+          onPing={handlePing}
+          onReboot={startReboot}
+        />
+        <Controller device={device} />
+        <div className="min-h-0 flex-1">
+          <LogReplies />
+        </div>
       </div>
 
       {/* Wake Dialog */}

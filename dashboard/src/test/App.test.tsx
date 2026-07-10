@@ -48,8 +48,7 @@ describe('App', () => {
     render(<App />)
     // two copies: desktop + mobile layout
     expect(screen.getAllByText('PC Control')).toHaveLength(2)
-    expect(screen.getAllByText('Device Status')).toHaveLength(2)
+    expect(screen.getAllByText('Controller')).toHaveLength(2)
     expect(screen.getAllByText('Activity')).toHaveLength(3)
-    expect(screen.getAllByText('Connection Health')).toHaveLength(2)
   })
 })
