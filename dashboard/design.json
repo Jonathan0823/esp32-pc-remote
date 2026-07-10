@@ -1,0 +1,729 @@
+{
+  "project": {
+    "name": "PC Remote Control Panel",
+    "goal": "Recreate the provided desktop and mobile layout exactly while using native shadcn/ui styling.",
+    "sourceReference": "Black and white desktop + mobile PC Remote control panel mockup from the current conversation.",
+    "implementationPriority": [
+      "Match layout, spacing, proportions, content hierarchy, and responsive behavior.",
+      "Use shadcn/ui components without visually restyling them.",
+      "Only customize dimensions, spacing, grid placement, responsive breakpoints, and content.",
+      "Do not recreate the mockup using custom visual CSS."
+    ]
+  },
+  "criticalInstructions": {
+    "mustUseShadcnDefaults": true,
+    "doNotOverride": [
+      "shadcn color tokens",
+      "shadcn border colors",
+      "shadcn border radius",
+      "shadcn shadows",
+      "shadcn button variants",
+      "shadcn card appearance",
+      "shadcn badge appearance",
+      "shadcn typography colors",
+      "shadcn hover states",
+      "shadcn focus rings",
+      "shadcn dark theme variables"
+    ],
+    "allowedOverrides": [
+      "width",
+      "height",
+      "min-width",
+      "max-width",
+      "grid-template-columns",
+      "grid-column",
+      "grid-row",
+      "gap",
+      "padding",
+      "margin",
+      "alignment",
+      "display",
+      "position",
+      "overflow",
+      "responsive visibility",
+      "responsive ordering"
+    ],
+    "forbiddenCustomStyling": [
+      "custom gradients",
+      "custom glows",
+      "custom glassmorphism",
+      "custom card backgrounds",
+      "custom button colors",
+      "custom badge colors",
+      "custom shadows",
+      "custom border colors",
+      "custom radius values",
+      "decorative neon effects",
+      "illustration-heavy graphics"
+    ],
+    "theme": {
+      "system": "shadcn/ui",
+      "mode": "dark",
+      "palette": "default neutral black-white shadcn theme",
+      "cssRule": "Use the generated shadcn CSS variables from globals.css exactly as installed.",
+      "componentRule": "Prefer component variants over custom class-based visual styling."
+    }
+  },
+  "stack": {
+    "framework": "React",
+    "recommended": "Next.js or Vite",
+    "styling": "Tailwind CSS",
+    "componentLibrary": "shadcn/ui",
+    "icons": "lucide-react",
+    "mqtt": "mqtt.js over WSS",
+    "responsiveStrategy": "desktop-first exact layout with mobile single-column adaptation"
+  },
+  "shadcnComponents": {
+    "required": [
+      "Sidebar",
+      "SidebarProvider",
+      "SidebarHeader",
+      "SidebarContent",
+      "SidebarFooter",
+      "SidebarMenu",
+      "SidebarMenuItem",
+      "SidebarMenuButton",
+      "Card",
+      "CardHeader",
+      "CardTitle",
+      "CardDescription",
+      "CardContent",
+      "Button",
+      "Badge",
+      "Separator",
+      "Progress",
+      "Dialog",
+      "DialogContent",
+      "DialogHeader",
+      "DialogTitle",
+      "DialogDescription",
+      "DialogFooter",
+      "Sheet",
+      "SheetContent",
+      "DropdownMenu",
+      "DropdownMenuTrigger",
+      "DropdownMenuContent",
+      "DropdownMenuItem",
+      "ScrollArea",
+      "Tooltip"
+    ],
+    "usageRule": "Do not copy shadcn internals or manually reproduce component visuals. Import and compose the official generated components."
+  },
+  "data": {
+    "device": {
+      "name": "Desktop-01",
+      "controllerLabel": "ESP32 Controller",
+      "online": true,
+      "ready": true,
+      "lastUpdateAgo": "5 sec ago",
+      "rssi": -49,
+      "ipAddress": "192.168.100.17",
+      "uptime": "10m 08s",
+      "freeHeap": "204 KB",
+      "cpuTemp": "34.2 \u00b0C",
+      "mqttStatus": "Connected",
+      "grafanaStatus": "Last sent: 1m ago",
+      "broker": "HiveMQ Cloud",
+      "signalQuality": 82,
+      "lastWake": "Today 15:44",
+      "lastWakeStatus": "WOL packet sent"
+    },
+    "events": [
+      {
+        "time": "15:44:21",
+        "title": "WOL packet sent to Desktop PC",
+        "type": "WAKE",
+        "icon": "Send"
+      },
+      {
+        "time": "15:43:58",
+        "title": "Ping replied (230 ms)",
+        "type": "PING",
+        "icon": "Activity"
+      },
+      {
+        "time": "15:41:12",
+        "title": "Heartbeat updated",
+        "type": "SYSTEM",
+        "icon": "Heart"
+      },
+      {
+        "time": "15:39:47",
+        "title": "ESP32 connected to Wi-Fi",
+        "type": "SYSTEM",
+        "icon": "Wifi"
+      },
+      {
+        "time": "15:39:45",
+        "title": "ESP32 connected to MQTT Broker",
+        "type": "SYSTEM",
+        "icon": "Cloud"
+      }
+    ]
+  },
+  "desktop": {
+    "viewport": {
+      "referenceWidth": 1648,
+      "referenceHeight": 928,
+      "minimumSupportedWidth": 1180
+    },
+    "shell": {
+      "component": "SidebarProvider",
+      "layout": "fixed left sidebar + fluid main dashboard",
+      "height": "100dvh",
+      "overflow": "hidden"
+    },
+    "sidebar": {
+      "width": 244,
+      "collapsible": "icon",
+      "headerHeight": 104,
+      "footerPinned": true,
+      "footerCardWidth": "calc(100% - 32px)",
+      "footerCardMargin": 16,
+      "brand": {
+        "icon": "Monitor",
+        "title": "PC Remote",
+        "subtitle": "Control Panel"
+      },
+      "menu": [
+        {
+          "label": "Dashboard",
+          "icon": "LayoutDashboard",
+          "active": true
+        },
+        {
+          "label": "Events",
+          "icon": "Bell",
+          "active": false
+        },
+        {
+          "label": "Logs",
+          "icon": "FileText",
+          "active": false
+        },
+        {
+          "label": "Settings",
+          "icon": "Settings",
+          "active": false
+        },
+        {
+          "label": "About",
+          "icon": "CircleHelp",
+          "active": false
+        }
+      ],
+      "footer": {
+        "component": "Card",
+        "title": "Connection",
+        "items": [
+          {
+            "label": "Online",
+            "type": "status"
+          },
+          {
+            "label": "MQTT Broker",
+            "value": "HiveMQ Cloud"
+          },
+          {
+            "label": "Last Update",
+            "value": "5 sec ago"
+          }
+        ],
+        "bottomIcon": "Wifi"
+      }
+    },
+    "main": {
+      "padding": 20,
+      "maxWidth": "none",
+      "header": {
+        "height": 86,
+        "layout": "title group left, status group right",
+        "left": {
+          "title": "Desktop-01",
+          "subtitle": "ESP32 Controller \u2022 Last update: 5 sec ago",
+          "onlineBadge": true
+        },
+        "right": [
+          {
+            "icon": "Wifi",
+            "value": "-49 dBm"
+          },
+          {
+            "icon": "ChartNoAxesColumnIncreasing",
+            "value": null
+          },
+          {
+            "type": "time",
+            "value": "15:44:32",
+            "width": 116
+          }
+        ]
+      },
+      "grid": {
+        "columns": "minmax(0, 1.08fr) minmax(0, 0.92fr)",
+        "rows": "minmax(0, 1fr) minmax(0, 0.82fr)",
+        "gap": 18,
+        "height": "calc(100dvh - 126px)",
+        "areas": [
+          ["pcControl", "deviceStatus"],
+          ["recentEvents", "connectionHealth"]
+        ]
+      }
+    },
+    "cards": {
+      "pcControl": {
+        "component": "Card",
+        "gridArea": "pcControl",
+        "header": {
+          "title": "PC Control",
+          "rightAction": {
+            "type": "DropdownMenu",
+            "triggerIcon": "Ellipsis"
+          }
+        },
+        "content": {
+          "layout": "two-column summary followed by full-width actions",
+          "topGrid": {
+            "columns": "180px minmax(0, 1fr)",
+            "gap": 28,
+            "align": "center"
+          },
+          "deviceVisual": {
+            "type": "simple Lucide monitor icon",
+            "icon": "Monitor",
+            "size": 132,
+            "rule": "Use an icon, not a custom illustration."
+          },
+          "deviceInfo": {
+            "title": "Desktop PC",
+            "status": "Ready",
+            "rows": [
+              {
+                "label": "Last Wake",
+                "value": "Today 15:44",
+                "icon": "Clock3"
+              },
+              {
+                "label": "Last Wake Status",
+                "value": "WOL packet sent",
+                "icon": "CircleCheck"
+              }
+            ]
+          },
+          "actions": {
+            "primary": {
+              "component": "Button",
+              "variant": "default",
+              "size": "lg",
+              "label": "WAKE PC",
+              "icon": "Power",
+              "width": "100%",
+              "height": 56
+            },
+            "secondaryGrid": {
+              "columns": "1fr 1fr",
+              "gap": 12,
+              "items": [
+                {
+                  "component": "Button",
+                  "variant": "outline",
+                  "label": "PING ESP32",
+                  "icon": "Activity",
+                  "height": 50
+                },
+                {
+                  "component": "Button",
+                  "variant": "outline",
+                  "label": "REBOOT ESP32",
+                  "icon": "RefreshCw",
+                  "height": 50
+                }
+              ]
+            }
+          }
+        }
+      },
+      "deviceStatus": {
+        "component": "Card",
+        "gridArea": "deviceStatus",
+        "header": {
+          "title": "Device Status"
+        },
+        "content": {
+          "component": "div",
+          "rowHeight": 49,
+          "rowSeparator": "Separator",
+          "rows": [
+            {
+              "label": "Status",
+              "value": "Online",
+              "icon": "Server"
+            },
+            {
+              "label": "Wi-Fi RSSI",
+              "value": "-49 dBm",
+              "icon": "Wifi"
+            },
+            {
+              "label": "IP Address",
+              "value": "192.168.100.17",
+              "icon": "Globe2"
+            },
+            {
+              "label": "Uptime",
+              "value": "10m 08s",
+              "icon": "Clock3"
+            },
+            {
+              "label": "Free Heap",
+              "value": "204 KB",
+              "icon": "MemoryStick"
+            },
+            {
+              "label": "CPU Temp",
+              "value": "34.2 \u00b0C",
+              "icon": "Thermometer"
+            },
+            {
+              "label": "MQTT",
+              "value": "Connected",
+              "icon": "Cloud"
+            }
+          ]
+        }
+      },
+      "recentEvents": {
+        "component": "Card",
+        "gridArea": "recentEvents",
+        "header": {
+          "title": "Recent Events",
+          "rightAction": {
+            "component": "Button",
+            "variant": "outline",
+            "size": "sm",
+            "label": "View all"
+          }
+        },
+        "content": {
+          "component": "ScrollArea",
+          "rowHeight": 52,
+          "rowSeparator": "Separator",
+          "eventLayout": "icon, time, flexible title, trailing badge",
+          "badgeVariant": "secondary",
+          "itemsSource": "data.events"
+        }
+      },
+      "connectionHealth": {
+        "component": "Card",
+        "gridArea": "connectionHealth",
+        "header": {
+          "title": "Connection Health"
+        },
+        "content": {
+          "rowHeight": 51,
+          "rowSeparator": "Separator",
+          "rows": [
+            {
+              "label": "MQTT Connection",
+              "value": "Connected"
+            },
+            {
+              "label": "Grafana Integration",
+              "value": "Last sent: 1m ago"
+            },
+            {
+              "label": "Broker",
+              "value": "HiveMQ Cloud"
+            },
+            {
+              "label": "Uptime (Device)",
+              "value": "10m 08s"
+            },
+            {
+              "label": "Signal Quality",
+              "value": "82%",
+              "component": "Progress",
+              "progress": 82
+            }
+          ]
+        }
+      }
+    }
+  },
+  "mobile": {
+    "breakpoint": "max-width: 767px",
+    "viewport": {
+      "referenceWidth": 390,
+      "contentMaxWidth": 430
+    },
+    "shell": {
+      "layout": "single column",
+      "sidebar": "hidden",
+      "bottomNavigation": true,
+      "padding": 12,
+      "gap": 12,
+      "contentBottomPadding": 84
+    },
+    "header": {
+      "height": 74,
+      "layout": "menu button left, centered title, online state right",
+      "menu": {
+        "component": "Sheet",
+        "triggerIcon": "Menu"
+      },
+      "center": {
+        "title": "PC Remote",
+        "subtitle": "Desktop-01"
+      },
+      "right": {
+        "label": "Online",
+        "component": "Badge",
+        "variant": "secondary"
+      }
+    },
+    "contentOrder": [
+      "mobilePcControl",
+      "mobileEsp32Status",
+      "mobileRecentEvents"
+    ],
+    "cards": {
+      "mobilePcControl": {
+        "component": "Card",
+        "header": {
+          "layout": "icon + title left, ready indicator right",
+          "title": "Desktop PC",
+          "icon": "Monitor",
+          "status": "Ready"
+        },
+        "content": {
+          "summaryGrid": {
+            "columns": "1fr 1fr",
+            "gap": 16,
+            "items": [
+              {
+                "label": "Last Wake",
+                "value": "Today 15:44"
+              },
+              {
+                "label": "Last Wake Status",
+                "value": "WOL packet sent"
+              }
+            ]
+          },
+          "primaryAction": {
+            "component": "Button",
+            "variant": "default",
+            "size": "lg",
+            "label": "WAKE PC",
+            "icon": "Power",
+            "width": "100%",
+            "height": 52
+          },
+          "secondaryActions": {
+            "columns": "1fr 1fr",
+            "gap": 10,
+            "items": [
+              {
+                "component": "Button",
+                "variant": "outline",
+                "label": "PING",
+                "icon": "Activity"
+              },
+              {
+                "component": "Button",
+                "variant": "outline",
+                "label": "REBOOT",
+                "icon": "RefreshCw"
+              }
+            ]
+          }
+        }
+      },
+      "mobileEsp32Status": {
+        "component": "Card",
+        "header": {
+          "title": "ESP32 Status",
+          "icon": "Cpu"
+        },
+        "content": {
+          "rows": [
+            {
+              "label": "Status",
+              "value": "Online",
+              "icon": "Server"
+            },
+            {
+              "label": "Wi-Fi RSSI",
+              "value": "-49 dBm",
+              "icon": "Wifi"
+            },
+            {
+              "label": "IP Address",
+              "value": "192.168.100.17",
+              "icon": "Globe2"
+            },
+            {
+              "label": "Uptime",
+              "value": "10m 08s",
+              "icon": "Clock3"
+            },
+            {
+              "label": "Free Heap",
+              "value": "204 KB",
+              "icon": "MemoryStick"
+            }
+          ],
+          "expandControl": {
+            "component": "Button",
+            "variant": "ghost",
+            "size": "icon",
+            "icon": "ChevronDown"
+          }
+        }
+      },
+      "mobileRecentEvents": {
+        "component": "Card",
+        "header": {
+          "title": "Recent Events",
+          "rightAction": {
+            "component": "Button",
+            "variant": "outline",
+            "size": "sm",
+            "label": "View all"
+          }
+        },
+        "content": {
+          "visibleItems": 3,
+          "eventLayout": "icon, time, flexible title, trailing badge",
+          "badgeVariant": "secondary",
+          "itemsSource": "data.events"
+        }
+      }
+    },
+    "bottomNavigation": {
+      "position": "fixed",
+      "height": 68,
+      "items": [
+        {
+          "label": "Dashboard",
+          "icon": "Home",
+          "active": true
+        },
+        {
+          "label": "Events",
+          "icon": "Bell",
+          "active": false
+        },
+        {
+          "label": "Logs",
+          "icon": "FileText",
+          "active": false
+        },
+        {
+          "label": "Settings",
+          "icon": "Settings",
+          "active": false
+        }
+      ],
+      "rule": "Use existing shadcn/Tailwind foreground and muted-foreground tokens. Do not add custom colors."
+    }
+  },
+  "responsive": {
+    "desktop": {
+      "minWidth": 1180,
+      "sidebar": "expanded",
+      "dashboardGrid": "2 columns x 2 rows"
+    },
+    "tablet": {
+      "range": "768px to 1179px",
+      "sidebar": "collapsed icon mode",
+      "dashboardGrid": "2 columns where possible",
+      "fallback": "single column if content becomes cramped"
+    },
+    "mobile": {
+      "maxWidth": 767,
+      "sidebar": "hidden",
+      "headerMenu": "Sheet",
+      "dashboardGrid": "single column",
+      "bottomNavigation": "fixed"
+    }
+  },
+  "interactions": {
+    "wake": {
+      "trigger": "WAKE PC button",
+      "component": "Dialog",
+      "flow": [
+        {
+          "state": "initial",
+          "title": "Wake Desktop PC?",
+          "description": "Request confirmation from the ESP32 before sending the Wake-on-LAN packet.",
+          "actions": [
+            {
+              "label": "Cancel",
+              "variant": "outline"
+            },
+            {
+              "label": "Continue",
+              "variant": "default",
+              "action": "publish wake_request"
+            }
+          ]
+        },
+        {
+          "state": "waiting",
+          "title": "Waiting for controller",
+          "description": "Requesting a temporary confirmation token from Desktop-01."
+        },
+        {
+          "state": "confirm",
+          "title": "Confirm wake",
+          "description": "The request expires in {{secondsLeft}} seconds.",
+          "actions": [
+            {
+              "label": "Cancel",
+              "variant": "outline"
+            },
+            {
+              "label": "Wake PC",
+              "variant": "default",
+              "action": "publish wake_confirm"
+            }
+          ]
+        },
+        {
+          "state": "success",
+          "title": "Wake packet sent",
+          "description": "Desktop-01 sent the Wake-on-LAN packet."
+        }
+      ]
+    },
+    "ping": {
+      "trigger": "PING button",
+      "feedback": "Use shadcn Sonner toast with latency result."
+    },
+    "reboot": {
+      "trigger": "REBOOT button",
+      "component": "AlertDialog",
+      "title": "Reboot ESP32?",
+      "description": "The controller will disconnect briefly and reconnect automatically."
+    }
+  },
+  "agentChecklist": [
+    "Install shadcn/ui using the official CLI.",
+    "Select the standard dark neutral theme.",
+    "Do not add custom visual tokens.",
+    "Do not override component classes for color, radius, border, or shadow.",
+    "Use layout utility classes only for exact spacing and placement.",
+    "Use Card for all dashboard panels.",
+    "Use Button variants default, outline, ghost, and destructive only.",
+    "Use Badge variant secondary for labels and event tags.",
+    "Use Separator between list rows.",
+    "Use Progress only for signal quality.",
+    "Use Sidebar on desktop and Sheet on mobile.",
+    "Match the desktop 244px sidebar and 2x2 dashboard grid.",
+    "Match the mobile card order and fixed bottom navigation.",
+    "Use lucide-react icons only.",
+    "Avoid custom illustrations; use the Monitor icon for the PC visual.",
+    "Keep content and labels exactly as specified."
+  ]
+}
