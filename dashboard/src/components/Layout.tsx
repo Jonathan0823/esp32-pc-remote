@@ -13,7 +13,6 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import type { Theme } from '@/components/ui/theme-provider'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ui/theme-provider'
 import type { DeviceData } from '@/lib/types'
@@ -32,6 +31,7 @@ import {
   ClockIcon,
   SunIcon,
   MoonIcon,
+  GithubLogoIcon,
 } from '@phosphor-icons/react'
 
 const STATIC_DEVICE: DeviceData = {
@@ -173,33 +173,16 @@ export default function Layout() {
           </SidebarMenu>
         </SidebarContent>
 
-        <SidebarFooter className="p-0 pb-4">
-          <div className="sidebar-footer-card">
-            <Card size="sm">
-              <CardHeader className="flex flex-row items-center gap-2">
-                <WifiHighIcon className="text-sidebar-foreground/70 size-4" />
-                <CardTitle className="text-sidebar-foreground/70 text-xs">Connection</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-1.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-sidebar-foreground/60">Online</span>
-                  <Badge variant="secondary" className="text-[10px] leading-none">
-                    {connection.connected ? 'Connected' : 'Offline'}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-sidebar-foreground/60">MQTT Broker</span>
-                  <span className="text-sidebar-foreground font-medium">{device.broker}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-sidebar-foreground/60">Last Update</span>
-                  <span className="text-sidebar-foreground font-medium">
-                    {device.lastUpdateAgo}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <SidebarFooter className="p-4 pt-0">
+          <a
+            href="https://github.com/Jonathan0823/esp32-pc-remote"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sidebar-foreground/30 hover:text-sidebar-foreground flex items-center gap-1.5 text-[10px] transition-colors"
+          >
+            <GithubLogoIcon className="size-3" />
+            <span>esp32-pc-remote</span>
+          </a>
         </SidebarFooter>
       </Sidebar>
 
