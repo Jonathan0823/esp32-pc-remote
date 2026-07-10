@@ -8,9 +8,9 @@ interface ConnectionHealthProps {
 
 function HealthRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between py-[12.5px] text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground font-medium">{value}</span>
+    <div className="flex items-center justify-between gap-2 py-[12.5px] text-xs">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="text-foreground truncate min-w-0 text-right font-medium">{value}</span>
     </div>
   )
 }
