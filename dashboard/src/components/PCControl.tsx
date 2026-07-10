@@ -53,7 +53,7 @@ export default function PCControl({
               <span className="text-foreground self-center font-medium">Last Wake</span>
               <span className="text-muted-foreground self-center">: {device.lastWake}</span>
               <CheckCircleIcon className="text-muted-foreground size-3.5 self-center" />
-              <span className="text-foreground self-center font-medium">Last Wake Status:</span>
+              <span className="text-foreground self-center font-medium">Last Wake Status</span>
               <span className="text-muted-foreground self-center">: {device.lastWakeStatus}</span>
             </div>
           </div>
