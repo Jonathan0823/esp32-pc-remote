@@ -31,6 +31,7 @@ type DashboardReply = ReturnType<typeof useLayoutContext>['replies'][number]
 
 type ReplyHandlerContext = Readonly<{
   deviceName: string
+  stateTs: number | null
   setWakePhase: Dispatch<SetStateAction<WakePhase>>
   setWakeToken: Dispatch<SetStateAction<string | null>>
   setWakeExpiresAt: Dispatch<SetStateAction<number | null>>
@@ -42,7 +43,9 @@ function handleWakeRequestReply(last: DashboardReply, ctx: ReplyHandlerContext) 
   ctx.setWakePhase(last.ok ? 'confirm' : 'initial')
   if (last.ok) {
     ctx.setWakeToken(token)
-    ctx.setWakeExpiresAt(resolveExpiresAt(last, 30))
+    const bootWallClockMs =
+      typeof ctx.stateTs === 'number' ? Date.now() - ctx.stateTs * 1000 : undefined
+    ctx.setWakeExpiresAt(resolveExpiresAt(last, 30, bootWallClockMs))
     toast('Confirmation ready', { description: 'The controller issued a wake token.' })
   } else {
     toast.error(readText(last.message) || 'Wake request failed')
@@ -154,6 +157,7 @@ export default function Dashboard() {
     if (last) {
       handleLatestReply(last, {
         deviceName: device.name,
+        stateTs: state?.ts ?? null,
         setWakePhase,
         setWakeToken,
         setWakeExpiresAt,

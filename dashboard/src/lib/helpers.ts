@@ -11,11 +11,20 @@ export function toMillis(value?: number | null): number | null {
   return value > 1_000_000_000_000 ? value : value * 1000
 }
 
-export function resolveExpiresAt(reply: Record<string, unknown>, fallbackSeconds: number): number {
-  const absolute =
-    toMillis(reply.expires_at as number | undefined) ??
-    toMillis(reply.wake_expires_at as number | undefined)
-  if (absolute) return absolute
+export function resolveExpiresAt(
+  reply: Record<string, unknown>,
+  fallbackSeconds: number,
+  bootWallClockMs?: number,
+): number {
+  const raw =
+    (reply.expires_at as number | undefined) ?? (reply.wake_expires_at as number | undefined)
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (bootWallClockMs != null && raw < 1_000_000_000_000) {
+      return bootWallClockMs + raw * 1000
+    }
+    const absolute = toMillis(raw)
+    if (absolute) return absolute
+  }
   if (typeof reply.expires_in_s === 'number' && Number.isFinite(reply.expires_in_s)) {
     return Date.now() + reply.expires_in_s * 1000
   }
