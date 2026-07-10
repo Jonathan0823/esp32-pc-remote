@@ -162,8 +162,8 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* Desktop: two independent flex columns */}
-      <div className="hidden lg:flex gap-[18px]">
+      {/* Desktop: grid for equal column widths, flex inside for natural heights */}
+      <div className="hidden lg:grid grid-cols-2 gap-[18px]">
         <div className="flex flex-col gap-[18px] flex-1">
           <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
           <LogReplies />
