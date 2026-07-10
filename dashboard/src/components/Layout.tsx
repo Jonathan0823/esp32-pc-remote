@@ -242,36 +242,6 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="border-border bg-background/90 fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm md:hidden">
-        <div className="flex h-[68px] items-center justify-around px-4">
-          <MobileNavItem
-            icon={LayoutIcon}
-            label="Dashboard"
-            active={active === '/'}
-            onClick={() => navTo('/')}
-          />
-          <MobileNavItem
-            icon={BellIcon}
-            label="Events"
-            active={active === '/events'}
-            onClick={() => navTo('/events')}
-          />
-          <MobileNavItem
-            icon={FileTextIcon}
-            label="Logs"
-            active={active === '/logs'}
-            onClick={() => navTo('/logs')}
-          />
-          <MobileNavItem
-            icon={GearIcon}
-            label="Settings"
-            active={active === '/settings'}
-            onClick={() => navTo('/settings')}
-          />
-          <MobileThemeToggle theme={theme} setTheme={setTheme} />
-        </div>
-      </nav>
     </SidebarProvider>
   )
 }
@@ -308,19 +278,6 @@ function ThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) =
   )
 }
 
-function MobileThemeToggle({ theme, setTheme }: { theme: Theme; setTheme: (t: Theme) => void }) {
-  const next = theme === 'dark' ? 'light' : 'dark'
-  return (
-    <button
-      onClick={() => setTheme(next)}
-      className="text-muted-foreground flex flex-col items-center gap-1 px-3 py-2 text-[10px] font-medium transition-colors"
-      aria-label={`Switch to ${next} theme`}
-    >
-      {theme === 'dark' ? <SunIcon className="size-5" /> : <MoonIcon className="size-5" />}
-    </button>
-  )
-}
-
 function NavItem({
   icon: Icon,
   label,
@@ -342,24 +299,3 @@ function NavItem({
   )
 }
 
-function MobileNavItem({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  active?: boolean
-  onClick?: () => void
-}) {
-  return (
-    <button
-      className={`flex flex-col items-center gap-1 px-3 py-2 text-[10px] font-medium transition-colors ${active ? 'text-foreground' : 'text-muted-foreground'}`}
-      onClick={onClick}
-    >
-      <Icon className={`size-5 ${active ? 'text-foreground' : 'text-muted-foreground'}`} />
-      <span>{label}</span>
-    </button>
-  )
-}
