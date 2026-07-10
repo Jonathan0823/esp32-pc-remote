@@ -1,12 +1,6 @@
-import { Card, CardHeader, CardTitle, CardContent, CardAction } from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu'
 import type { DeviceData } from '@/lib/types'
 import {
   MonitorIcon,
@@ -15,7 +9,6 @@ import {
   PowerIcon,
   PulseIcon,
   ArrowClockwiseIcon,
-  DotsThreeIcon,
 } from '@phosphor-icons/react'
 
 interface PCControlProps {
