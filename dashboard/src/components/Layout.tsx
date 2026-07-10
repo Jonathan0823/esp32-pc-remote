@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useMqtt } from '@/mqtt/useMqtt'
 import {
@@ -252,7 +252,10 @@ function ClockTimer() {
   )
 }
 
-function ThemeToggle({ theme, setTheme }: Readonly<{ theme: Theme; setTheme: (t: Theme) => void }>) {
+function ThemeToggle({
+  theme,
+  setTheme,
+}: Readonly<{ theme: Theme; setTheme: (t: Theme) => void }>) {
   const next = theme === 'dark' ? 'light' : 'dark'
   return (
     <button
