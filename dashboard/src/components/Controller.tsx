@@ -24,24 +24,26 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center gap-3 text-xs min-w-0">
+    <div className="flex min-w-0 items-center gap-3 text-xs">
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="text-muted-foreground shrink-0 whitespace-nowrap">{label}</span>
-      <span className="text-foreground min-w-0 flex-1 truncate text-right font-medium">{value}</span>
+      <span className="text-foreground min-w-0 flex-1 truncate text-right font-medium">
+        {value}
+      </span>
     </div>
   )
 }
 
 export default function Controller({ device }: ControllerProps) {
   return (
-    <Card className="overflow-hidden">
+    <Card>
       <CardHeader>
         <CardTitle>Controller</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-2">
+      <CardContent>
         <span className="text-muted-foreground font-medium">{device.controllerLabel}</span>
 
-        <div className="divide-border grid grid-cols-4 divide-x border-t border-b">
+        <div className="divide-border my-2 grid grid-cols-4 divide-x border-t border-b">
           <div className="flex flex-col items-center gap-1 p-3 text-center">
             <WifiHighIcon className="text-muted-foreground size-5" />
             <span className="text-muted-foreground text-[10px] tracking-wider uppercase">RSSI</span>
@@ -68,7 +70,7 @@ export default function Controller({ device }: ControllerProps) {
           </div>
         </div>
 
-        <div className="space-y-3.5">
+        <div className="space-y-3">
           <InfoRow
             icon={ComputerTowerIcon}
             label="Status"
