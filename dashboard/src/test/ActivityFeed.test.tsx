@@ -99,6 +99,8 @@ describe('Activity page', () => {
     fireEvent.click(await screen.findByText('Copy summary'))
 
     expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('cmd: wake_request'))
-    expect(clipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('confirm_token: cfm-12345678'))
+    expect(clipboardWriteText).toHaveBeenCalledWith(
+      expect.stringContaining('confirm_token: cfm-12345678'),
+    )
   })
 })

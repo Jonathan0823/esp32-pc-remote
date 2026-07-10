@@ -4,7 +4,12 @@ import { useLayoutContext } from '@/components/Layout'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
@@ -65,12 +70,7 @@ function formatReplySummary(reply: CommandReply): string {
 }
 
 function formatReplyCopySummary(reply: CommandReply): string {
-  const lines = [
-    `cmd: ${reply.cmd}`,
-    `ok: ${reply.ok}`,
-    `id: ${reply.id}`,
-    `ts: ${reply.ts}s`,
-  ]
+  const lines = [`cmd: ${reply.cmd}`, `ok: ${reply.ok}`, `id: ${reply.id}`, `ts: ${reply.ts}s`]
 
   const fields: Array<[string, unknown]> = [
     ['status', reply.status],
@@ -114,12 +114,17 @@ function formatEventCopySummary(event: EspEvent): string {
 
 function copyText(text: string): Promise<boolean> {
   if (!navigator.clipboard?.writeText) return Promise.resolve(false)
-  return navigator.clipboard.writeText(text).then(() => true, () => false)
+  return navigator.clipboard.writeText(text).then(
+    () => true,
+    () => false,
+  )
 }
 
 function fieldEntries(reply: CommandReply): Array<[string, unknown]> {
   const core = ['id', 'cmd', 'ok', 'ts']
-  const extras = Object.keys(reply).filter((key) => !core.includes(key)).sort()
+  const extras = Object.keys(reply)
+    .filter((key) => !core.includes(key))
+    .sort()
   return [...core, ...extras].map((key) => [key, reply[key]])
 }
 
@@ -187,15 +192,7 @@ function FilterButton({
   )
 }
 
-function CopyMenu({
-  summary,
-  json,
-  label,
-}: {
-  summary: string
-  json: string
-  label: string
-}) {
+function CopyMenu({ summary, json, label }: { summary: string; json: string; label: string }) {
   const onCopySummary = async () => {
     const ok = await copyText(summary)
     toast[ok ? 'success' : 'error'](ok ? `${label} summary copied` : `Copy failed`)
@@ -210,7 +207,7 @@ function CopyMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={`Copy ${label}`}
-        className="inline-flex size-7 items-center justify-center rounded-none border border-transparent text-foreground hover:bg-muted focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+        className="text-foreground hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 inline-flex size-7 items-center justify-center rounded-none border border-transparent focus-visible:ring-1"
       >
         <DotsThreeIcon className="size-4" />
       </DropdownMenuTrigger>
@@ -227,9 +224,12 @@ function ReplyDetails({ reply }: { reply: CommandReply }) {
     <div className="border-border/50 bg-background/40 mt-2 border p-2 dark:border-slate-800 dark:bg-slate-900/60">
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {fieldEntries(reply).map(([key, value]) => (
-          <div key={key} className="border-border/40 bg-background/70 border p-2 dark:border-slate-800 dark:bg-slate-950/90">
-            <div className="text-muted-foreground text-[10px] uppercase tracking-wider">{key}</div>
-            <div className="text-foreground mt-1 whitespace-pre-wrap break-words text-xs">
+          <div
+            key={key}
+            className="border-border/40 bg-background/70 border p-2 dark:border-slate-800 dark:bg-slate-950/90"
+          >
+            <div className="text-muted-foreground text-[10px] tracking-wider uppercase">{key}</div>
+            <div className="text-foreground mt-1 text-xs break-words whitespace-pre-wrap">
               {key === 'ts' && typeof value === 'number' ? `${value}s` : formatStatusValue(value)}
             </div>
           </div>
@@ -296,7 +296,7 @@ function ReplyRow({
                 {readText(reply.status)}
               </Badge>
             ) : null}
-            <span className="text-muted-foreground ml-auto tabular-nums text-[10px]">
+            <span className="text-muted-foreground ml-auto text-[10px] tabular-nums">
               {formatTimeLabel(reply.ts)}
             </span>
           </div>
@@ -311,7 +311,9 @@ function ReplyRow({
               aria-label={expanded ? 'Collapse reply details' : 'Expand reply details'}
               onClick={onToggle}
             >
-              <CaretRightIcon className={cn('size-4 transition-transform', expanded && 'rotate-90')} />
+              <CaretRightIcon
+                className={cn('size-4 transition-transform', expanded && 'rotate-90')}
+              />
             </Button>
           ) : null}
         </div>
@@ -336,7 +338,7 @@ function EventRow({ event }: { event: EspEvent }) {
               {readText(event.target)}
             </Badge>
           ) : null}
-          <span className="text-muted-foreground ml-auto tabular-nums text-[10px]">
+          <span className="text-muted-foreground ml-auto text-[10px] tabular-nums">
             {formatTimeLabel(event.ts)}
           </span>
         </div>
@@ -350,14 +352,14 @@ function EventRow({ event }: { event: EspEvent }) {
 function LogRow({ line }: { line: string }) {
   return (
     <div className="border-border/20 flex items-start gap-2 border-b py-1.5 text-xs last:border-0 dark:border-slate-800">
-      <TerminalIcon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-      <div className="text-muted-foreground min-w-0 flex-1 font-mono whitespace-pre-wrap break-words dark:text-slate-300">
+      <TerminalIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+      <div className="text-muted-foreground min-w-0 flex-1 font-mono break-words whitespace-pre-wrap dark:text-slate-300">
         {line}
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Copy log line"
-          className="inline-flex size-7 items-center justify-center rounded-none border border-transparent text-foreground hover:bg-muted focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+          className="text-foreground hover:bg-muted focus-visible:border-ring focus-visible:ring-ring/50 inline-flex size-7 items-center justify-center rounded-none border border-transparent focus-visible:ring-1"
         >
           <DotsThreeIcon className="size-4" />
         </DropdownMenuTrigger>
@@ -463,7 +465,9 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
       return filteredEvents.length === 0 ? (
         <EmptyState label="events" />
       ) : (
-        filteredEvents.map((event, i) => <EventRow key={`${event.ts}-${event.event}-${i}`} event={event} />)
+        filteredEvents.map((event, i) => (
+          <EventRow key={`${event.ts}-${event.event}-${i}`} event={event} />
+        ))
       )
     }
 
@@ -492,7 +496,7 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 pt-3 bg-zinc-100 dark:bg-zinc-950">
+        <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-100 p-0 pt-3 dark:bg-zinc-950">
           <ScrollArea className="min-h-0 flex-1 overflow-auto">
             <div className="px-(--card-spacing)">{renderTabContent()}</div>
           </ScrollArea>
@@ -528,7 +532,9 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Input
-            value={activeTab === 'replies' ? replyQuery : activeTab === 'events' ? eventQuery : logQuery}
+            value={
+              activeTab === 'replies' ? replyQuery : activeTab === 'events' ? eventQuery : logQuery
+            }
             onChange={(event) => {
               const value = event.target.value
               if (activeTab === 'replies') setReplyQuery(value)
@@ -538,7 +544,12 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
             placeholder={`Search ${activeTab}`}
             className="h-8 min-w-[220px] flex-1"
           />
-          <Button variant="ghost" size="sm" className="h-8 px-2 text-[10px]" onClick={resetActiveFilter}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-[10px]"
+            onClick={resetActiveFilter}
+          >
             Clear
           </Button>
         </div>
@@ -557,7 +568,7 @@ export default function ActivityFeed({ compact = false }: ActivityFeedProps) {
         ) : null}
       </CardHeader>
 
-      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0 bg-zinc-100 dark:bg-zinc-950">
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden bg-zinc-100 p-0 dark:bg-zinc-950">
         <ScrollArea className="min-h-0 flex-1 overflow-auto">
           <div className="px-(--card-spacing) py-(--card-spacing)">{renderTabContent()}</div>
         </ScrollArea>

@@ -185,7 +185,7 @@ export default function Dashboard() {
         <div className="min-w-0">
           <Controller device={device} />
         </div>
-        <div className="col-span-2 min-h-0 h-full">
+        <div className="col-span-2 h-full min-h-0">
           <LogReplies />
         </div>
       </div>
