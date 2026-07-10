@@ -7,7 +7,7 @@ export default function Logs() {
         <CardTitle>Logs</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">System logs coming soon.</p>
+        <p className="text-muted-foreground text-xs">System logs coming soon.</p>
       </CardContent>
     </Card>
   )

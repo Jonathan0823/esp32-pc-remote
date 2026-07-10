@@ -1,19 +1,33 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { DeviceData } from '@/lib/types'
-import { ComputerTowerIcon, WifiHighIcon, GlobeSimpleIcon, ClockIcon, MemoryIcon, ChartBarIcon } from '@phosphor-icons/react'
-
+import {
+  ComputerTowerIcon,
+  WifiHighIcon,
+  GlobeSimpleIcon,
+  ClockIcon,
+  MemoryIcon,
+  ChartBarIcon,
+} from '@phosphor-icons/react'
 
 interface DeviceStatusProps {
   device: DeviceData
 }
 
-function StatusRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string }) {
+function StatusRow({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: string
+}) {
   return (
     <div className="flex items-center gap-3 py-[12.5px] text-xs">
-      <Icon className="size-4 text-muted-foreground shrink-0" />
+      <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="text-muted-foreground">{label}</span>
-      <span className="ml-auto font-medium text-foreground">{value}</span>
+      <span className="text-foreground ml-auto font-medium">{value}</span>
     </div>
   )
 }
@@ -25,7 +39,11 @@ export default function DeviceStatus({ device }: DeviceStatusProps) {
         <CardTitle>Device Status</CardTitle>
       </CardHeader>
       <CardContent className="grid">
-        <StatusRow icon={ComputerTowerIcon} label="Status" value={device.online ? 'Online' : 'Offline'} />
+        <StatusRow
+          icon={ComputerTowerIcon}
+          label="Status"
+          value={device.online ? 'Online' : 'Offline'}
+        />
         <Separator />
         <StatusRow icon={WifiHighIcon} label="Wi-Fi RSSI" value={`${device.rssi} dBm`} />
         <Separator />

@@ -11,10 +11,7 @@ export function toMillis(value?: number | null): number | null {
   return value > 1_000_000_000_000 ? value : value * 1000
 }
 
-export function resolveExpiresAt(
-  reply: Record<string, unknown>,
-  fallbackSeconds: number,
-): number {
+export function resolveExpiresAt(reply: Record<string, unknown>, fallbackSeconds: number): number {
   const absolute =
     toMillis(reply.expires_at as number | undefined) ??
     toMillis(reply.wake_expires_at as number | undefined)

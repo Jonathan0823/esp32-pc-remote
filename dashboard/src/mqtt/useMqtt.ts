@@ -32,7 +32,7 @@ export function useMqtt(): UseMqttReturn {
   const [events, setEvents] = useState<EspEvent[]>([])
   const [logs, setLogs] = useState<string[]>([])
 
-  const append = <T,>(arr: T[], item: T, max: number): T[] => {
+  const append = <T>(arr: T[], item: T, max: number): T[] => {
     const next = [...arr, item]
     return next.length > max ? next.slice(-max) : next
   }
@@ -44,7 +44,11 @@ export function useMqtt(): UseMqttReturn {
     const baseTopic = getEnv('VITE_MQTT_BASE_TOPIC', 'esp-32-remote')
 
     if (!brokerUrl) {
-      setConnection({ connected: false, error: 'VITE_MQTT_BROKER_URL is not set', reconnecting: false })
+      setConnection({
+        connected: false,
+        error: 'VITE_MQTT_BROKER_URL is not set',
+        reconnecting: false,
+      })
       return
     }
 
@@ -125,7 +129,8 @@ export function useMqtt(): UseMqttReturn {
     if (!client || !client.connected) return
 
     const baseTopic = getEnv('VITE_MQTT_BASE_TOPIC', 'esp-32-remote')
-    const id = cmdName + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6)
+    const id =
+      cmdName + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6)
     const payload = { id, cmd: cmdName, ts: Math.floor(Date.now() / 1000), ...extra }
     client.publish(baseTopic + '/cmd', JSON.stringify(payload), { qos: 1 })
   }, [])

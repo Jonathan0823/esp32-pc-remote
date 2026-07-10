@@ -1,19 +1,13 @@
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardAction,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent, CardAction } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import type { DeviceData } from "@/lib/types";
+} from '@/components/ui/dropdown-menu'
+import type { DeviceData } from '@/lib/types'
 import {
   MonitorIcon,
   ClockIcon,
@@ -22,15 +16,15 @@ import {
   PulseIcon,
   ArrowClockwiseIcon,
   DotsThreeIcon,
-} from "@phosphor-icons/react";
+} from '@phosphor-icons/react'
 
 interface PCControlProps {
-  device: DeviceData;
-  connected: boolean;
-  wakePending: boolean;
-  onWake: () => void;
-  onPing: () => void;
-  onReboot: () => void;
+  device: DeviceData
+  connected: boolean
+  wakePending: boolean
+  onWake: () => void
+  onPing: () => void
+  onReboot: () => void
 }
 
 export default function PCControl({
@@ -60,10 +54,10 @@ export default function PCControl({
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-5">
-        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-center">
+        <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[auto_1fr]">
           <div className="flex items-center justify-center justify-self-center sm:justify-self-auto">
             <MonitorIcon
-              className="size-[80px] sm:size-[132px] text-muted-foreground/40"
+              className="text-muted-foreground/40 size-[80px] sm:size-[132px]"
               weight="thin"
             />
           </div>
@@ -71,24 +65,16 @@ export default function PCControl({
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold">Desktop PC</span>
               <Badge variant="secondary" className="text-[10px]">
-                {device.ready ? "Ready" : "Unavailable"}
+                {device.ready ? 'Ready' : 'Unavailable'}
               </Badge>
             </div>
             <div className="grid grid-cols-[auto_auto_1fr] gap-x-2 gap-y-1.5 text-xs">
-              <ClockIcon className="size-3.5 text-muted-foreground self-center" />
-              <span className="font-medium text-foreground self-center">
-                Last Wake
-              </span>
-              <span className="text-muted-foreground self-center">
-                : {device.lastWake}
-              </span>
-              <CheckCircleIcon className="size-3.5 text-muted-foreground self-center" />
-              <span className="font-medium text-foreground self-center">
-                Last Wake Status:
-              </span>
-              <span className="text-muted-foreground self-center">
-                : {device.lastWakeStatus}
-              </span>
+              <ClockIcon className="text-muted-foreground size-3.5 self-center" />
+              <span className="text-foreground self-center font-medium">Last Wake</span>
+              <span className="text-muted-foreground self-center">: {device.lastWake}</span>
+              <CheckCircleIcon className="text-muted-foreground size-3.5 self-center" />
+              <span className="text-foreground self-center font-medium">Last Wake Status:</span>
+              <span className="text-muted-foreground self-center">: {device.lastWakeStatus}</span>
             </div>
           </div>
         </div>
@@ -96,7 +82,7 @@ export default function PCControl({
         <Button
           variant="default"
           size="lg"
-          className="w-full h-14 text-sm font-bold gap-2"
+          className="h-14 w-full gap-2 text-sm font-bold"
           disabled={!connected || wakePending}
           onClick={onWake}
         >
@@ -107,7 +93,7 @@ export default function PCControl({
         <div className="grid grid-cols-2 gap-3">
           <Button
             variant="outline"
-            className="h-[50px] text-xs font-semibold gap-2"
+            className="h-[50px] gap-2 text-xs font-semibold"
             disabled={!connected}
             onClick={onPing}
           >
@@ -116,7 +102,7 @@ export default function PCControl({
           </Button>
           <Button
             variant="outline"
-            className="h-[50px] text-xs font-semibold gap-2"
+            className="h-[50px] gap-2 text-xs font-semibold"
             disabled={!connected}
             onClick={onReboot}
           >
@@ -126,5 +112,5 @@ export default function PCControl({
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }

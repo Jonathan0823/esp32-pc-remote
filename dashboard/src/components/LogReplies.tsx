@@ -4,9 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { CommandReply } from '@/mqtt/types'
-import {
-  PulseIcon, CheckCircleIcon, XCircleIcon, TerminalIcon,
-} from '@phosphor-icons/react'
+import { PulseIcon, CheckCircleIcon, XCircleIcon, TerminalIcon } from '@phosphor-icons/react'
 
 type Tab = 'logs' | 'replies'
 
@@ -17,15 +15,21 @@ function formatReplyTime(ts: number): string {
 
 function ReplyRow({ reply }: { reply: CommandReply }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 text-xs border-b border-border/30 last:border-0">
-      {reply.ok
-        ? <CheckCircleIcon className="size-3 text-green-500 shrink-0" />
-        : <XCircleIcon className="size-3 text-red-500 shrink-0" />
-      }
-      <span className="font-medium text-foreground min-w-[60px]">{reply.cmd}</span>
-      <span className="text-muted-foreground tabular-nums shrink-0">{formatReplyTime(reply.ts)}</span>
-      <span className="text-muted-foreground truncate flex-1 text-right">
-        {reply.ok ? 'ok' : (typeof reply.message === 'string' ? reply.message : 'failed')}
+    <div className="border-border/30 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 border-b py-1.5 text-xs last:border-0">
+      <div className="col-span-2 flex items-center gap-2">
+        {reply.ok ? (
+          <CheckCircleIcon className="size-3 shrink-0 text-green-500" />
+        ) : (
+          <XCircleIcon className="size-3 shrink-0 text-red-500" />
+        )}
+        <span className="text-foreground font-medium">{reply.cmd}</span>
+        <span className="text-muted-foreground ml-auto tabular-nums">
+          {formatReplyTime(reply.ts)}
+        </span>
+      </div>
+      <span className="text-muted-foreground text-right">Result:</span>
+      <span className={reply.ok ? 'text-green-500' : 'text-red-500'}>
+        {reply.ok ? 'ok' : typeof reply.message === 'string' ? reply.message : 'failed'}
       </span>
     </div>
   )
@@ -45,18 +49,18 @@ export default function LogReplies() {
               variant={tab === 'replies' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setTab('replies')}
-              className="text-[10px] h-7 px-2"
+              className="h-7 px-2 text-[10px]"
             >
-              <PulseIcon className="size-3 mr-1" />
+              <PulseIcon className="mr-1 size-3" />
               Replies
             </Button>
             <Button
               variant={tab === 'logs' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setTab('logs')}
-              className="text-[10px] h-7 px-2"
+              className="h-7 px-2 text-[10px]"
             >
-              <TerminalIcon className="size-3 mr-1" />
+              <TerminalIcon className="mr-1 size-3" />
               Logs
             </Button>
           </div>
@@ -65,20 +69,25 @@ export default function LogReplies() {
       <CardContent className="p-0 pt-3">
         <ScrollArea>
           <div className="px-(--card-spacing)">
-            {tab === 'replies' && (
-              replies.length === 0
-                ? <p className="text-xs text-muted-foreground py-2">No replies yet.</p>
-                : replies.map((r, i) => <ReplyRow key={r.id || i} reply={r} />)
-            )}
-            {tab === 'logs' && (
-              logs.length === 0
-                ? <p className="text-xs text-muted-foreground py-2">No logs yet.</p>
-                : logs.map((line, i) => (
-                    <div key={i} className="text-xs text-muted-foreground py-0.5 font-mono truncate border-b border-border/20 last:border-0">
-                      {line}
-                    </div>
-                  ))
-            )}
+            {tab === 'replies' &&
+              (replies.length === 0 ? (
+                <p className="text-muted-foreground py-2 text-xs">No replies yet.</p>
+              ) : (
+                replies.map((r, i) => <ReplyRow key={r.id || i} reply={r} />)
+              ))}
+            {tab === 'logs' &&
+              (logs.length === 0 ? (
+                <p className="text-muted-foreground py-2 text-xs">No logs yet.</p>
+              ) : (
+                logs.map((line, i) => (
+                  <div
+                    key={i}
+                    className="text-muted-foreground border-border/20 truncate border-b py-0.5 font-mono text-xs last:border-0"
+                  >
+                    {line}
+                  </div>
+                ))
+              ))}
           </div>
         </ScrollArea>
       </CardContent>

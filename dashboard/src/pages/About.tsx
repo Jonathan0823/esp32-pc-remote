@@ -7,7 +7,7 @@ export default function About() {
         <CardTitle>About</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-muted-foreground text-xs">
           PC Remote Control Panel &middot; ESP32-based Wake-on-LAN controller.
         </p>
       </CardContent>

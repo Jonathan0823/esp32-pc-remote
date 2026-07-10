@@ -8,11 +8,22 @@ import ConnectionHealth from '@/components/ConnectionHealth'
 import { readText, readNumber, resolveExpiresAt } from '@/lib/helpers'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
 
 type WakePhase = 'initial' | 'waiting' | 'confirm' | 'success'
@@ -163,26 +174,45 @@ export default function Dashboard() {
   return (
     <>
       {/* Desktop: grid for equal column widths, flex inside for natural heights */}
-      <div className="hidden lg:grid grid-cols-2 gap-[18px]">
-        <div className="flex flex-col gap-[18px] flex-1">
-          <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
+      <div className="hidden grid-cols-2 gap-[18px] lg:grid">
+        <div className="flex flex-1 flex-col gap-[18px]">
+          <PCControl
+            device={device}
+            connected={connected}
+            wakePending={state?.wake_pending ?? false}
+            onWake={startWake}
+            onPing={handlePing}
+            onReboot={startReboot}
+          />
           <LogReplies />
         </div>
-        <div className="flex flex-col gap-[18px] flex-1">
+        <div className="flex flex-1 flex-col gap-[18px]">
           <DeviceStatus device={device} />
           <ConnectionHealth device={device} />
         </div>
       </div>
       {/* Mobile: single column */}
-      <div className="flex flex-col lg:hidden gap-[18px]">
-        <PCControl device={device} connected={connected} wakePending={state?.wake_pending ?? false} onWake={startWake} onPing={handlePing} onReboot={startReboot} />
+      <div className="flex flex-col gap-[18px] lg:hidden">
+        <PCControl
+          device={device}
+          connected={connected}
+          wakePending={state?.wake_pending ?? false}
+          onWake={startWake}
+          onPing={handlePing}
+          onReboot={startReboot}
+        />
         <DeviceStatus device={device} />
         <LogReplies />
         <ConnectionHealth device={device} />
       </div>
 
       {/* Wake Dialog */}
-      <Dialog open={wakeOpen} onOpenChange={(open) => { if (!open) cancelWake() }}>
+      <Dialog
+        open={wakeOpen}
+        onOpenChange={(open) => {
+          if (!open) cancelWake()
+        }}
+      >
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>
@@ -192,8 +222,10 @@ export default function Dashboard() {
               {wakePhase === 'success' && 'Wake packet sent'}
             </DialogTitle>
             <DialogDescription>
-              {wakePhase === 'initial' && 'Request confirmation from the ESP32 before sending the Wake-on-LAN packet.'}
-              {wakePhase === 'waiting' && 'Requesting a temporary confirmation token from ' + device.name + '.'}
+              {wakePhase === 'initial' &&
+                'Request confirmation from the ESP32 before sending the Wake-on-LAN packet.'}
+              {wakePhase === 'waiting' &&
+                'Requesting a temporary confirmation token from ' + device.name + '.'}
               {wakePhase === 'confirm' && `The request expires in ${countdown} seconds.`}
               {wakePhase === 'success' && device.name + ' sent the Wake-on-LAN packet.'}
             </DialogDescription>
@@ -201,21 +233,31 @@ export default function Dashboard() {
           <DialogFooter>
             {wakePhase === 'initial' && (
               <>
-                <Button variant="outline" onClick={cancelWake}>Cancel</Button>
-                <Button variant="default" onClick={requestWake}>Continue</Button>
+                <Button variant="outline" onClick={cancelWake}>
+                  Cancel
+                </Button>
+                <Button variant="default" onClick={requestWake}>
+                  Continue
+                </Button>
               </>
             )}
             {wakePhase === 'waiting' && (
-              <Button variant="outline" disabled>Waiting…</Button>
+              <Button variant="outline" disabled>
+                Waiting…
+              </Button>
             )}
             {wakePhase === 'confirm' && (
               <>
-                <Button variant="outline" onClick={cancelWake}>Cancel</Button>
-                <Button variant="default" onClick={confirmWake}>Wake PC</Button>
+                <Button variant="outline" onClick={cancelWake}>
+                  Cancel
+                </Button>
+                <Button variant="default" onClick={confirmWake}>
+                  Wake PC
+                </Button>
               </>
             )}
             {wakePhase === 'success' && (
-              <span className="text-xs text-muted-foreground">Closing…</span>
+              <span className="text-muted-foreground text-xs">Closing…</span>
             )}
           </DialogFooter>
         </DialogContent>

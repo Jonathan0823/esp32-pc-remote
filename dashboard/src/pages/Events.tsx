@@ -7,7 +7,7 @@ export default function Events() {
         <CardTitle>Events</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">Event log coming soon.</p>
+        <p className="text-muted-foreground text-xs">Event log coming soon.</p>
       </CardContent>
     </Card>
   )

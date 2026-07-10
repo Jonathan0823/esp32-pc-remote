@@ -7,7 +7,7 @@ export default function Settings() {
         <CardTitle>Settings</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">Settings coming soon.</p>
+        <p className="text-muted-foreground text-xs">Settings coming soon.</p>
       </CardContent>
     </Card>
   )
