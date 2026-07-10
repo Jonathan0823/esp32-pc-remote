@@ -24,7 +24,7 @@ function InfoRow({
   value: string
 }) {
   return (
-    <div className="flex items-center gap-3 py-2 text-xs">
+    <div className="flex items-center gap-3 text-xs">
       <Icon className="text-muted-foreground size-4 shrink-0" />
       <span className="text-muted-foreground">{label}</span>
       <span className="text-foreground ml-auto font-medium">{value}</span>
@@ -38,8 +38,10 @@ export default function Controller({ device }: ControllerProps) {
       <CardHeader>
         <CardTitle>Controller</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="divide-border grid grid-cols-4 divide-x rounded-lg border">
+      <CardContent className="grid gap-2">
+        <span className="text-muted-foreground font-medium">{device.controllerLabel}</span>
+
+        <div className="divide-border grid grid-cols-4 divide-x border-t border-b">
           <div className="flex flex-col items-center gap-1 p-3 text-center">
             <WifiHighIcon className="text-muted-foreground size-5" />
             <span className="text-muted-foreground text-[10px] tracking-wider uppercase">RSSI</span>
@@ -66,7 +68,7 @@ export default function Controller({ device }: ControllerProps) {
           </div>
         </div>
 
-        <div>
+        <div className="space-y-3.5">
           <InfoRow
             icon={ComputerTowerIcon}
             label="Status"
