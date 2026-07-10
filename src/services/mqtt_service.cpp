@@ -41,6 +41,7 @@ static int wakeProbePort = 0;
 
 static const unsigned long WAKE_TIMEOUT_MS = 45000;
 static const unsigned long WAKE_RETRY_MS = 3000;
+static const unsigned long CONFIRM_EXPIRES_MAX_S = 3600;
 
 // --- Pending confirmations ---
 static String wakeConfirmToken = "";
@@ -68,8 +69,8 @@ static String logTopic()      { return baseTopic + "/log"; }
 // --- Generate a confirm token ---
 static String generate_token() {
   uint32_t r = esp_random();
-  char buf[16];
-  snprintf(buf, sizeof(buf), "cfm-%04x", (unsigned int)(r & 0xFFFF));
+  char buf[20];
+  snprintf(buf, sizeof(buf), "cfm-%08x", (unsigned int)r);
   return String(buf);
 }
 
@@ -216,14 +217,19 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
     return;
   }
 
+  // ponytail: cap confirmation TTL to avoid overflow and keep requests short-lived
+  if (expiresIn > CONFIRM_EXPIRES_MAX_S) {
+    expiresIn = CONFIRM_EXPIRES_MAX_S;
+  }
+
   wakeConfirmToken = generate_token();
-  wakeConfirmExpiresMs = millis() + (expiresIn * 1000);
+  wakeConfirmExpiresMs = millis() + (expiresIn * 1000UL);
   wakeTarget = target;
 
   DynamicJsonDocument extra(128);
   extra["status"] = "confirmation_required";
   extra["confirm_token"] = wakeConfirmToken;
-  extra["expires_at"] = (unsigned long)((millis() + expiresIn * 1000) / 1000);
+  extra["expires_at"] = (unsigned long)((millis() + (expiresIn * 1000UL)) / 1000UL);
   mqtt_publish_reply(reqId, "wake_request", true, extra);
   mqtt_publish_state(true);
   log_print("[mqtt] wake_request target=%s token=%s expires=%lus\n",
@@ -276,13 +282,19 @@ static void handle_wake_cancel(const String& reqId) {
 
 static void handle_reboot_request(const String& reqId, DynamicJsonDocument& doc) {
   unsigned long expiresIn = doc["expires_in_s"] | 30;
+
+  // ponytail: cap confirmation TTL to avoid overflow and keep requests short-lived
+  if (expiresIn > CONFIRM_EXPIRES_MAX_S) {
+    expiresIn = CONFIRM_EXPIRES_MAX_S;
+  }
+
   rebootConfirmToken = generate_token();
-  rebootConfirmExpiresMs = millis() + (expiresIn * 1000);
+  rebootConfirmExpiresMs = millis() + (expiresIn * 1000UL);
 
   DynamicJsonDocument extra(96);
   extra["status"] = "confirmation_required";
   extra["confirm_token"] = rebootConfirmToken;
-  extra["expires_at"] = (unsigned long)((millis() + expiresIn * 1000) / 1000);
+  extra["expires_at"] = (unsigned long)((millis() + (expiresIn * 1000UL)) / 1000UL);
   mqtt_publish_reply(reqId, "reboot_request", true, extra);
   log_print("[mqtt] reboot_request token=%s expires=%lus\n",
             rebootConfirmToken.c_str(), expiresIn);
