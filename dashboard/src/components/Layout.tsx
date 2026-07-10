@@ -194,14 +194,14 @@ export default function Layout() {
             <SidebarTrigger className="md:hidden" />
             <div className="grid gap-0.5">
               <div className="flex items-center gap-2">
-                <h1 className="text-foreground text-lg leading-none font-semibold">
+                <h1 className="text-foreground text-base leading-none font-semibold md:text-lg">
                   {device.name}
                 </h1>
-                <Badge variant="secondary" className="text-[10px]">
+                <Badge variant="secondary" className="text-[9px] md:text-[10px]">
                   {device.online ? 'Online' : 'Offline'}
                 </Badge>
               </div>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-[10px] md:text-xs">
                 {device.controllerLabel} &middot; Last update: {device.lastUpdateAgo}
               </p>
             </div>
@@ -245,7 +245,6 @@ export default function Layout() {
           />
         </div>
       </div>
-
     </SidebarProvider>
   )
 }
@@ -302,4 +301,3 @@ function NavItem({
     </SidebarMenuItem>
   )
 }
-
