@@ -1,0 +1,11 @@
+# Deploy
+#   npm run build
+#   npx wrangler pages deploy dist --branch production
+#
+# Or connect your GitHub repo in the Cloudflare dashboard:
+# - Framework preset: Vite
+# - Build command: npm run build
+# - Build output: dist
+
+name = "esp32-pc-remote-dashboard"
+compatibility_date = "2026-07-10"

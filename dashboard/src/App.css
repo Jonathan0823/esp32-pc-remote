@@ -1,0 +1,251 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+/* ---- Header ---- */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #f0f6fc;
+}
+
+.status-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+.conn-ok { background: #1b4332; color: #52c41a; }
+.conn-pending { background: #3b2f1a; color: #faad14; }
+.conn-err { background: #3b1a1a; color: #f5222d; }
+.pc-online { background: #1b4332; color: #52c41a; }
+.pc-offline { background: #3b1a1a; color: #f5222d; }
+
+/* ---- Cards ---- */
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.card h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+/* ---- State card ---- */
+.state-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.state-grid div { color: #c9d1d9; }
+.state-grid strong { color: #8b949e; }
+
+.wake-pending {
+  color: #faad14;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- Buttons ---- */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #21262d;
+  color: #c9d1d9;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn:hover:not(:disabled) { background: #30363d; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-ping { border-color: #58a6ff; color: #58a6ff; }
+.btn-wake { border-color: #d29922; color: #d29922; }
+.btn-reboot { border-color: #f5222d; color: #f5222d; }
+.btn-clear { border-color: #8b949e; color: #8b949e; }
+.btn-primary { background: #238636; border-color: #238636; color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #2ea043; }
+.btn-secondary { background: #21262d; border-color: #30363d; color: #c9d1d9; }
+
+/* ---- Confirm overlay ---- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.confirm-dialog {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 320px;
+}
+
+.confirm-dialog h3 { color: #f0f6fc; margin-bottom: 8px; }
+.confirm-dialog p { color: #8b949e; margin-bottom: 16px; font-size: 0.875rem; }
+.confirm-dialog .btn-row { justify-content: flex-end; }
+
+/* ---- Feed ---- */
+.feed-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.feed-tab {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #21262d;
+  color: #8b949e;
+}
+
+.feed-tab.active {
+  background: #1f3a5f;
+  color: #58a6ff;
+}
+
+.feed {
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feed::-webkit-scrollbar {
+  width: 6px;
+}
+.feed::-webkit-scrollbar-track {
+  background: #0d1117;
+}
+.feed::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+.feed-empty {
+  color: #484f58;
+  padding: 24px;
+  text-align: center;
+  font-family: inherit;
+}
+
+.feed-item {
+  display: flex;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.feed-item:hover { background: #1c2128; }
+
+.reply-ok { color: #52c41a; }
+.reply-err { color: #f5222d; }
+.feed-event { color: #58a6ff; }
+.feed-log { color: #8b949e; }
+
+.feed-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #21262d;
+  color: #8b949e;
+  white-space: nowrap;
+  min-width: 48px;
+  text-align: center;
+}
+
+.feed-cmd {
+  min-width: 80px;
+  color: #c9d1d9;
+}
+
+.feed-status {
+  min-width: 16px;
+}
+.feed-status.ok { color: #52c41a; }
+.feed-status.err { color: #f5222d; }
+
+.feed-body {
+  color: inherit;
+  word-break: break-all;
+}
+
+/* ---- Footer ---- */
+.footer {
+  text-align: center;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.mqtt-topic {
+  font-size: 0.7rem;
+  color: #484f58;
+  font-family: 'SF Mono', monospace;
+}
