@@ -10,3 +10,10 @@ AGENTS.md
 *.log
 compile_commands.json
 .clangd
+dashboard/dist
+dashboard/node_modules
+dashboard/.env
+.pi/
+.scannerwork/
+
+

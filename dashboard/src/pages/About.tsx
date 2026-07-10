@@ -1,0 +1,245 @@
+import { useState } from 'react'
+import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
+
+const githubMarkdownFont =
+  'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
+
+const markdownComponents: Components = {
+  h1: ({ children }) => (
+    <h1 className="text-foreground text-2xl leading-tight font-semibold tracking-tight">
+      {children}
+    </h1>
+  ),
+  h2: ({ children }) => (
+    <h2 className="text-foreground mt-8 mb-3 text-lg leading-tight font-semibold tracking-tight first:mt-0">
+      {children}
+    </h2>
+  ),
+  h3: ({ children }) => (
+    <h3 className="text-foreground mt-6 mb-2 text-base leading-tight font-semibold tracking-tight">
+      {children}
+    </h3>
+  ),
+  p: ({ children }) => <p className="text-muted-foreground leading-7">{children}</p>,
+  ul: ({ children }) => (
+    <ul className="text-muted-foreground my-4 list-disc space-y-2 pl-6">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="text-muted-foreground my-4 list-decimal space-y-2 pl-6">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-7">{children}</li>,
+  blockquote: ({ children }) => (
+    <blockquote className="border-border text-muted-foreground my-4 border-l-2 pl-4 italic">
+      {children}
+    </blockquote>
+  ),
+  hr: () => <hr className="border-border my-6 border-t" />,
+  a: ({ href, children }) => {
+    const resolvedHref = href ? resolveAboutHref('', href) : href
+    const safeExternal =
+      !!resolvedHref &&
+      (resolvedHref.startsWith('http://') ||
+        resolvedHref.startsWith('https://') ||
+        resolvedHref.startsWith('//'))
+
+    return (
+      <a
+        href={resolvedHref}
+        target={safeExternal ? '_blank' : undefined}
+        rel={safeExternal ? 'noopener noreferrer' : undefined}
+        className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
+      >
+        {children}
+      </a>
+    )
+  },
+  code: ({ children, className }) => {
+    const inline = !className
+    return (
+      <code
+        className={
+          inline
+            ? 'bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-[0.85em]'
+            : 'text-foreground font-mono text-[0.85em]'
+        }
+      >
+        {children}
+      </code>
+    )
+  },
+  pre: ({ children }) => (
+    <pre className="bg-muted text-foreground my-4 overflow-x-auto rounded-lg border p-4 text-sm leading-6">
+      {children}
+    </pre>
+  ),
+  table: ({ children }) => (
+    <div className="my-4 overflow-x-auto">
+      <table className="text-muted-foreground w-full border-collapse text-left text-sm">
+        {children}
+      </table>
+    </div>
+  ),
+  thead: ({ children }) => <thead className="border-border border-b">{children}</thead>,
+  tbody: ({ children }) => <tbody>{children}</tbody>,
+  tr: ({ children }) => <tr className="border-border border-b last:border-b-0">{children}</tr>,
+  th: ({ children }) => <th className="text-foreground py-3 pr-4 font-semibold">{children}</th>,
+  td: ({ children }) => <td className="py-3 pr-4 align-top">{children}</td>,
+}
+
+function DocSection({
+  title,
+  sourcePath,
+  slug,
+  sourceDir,
+  markdown,
+  onLocalLinkClick,
+}: {
+  title: string
+  sourcePath: string
+  slug: string
+  sourceDir: string
+  markdown: string
+  onLocalLinkClick: (href: string) => void
+}) {
+  return (
+    <Card id={slug} className="scroll-mt-6 overflow-hidden">
+      <CardHeader className="space-y-2 pb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CardTitle className="text-xl">{title}</CardTitle>
+          <Badge variant="secondary">{sourcePath}</Badge>
+        </div>
+      </CardHeader>
+      <Separator />
+      <CardContent className="pt-6">
+        <article
+          className="space-y-4 text-[15px] leading-7"
+          style={{ fontFamily: githubMarkdownFont }}
+        >
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              ...markdownComponents,
+              a: ({ href, children }) => {
+                const resolvedHref = href ? resolveAboutHref(sourceDir, href) : href
+                const safeExternal =
+                  !!resolvedHref &&
+                  (resolvedHref.startsWith('http://') ||
+                    resolvedHref.startsWith('https://') ||
+                    resolvedHref.startsWith('//'))
+
+                return (
+                  <a
+                    href={resolvedHref}
+                    target={safeExternal ? '_blank' : undefined}
+                    rel={safeExternal ? 'noopener noreferrer' : undefined}
+                    onClick={() => {
+                      if (resolvedHref?.startsWith('#')) onLocalLinkClick(resolvedHref)
+                    }}
+                    className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
+                  >
+                    {children}
+                  </a>
+                )
+              },
+            }}
+          >
+            {markdown}
+          </ReactMarkdown>
+        </article>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function About() {
+  const [backTarget, setBackTarget] = useState<{ href: string; label: string } | null>(null)
+
+  return (
+    <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
+      <Card className="overflow-hidden">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">ESP32</Badge>
+            <Badge variant="secondary">MQTT</Badge>
+            <Badge variant="secondary">Telegram</Badge>
+            <Badge variant="secondary">Wake-on-LAN</Badge>
+            <Badge variant="secondary">Grafana</Badge>
+          </div>
+          <div className="grid gap-2">
+            <CardTitle className="text-2xl">About this project</CardTitle>
+            <p className="text-muted-foreground text-sm leading-6">
+              <span className="text-foreground font-medium">esp32-pc-remote</span> is a private PC
+              control stack: an ESP32 firmware plus a React dashboard for waking, checking, and
+              managing a desktop over MQTT or Telegram.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 text-sm leading-6">
+          <ul className="text-muted-foreground list-disc space-y-2 pl-6">
+            <li>Wake your PC with confirmation or force mode.</li>
+            <li>Check online status, ping health, and reboot the controller.</li>
+            <li>Use MQTT over WebSocket for the dashboard, or Telegram for command control.</li>
+            <li>See the setup notes for Wake-on-LAN, MQTT access control, and optional logging.</li>
+          </ul>
+          <Separator />
+          <div className="grid gap-2 text-sm">
+            <span className="text-muted-foreground text-xs tracking-wide uppercase">Jump to</span>
+            <div className="flex flex-wrap gap-2">
+              {ABOUT_DOCS.map((doc) => (
+                <a
+                  key={doc.sourcePath}
+                  href={`#${doc.slug}`}
+                  className="bg-muted text-foreground hover:bg-muted/80 rounded-md border px-3 py-1.5 text-xs font-medium no-underline transition-colors"
+                >
+                  {doc.title}
+                </a>
+              ))}
+            </div>
+          </div>
+          <Separator />
+          <a
+            href={ABOUT_REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
+          >
+            View the repository on GitHub
+          </a>
+        </CardContent>
+      </Card>
+
+      {ABOUT_DOCS.map((doc) => (
+        <DocSection
+          key={doc.sourcePath}
+          {...doc}
+          onLocalLinkClick={(href) => {
+            setBackTarget({ href: window.location.hash || '#about-top', label: 'Back' })
+            window.location.hash = href
+          }}
+        />
+      ))}
+
+      <a
+        href={backTarget?.href ?? '#about-top'}
+        onClick={() => setBackTarget(null)}
+        className={cn(
+          buttonVariants({ variant: 'default', size: 'lg' }),
+          'shadow-primary/30 fixed right-4 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
+        )}
+        aria-label={backTarget?.label ?? 'Top'}
+        title={backTarget?.label ?? 'Top'}
+      >
+        {backTarget ? <ArrowLeftIcon className="size-5" /> : <ArrowUpIcon className="size-5" />}
+        <span>{backTarget?.label ?? 'Top'}</span>
+      </a>
+    </div>
+  )
+}
