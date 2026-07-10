@@ -5,7 +5,6 @@ import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
 import Activity from '@/pages/Activity'
-import Settings from '@/pages/Settings'
 import About from '@/pages/About'
 import './App.css'
 
@@ -18,7 +17,6 @@ function AppWrapper() {
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="activity" element={<Activity />} />
-              <Route path="settings" element={<Settings />} />
               <Route path="about" element={<About />} />
             </Route>
           </Routes>

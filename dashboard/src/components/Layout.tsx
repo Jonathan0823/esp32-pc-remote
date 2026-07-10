@@ -24,7 +24,6 @@ import {
   MonitorIcon,
   LayoutIcon,
   FileTextIcon,
-  GearIcon,
   QuestionIcon,
   WifiHighIcon,
   ChartBarIcon,
@@ -153,12 +152,6 @@ export default function Layout() {
               label="Activity"
               active={active === '/activity'}
               onClick={() => navTo('/activity')}
-            />
-            <NavItem
-              icon={GearIcon}
-              label="Settings"
-              active={active === '/settings'}
-              onClick={() => navTo('/settings')}
             />
             <NavItem
               icon={QuestionIcon}
