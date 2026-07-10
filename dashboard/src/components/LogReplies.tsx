@@ -67,7 +67,7 @@ export default function LogReplies() {
         </div>
       </CardHeader>
       <CardContent className="min-h-0 flex-1 p-0 pt-3">
-        <ScrollArea className="h-full">
+        <ScrollArea className="h-full min-h-0">
           <div className="px-(--card-spacing)">
             {tab === 'replies' &&
               (replies.length === 0 ? (
@@ -79,17 +79,15 @@ export default function LogReplies() {
               (logs.length === 0 ? (
                 <p className="text-muted-foreground py-2 text-xs">No logs yet.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <div className="min-w-max">
-                    {logs.map((line, i) => (
-                      <div
-                        key={i}
-                        className="text-muted-foreground border-border/20 border-b py-0.5 font-mono text-xs whitespace-pre last:border-0"
-                      >
-                        {line}
-                      </div>
-                    ))}
-                  </div>
+                <div className="min-w-full w-max">
+                  {logs.slice().reverse().map((line, i) => (
+                    <div
+                      key={i}
+                      className="text-muted-foreground border-border/20 border-b py-0.5 font-mono text-xs whitespace-pre last:border-0"
+                    >
+                      {line}
+                    </div>
+                  ))}
                 </div>
               ))}
           </div>
