@@ -34,7 +34,7 @@ function InfoRow({
 
 export default function Controller({ device }: ControllerProps) {
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle>Controller</CardTitle>
       </CardHeader>
