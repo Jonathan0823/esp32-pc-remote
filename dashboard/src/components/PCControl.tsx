@@ -34,8 +34,8 @@ export default function PCControl({ device, connected, wakePending, onWake, onPi
         </CardAction>
       </CardHeader>
       <CardContent className="grid gap-5">
-        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-center justify-items-center sm:justify-items-start">
-          <div className="flex items-center justify-center">
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-4 items-center">
+          <div className="flex items-center justify-center justify-self-center sm:justify-self-auto">
             <MonitorIcon className="size-[80px] sm:size-[132px] text-muted-foreground/40" weight="thin" />
           </div>
           <div className="grid gap-2">
