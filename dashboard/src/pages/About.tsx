@@ -250,7 +250,7 @@ export default function About() {
         onClick={() => setBackTarget(null)}
         className={cn(
           buttonVariants({ variant: 'default', size: 'lg' }),
-          'shadow-primary/30 fixed right-4 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
+          'fixed right-10 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
         )}
         aria-label={backTarget?.label ?? 'Top'}
         title={backTarget?.label ?? 'Top'}
