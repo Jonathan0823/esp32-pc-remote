@@ -57,8 +57,6 @@ First, enable and test Wake-on-LAN on the PC using the [Wake-on-LAN setup guide]
 ```bash
 arduino-cli core update-index
 arduino-cli core install esp32:esp32
-arduino-cli lib install UniversalTelegramBot
-
 cp config.example.h config.h
 # Fill in WiFi, BOT_TOKEN, PC_MAC, PC_IP, and WOL_BCAST in config.h
 
@@ -181,7 +179,6 @@ Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check i
 ## Requirements and limitations
 
 - Any ESP32 board supported by the `esp32:esp32` Arduino core
-- `UniversalTelegramBot` if Telegram is enabled
 - `PubSubClient` if MQTT is enabled
 - Wake-on-LAN must work from the same LAN before using this project
 - The ESP32 needs power and WiFi while the PC is off

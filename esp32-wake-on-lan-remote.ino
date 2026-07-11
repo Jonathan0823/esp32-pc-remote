@@ -3,7 +3,6 @@
  *
  * Dependencies (install via Arduino CLI):
  *   arduino-cli core install esp32:esp32
- *   arduino-cli lib install "UniversalTelegramBot"
  *
  * Setup:
  *   1. Copy config.example.h → config.h
