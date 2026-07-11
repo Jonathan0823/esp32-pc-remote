@@ -13,7 +13,6 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import type { Theme } from '@/components/ui/theme-provider'
-import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ui/theme-provider'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
@@ -180,16 +179,6 @@ export default function Layout() {
                 <h1 className="text-foreground text-base leading-none font-semibold md:text-lg">
                   {device.name}
                 </h1>
-                <Badge
-                  variant="outline"
-                  className={`text-[9px] md:text-[10px] ${
-                    device.online
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                  }`}
-                >
-                  {device.online ? 'Online' : 'Offline'}
-                </Badge>
               </div>
               <p className="text-muted-foreground text-[10px] md:text-xs">
                 {device.controllerLabel} &middot; Last update: {device.lastUpdateAgo}
