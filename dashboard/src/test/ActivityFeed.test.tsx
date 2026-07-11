@@ -48,6 +48,8 @@ vi.mock('../mqtt/useMqtt', () => ({
     logs: ['[boot] start', '[mqtt] connected'],
     send: vi.fn(),
     clearFeed: vi.fn(),
+    markReplyHandled: vi.fn(),
+    isReplyHandled: vi.fn(() => false),
   }),
 }))
 
