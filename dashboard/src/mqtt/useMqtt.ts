@@ -153,5 +153,15 @@ export function useMqtt(): UseMqttReturn {
     return handledReplyIds.current.has(id)
   }, [])
 
-  return { connection, state, replies, events, logs, send, clearFeed, markReplyHandled, isReplyHandled }
+  return {
+    connection,
+    state,
+    replies,
+    events,
+    logs,
+    send,
+    clearFeed,
+    markReplyHandled,
+    isReplyHandled,
+  }
 }
