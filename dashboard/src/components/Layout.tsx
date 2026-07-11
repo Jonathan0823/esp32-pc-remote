@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
 import { PC_NAME, BROKER_URL } from '@/lib/types'
 import type { EspState } from '@/mqtt/types'
+import LiveTime from '@/components/LiveTime'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
 import {
   LayoutIcon,
@@ -46,6 +47,8 @@ const STATIC_DEVICE: DeviceData = {
   signalQuality: 82,
   lastWake: 'Today 15:44',
   lastWakeStatus: 'WOL packet sent',
+  stateRefreshedAt: Date.now(),
+  uptimeSeconds: 608,
 }
 
 export interface LayoutContext {
@@ -99,6 +102,8 @@ export default function Layout() {
       rssi: typeof s?.rssi === 'number' ? s.rssi : STATIC_DEVICE.rssi,
       ipAddress: s?.ip || STATIC_DEVICE.ipAddress,
       uptime: typeof s?.uptime_s === 'number' ? formatDuration(s.uptime_s) : STATIC_DEVICE.uptime,
+      stateRefreshedAt: now,
+      uptimeSeconds: typeof s?.uptime_s === 'number' ? s.uptime_s : STATIC_DEVICE.uptimeSeconds,
       freeHeap:
         typeof s?.heap === 'number' ? `${Math.round(s.heap / 1024)} KB` : STATIC_DEVICE.freeHeap,
       mqttStatus: espOnline ? 'Connected' : 'Disconnected',
@@ -181,7 +186,8 @@ export default function Layout() {
                 </h1>
               </div>
               <p className="text-muted-foreground text-[10px] md:text-xs">
-                {device.controllerLabel} &middot; Last update: {device.lastUpdateAgo}
+                {device.controllerLabel} &middot; Last update:{' '}
+                <LiveTime refTimestamp={device.stateRefreshedAt} />
               </p>
             </div>
           </div>

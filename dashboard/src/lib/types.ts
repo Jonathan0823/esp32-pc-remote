@@ -13,6 +13,8 @@ export interface DeviceData {
   signalQuality: number
   lastWake: string
   lastWakeStatus: string
+  stateRefreshedAt: number
+  uptimeSeconds: number
 }
 
 export const PC_NAME = import.meta.env.VITE_PC_NAME || 'Desktop-01'

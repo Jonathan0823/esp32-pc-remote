@@ -1,4 +1,6 @@
+import { type ReactNode } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import LiveTime from '@/components/LiveTime'
 import type { DeviceData } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import {
@@ -24,7 +26,7 @@ function InfoRow({
 }: Readonly<{
   icon: React.ComponentType<{ className?: string }>
   label: string
-  value: string
+  value: ReactNode
   iconClassName?: string
   valueClassName?: string
 }>) {
@@ -71,7 +73,12 @@ export default function Controller({ device }: ControllerProps) {
             <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
               Uptime
             </span>
-            <span className="text-foreground text-sm font-semibold">{device.uptime}</span>
+            <span className="text-foreground text-sm font-semibold">
+              <LiveTime
+                refTimestamp={device.stateRefreshedAt}
+                uptimeBaseSeconds={device.uptimeSeconds}
+              />
+            </span>
           </div>
           <div className="flex flex-col items-center gap-1 p-3 text-center">
             <MemoryIcon className="text-muted-foreground size-5" />
@@ -88,7 +95,11 @@ export default function Controller({ device }: ControllerProps) {
             valueClassName={device.online ? 'text-emerald-500' : 'text-rose-500'}
           />
           <InfoRow icon={GlobeSimpleIcon} label="IP Address" value={device.ipAddress} />
-          <InfoRow icon={ClockIcon} label="Last Update" value={device.lastUpdateAgo} />
+          <InfoRow
+            icon={ClockIcon}
+            label="Last Update"
+            value={<LiveTime refTimestamp={device.stateRefreshedAt} />}
+          />
           <InfoRow
             icon={WifiHighIcon}
             label="MQTT"
