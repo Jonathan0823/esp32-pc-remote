@@ -9,7 +9,6 @@
 
 An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Control it remotely through Telegram, MQTT automation, or the included browser dashboard.
 
-> Repository name: `esp32-pc-remote`
 
 ## Why this exists
 
