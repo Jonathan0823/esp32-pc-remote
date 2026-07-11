@@ -1,5 +1,6 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import type { DeviceData } from '@/lib/types'
+import { cn } from '@/lib/utils'
 import {
   WifiHighIcon,
   ChartBarIcon,
@@ -18,16 +19,25 @@ function InfoRow({
   icon: Icon,
   label,
   value,
+  iconClassName,
+  valueClassName,
 }: Readonly<{
   icon: React.ComponentType<{ className?: string }>
   label: string
   value: string
+  iconClassName?: string
+  valueClassName?: string
 }>) {
   return (
     <div className="flex min-w-0 items-center gap-3 text-xs">
-      <Icon className="text-muted-foreground size-4 shrink-0" />
+      <Icon className={cn('size-4 shrink-0', iconClassName ?? 'text-muted-foreground')} />
       <span className="text-muted-foreground shrink-0 whitespace-nowrap">{label}</span>
-      <span className="text-foreground min-w-0 flex-1 truncate text-right font-medium">
+      <span
+        className={cn(
+          'min-w-0 flex-1 truncate text-right font-medium',
+          valueClassName ?? 'text-foreground',
+        )}
+      >
         {value}
       </span>
     </div>
@@ -75,10 +85,16 @@ export default function Controller({ device }: ControllerProps) {
             icon={ComputerTowerIcon}
             label="Status"
             value={device.online ? 'Online' : 'Offline'}
+            valueClassName={device.online ? 'text-emerald-500' : 'text-rose-500'}
           />
           <InfoRow icon={GlobeSimpleIcon} label="IP Address" value={device.ipAddress} />
           <InfoRow icon={ClockIcon} label="Last Update" value={device.lastUpdateAgo} />
-          <InfoRow icon={WifiHighIcon} label="MQTT" value={device.mqttStatus} />
+          <InfoRow
+            icon={WifiHighIcon}
+            label="MQTT"
+            value={device.mqttStatus}
+            valueClassName={device.mqttStatus === 'Connected' ? 'text-sky-500' : 'text-rose-500'}
+          />
           <InfoRow icon={MonitorIcon} label="Broker" value={device.broker} />
         </div>
       </CardContent>

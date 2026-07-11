@@ -70,7 +70,8 @@ export function useLayoutContext(): LayoutContext {
 }
 
 export default function Layout() {
-  const { connection, state, replies, events, logs, send, markReplyHandled, isReplyHandled } = useMqtt()
+  const { connection, state, replies, events, logs, send, markReplyHandled, isReplyHandled } =
+    useMqtt()
 
   const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
@@ -123,7 +124,7 @@ export default function Layout() {
       <Sidebar collapsible="icon" className="border-sidebar-border border-r">
         <SidebarHeader className="p-4 pt-6">
           <div className="flex items-center gap-3">
-            <MonitorIcon className="text-foreground size-10" weight="light" />
+            <MonitorIcon className="text-muted-foreground size-10" weight="light" />
             <div className="grid gap-0.5">
               <span className="text-sidebar-foreground text-sm leading-none font-semibold">
                 PC Remote
@@ -180,7 +181,14 @@ export default function Layout() {
                 <h1 className="text-foreground text-base leading-none font-semibold md:text-lg">
                   {device.name}
                 </h1>
-                <Badge variant="secondary" className="text-[9px] md:text-[10px]">
+                <Badge
+                  variant="outline"
+                  className={`text-[9px] md:text-[10px] ${
+                    device.online
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                  }`}
+                >
                   {device.online ? 'Online' : 'Offline'}
                 </Badge>
               </div>
