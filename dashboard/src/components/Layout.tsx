@@ -21,7 +21,6 @@ import { PC_NAME, BROKER_URL } from '@/lib/types'
 import type { EspState } from '@/mqtt/types'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
 import {
-  MonitorIcon,
   LayoutIcon,
   FileTextIcon,
   QuestionIcon,
@@ -123,13 +122,13 @@ export default function Layout() {
     <SidebarProvider defaultOpen style={{ '--sidebar-width': '244px' } as React.CSSProperties}>
       <Sidebar collapsible="icon" className="border-sidebar-border border-r">
         <SidebarHeader className="p-4 pt-6">
-          <div className="flex items-center gap-3">
-            <MonitorIcon className="text-muted-foreground size-10" weight="light" />
-            <div className="grid gap-0.5">
+          <div className="flex items-center gap-2.5">
+            <WifiHighIcon className="text-muted-foreground size-6 shrink-0" />
+            <div className="grid min-w-0 gap-0.5">
               <span className="text-sidebar-foreground text-sm leading-none font-semibold">
-                PC Remote
+                Wake-on-LAN Remote
               </span>
-              <span className="text-sidebar-foreground/60 text-xs">Control Panel</span>
+              <span className="text-sidebar-foreground/60 text-xs">ESP32 dashboard</span>
             </div>
           </div>
         </SidebarHeader>
@@ -159,13 +158,13 @@ export default function Layout() {
 
         <SidebarFooter className="p-4 pt-0">
           <a
-            href="https://github.com/Jonathan0823/esp32-pc-remote"
+            href="https://github.com/Jonathan0823/esp32-wake-on-lan-remote"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sidebar-foreground/30 hover:text-sidebar-foreground flex items-center gap-1.5 text-[10px] transition-colors"
           >
             <GithubLogoIcon className="size-3" />
-            <span>esp32-pc-remote</span>
+            <span>esp32-wake-on-lan-remote</span>
           </a>
         </SidebarFooter>
       </Sidebar>

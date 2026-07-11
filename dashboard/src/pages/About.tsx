@@ -194,9 +194,9 @@ export default function About() {
           <div className="grid gap-2">
             <CardTitle className="text-2xl">About this project</CardTitle>
             <p className="text-muted-foreground text-sm leading-6">
-              <span className="text-foreground font-medium">esp32-pc-remote</span> is a private PC
-              control stack: an ESP32 firmware plus a React dashboard for waking, checking, and
-              managing a desktop over MQTT or Telegram.
+              <span className="text-foreground font-medium">esp32-wake-on-lan-remote</span> is a
+              private PC control stack: an ESP32 firmware plus a React dashboard for waking,
+              checking, and managing a desktop over MQTT or Telegram.
             </p>
           </div>
         </CardHeader>
