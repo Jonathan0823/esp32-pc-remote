@@ -107,7 +107,8 @@ function handleLatestReply(last: DashboardReply, ctx: ReplyHandlerContext) {
 }
 
 export default function Dashboard() {
-  const { device, state, connected, send, replies, markReplyHandled, isReplyHandled } = useLayoutContext()
+  const { device, state, connected, send, replies, markReplyHandled, isReplyHandled } =
+    useLayoutContext()
 
   const [wakeOpen, setWakeOpen] = useState(false)
   const [wakePhase, setWakePhase] = useState<WakePhase>('initial')
@@ -315,7 +316,9 @@ export default function Dashboard() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmReboot}>Reboot</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={confirmReboot}>
+              Reboot
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

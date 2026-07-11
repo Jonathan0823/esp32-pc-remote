@@ -44,7 +44,14 @@ export default function PCControl({
           <div className="grid gap-2">
             <div className="flex items-center gap-2">
               <span className="text-base font-semibold">Desktop PC</span>
-              <Badge variant="secondary" className="text-[10px]">
+              <Badge
+                variant="outline"
+                className={`text-[10px] ${
+                  device.ready
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                }`}
+              >
                 {device.ready ? 'Ready' : 'Unavailable'}
               </Badge>
             </div>
@@ -54,7 +61,15 @@ export default function PCControl({
               <span className="text-muted-foreground self-center">: {device.lastWake}</span>
               <CheckCircleIcon className="text-muted-foreground size-3.5 self-center" />
               <span className="text-foreground self-center font-medium">Last Wake Status</span>
-              <span className="text-muted-foreground self-center">: {device.lastWakeStatus}</span>
+              <span
+                className={`self-center ${
+                  device.lastWakeStatus.toLowerCase().includes('sent')
+                    ? 'text-emerald-500'
+                    : 'text-muted-foreground'
+                }`}
+              >
+                : {device.lastWakeStatus}
+              </span>
             </div>
           </div>
         </div>
@@ -81,7 +96,7 @@ export default function PCControl({
             PING ESP32
           </Button>
           <Button
-            variant="outline"
+            variant="destructive"
             className="h-[50px] gap-2 text-xs font-semibold"
             disabled={!connected}
             onClick={onReboot}

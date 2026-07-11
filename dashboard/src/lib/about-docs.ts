@@ -1,4 +1,4 @@
-export const ABOUT_REPO_URL = 'https://github.com/Jonathan0823/esp32-pc-remote'
+export const ABOUT_REPO_URL = 'https://github.com/Jonathan0823/esp32-wake-on-lan-remote'
 export const ABOUT_REPO_BLOB_URL = `${ABOUT_REPO_URL}/blob/main`
 
 export type AboutDoc = {

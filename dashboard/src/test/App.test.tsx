@@ -35,7 +35,7 @@ vi.mock('../mqtt/useMqtt', () => ({
 describe('App', () => {
   it('renders the control panel shell', () => {
     render(<App />)
-    expect(screen.getByText('PC Remote')).toBeInTheDocument()
+    expect(screen.getByText('Wake-on-LAN Remote')).toBeInTheDocument()
   })
 
   it('shows the primary controls', () => {
