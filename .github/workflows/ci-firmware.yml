@@ -1,0 +1,33 @@
+name: Firmware CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    name: Compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Arduino CLI
+        uses: arduino/arduino-cli-action@v2
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "UniversalTelegramBot"
+          arduino-cli lib install "PubSubClient"
+
+      - name: Create config.h from template
+        run: cp config.example.h config.h
+
+      - name: Compile
+        run: arduino-cli compile --fqbn esp32:esp32:esp32 .
