@@ -23,6 +23,7 @@ jobs:
 
       - name: Install libraries
         run: |
+          arduino-cli lib install "ArduinoJson"
           arduino-cli lib install "PubSubClient"
 
       - name: Create config.h from template
