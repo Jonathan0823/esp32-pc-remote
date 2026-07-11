@@ -107,7 +107,7 @@ function handleLatestReply(last: DashboardReply, ctx: ReplyHandlerContext) {
 }
 
 export default function Dashboard() {
-  const { device, state, connected, send, replies } = useLayoutContext()
+  const { device, state, connected, send, replies, markReplyHandled, isReplyHandled } = useLayoutContext()
 
   const [wakeOpen, setWakeOpen] = useState(false)
   const [wakePhase, setWakePhase] = useState<WakePhase>('initial')
@@ -151,10 +151,10 @@ export default function Dashboard() {
     send('reboot_request', { expires_in_s: 30 })
   }
 
-  // MQTT reply listener
+  // MQTT reply listener — toast once per reply id, survives navigation
   useEffect(() => {
     const last = replies.at(-1)
-    if (last) {
+    if (last && !isReplyHandled(last.id)) {
       handleLatestReply(last, {
         deviceName: device.name,
         stateTs: state?.ts ?? null,
@@ -163,8 +163,9 @@ export default function Dashboard() {
         setWakeExpiresAt,
         setRebootOpen,
       })
+      markReplyHandled(last.id)
     }
-  }, [replies, device.name])
+  }, [replies, device.name, markReplyHandled, isReplyHandled])
 
   // Auto-close wake dialog after success
   useEffect(() => {

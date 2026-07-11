@@ -10,6 +10,8 @@ export interface UseMqttReturn {
   logs: string[]
   send: (cmd: string, payload?: Record<string, unknown>) => void
   clearFeed: () => void
+  markReplyHandled: (id: string) => void
+  isReplyHandled: (id: string) => boolean
 }
 
 function getEnv(key: string, fallback: string): string {
@@ -31,6 +33,7 @@ export function useMqtt(): UseMqttReturn {
   const [replies, setReplies] = useState<CommandReply[]>([])
   const [events, setEvents] = useState<EspEvent[]>([])
   const [logs, setLogs] = useState<string[]>([])
+  const handledReplyIds = useRef(new Set<string>())
 
   const append = <T>(arr: T[], item: T, max: number): T[] => {
     const next = [...arr, item]
@@ -139,7 +142,16 @@ export function useMqtt(): UseMqttReturn {
     setReplies([])
     setEvents([])
     setLogs([])
+    handledReplyIds.current.clear()
   }, [])
 
-  return { connection, state, replies, events, logs, send, clearFeed }
+  const markReplyHandled = useCallback((id: string) => {
+    handledReplyIds.current.add(id)
+  }, [])
+
+  const isReplyHandled = useCallback((id: string): boolean => {
+    return handledReplyIds.current.has(id)
+  }, [])
+
+  return { connection, state, replies, events, logs, send, clearFeed, markReplyHandled, isReplyHandled }
 }
