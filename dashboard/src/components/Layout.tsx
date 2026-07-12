@@ -50,7 +50,7 @@ const STATIC_DEVICE: DeviceData = {
 }
 
 export default function Layout() {
-  const { connection, state, replies, events, logs, send, markReplyHandled, isReplyHandled } =
+  const { connection, state, availability, replies, events, logs, send, markReplyHandled, isReplyHandled } =
     useMqtt()
 
   const { theme, setTheme } = useTheme()
@@ -140,6 +140,14 @@ export default function Layout() {
         </SidebarContent>
 
         <SidebarFooter className="p-4 pt-0">
+          {availability && (
+            <div className="mb-3 flex items-center gap-1.5 text-xs">
+              <span
+                className={`size-2 shrink-0 rounded-full ${availability.online ? 'bg-green-500' : 'bg-red-500'}`}
+              />
+              <span className="text-sidebar-foreground/60 truncate">{availability.reason}</span>
+            </div>
+          )}
           <a
             href="https://github.com/Jonathan0823/esp32-wake-on-lan-remote"
             target="_blank"
