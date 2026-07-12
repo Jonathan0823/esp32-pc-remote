@@ -1,57 +1,11 @@
-import { useState, useEffect, useRef, type ReactNode, isValidElement } from 'react'
-import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
+import { type ReactNode, isValidElement } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { buttonVariants } from '@/components/ui/button-variants'
-import { cn } from '@/lib/utils'
-import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
-import { useTheme } from '@/hooks/use-theme'
-import mermaid from 'mermaid'
-
-function MermaidBlock({ diagram }: Readonly<{ diagram: string }>) {
-  const { theme } = useTheme()
-  const [svg, setSvg] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const uid = 'mermaid-' + Math.random().toString(36).slice(2, 8)
-    const mermaidTheme = theme === 'dark' ? 'dark' : 'default'
-    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme })
-    mermaid
-      .render(uid, diagram)
-      .then((result) => {
-        if (!cancelled) setSvg(result.svg)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(String(err))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [diagram, theme])
-
-  if (error)
-    return (
-      <pre className="text-destructive my-4 overflow-x-auto rounded-lg border border-red-300 bg-red-50 p-4 text-sm dark:bg-red-950">
-        Mermaid error: {error}
-      </pre>
-    )
-  if (!svg)
-    return (
-      <div className="text-muted-foreground my-4 p-4 text-center text-sm">Rendering diagram…</div>
-    )
-  return (
-    <div
-      data-mermaid="true"
-      className="my-4 flex justify-center"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  )
-}
+import { resolveAboutHref } from '@/lib/about-docs'
+import { MermaidBlock } from '@/pages/About/components/mermaid-block'
 
 const githubMarkdownFont =
   'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
@@ -209,7 +163,7 @@ function createMarkdownComponents(
   }
 }
 
-function DocSection({
+export function DocSection({
   title,
   sourcePath,
   slug,
@@ -247,103 +201,5 @@ function DocSection({
         </article>
       </CardContent>
     </Card>
-  )
-}
-
-export default function About() {
-  const [backTarget, setBackTarget] = useState<{ href: string; label: string } | null>(null)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [showScrollTop, setShowScrollTop] = useState(false)
-
-  useEffect(() => {
-    // Find the scrollable parent (Layout wraps outlet in overflow-auto)
-    const el = scrollRef.current?.closest('.overflow-auto') as HTMLElement | null
-    if (!el) return
-    const check = () => setShowScrollTop(el.scrollTop > 200)
-    el.addEventListener('scroll', check, { passive: true })
-    check()
-    return () => el.removeEventListener('scroll', check)
-  }, [])
-
-  return (
-    <div ref={scrollRef} id="about-top" className="mx-auto grid max-w-5xl gap-5">
-      <Card className="overflow-hidden">
-        <CardHeader className="space-y-4">
-          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
-            <Badge variant="secondary">ESP32</Badge>
-            <Badge variant="secondary">MQTT</Badge>
-            <Badge variant="secondary">Telegram</Badge>
-            <Badge variant="secondary">Wake-on-LAN</Badge>
-            <Badge variant="secondary">Grafana</Badge>
-          </div>
-          <div className="grid gap-2">
-            <CardTitle className="text-2xl">About this project</CardTitle>
-            <p className="text-muted-foreground text-sm leading-6">
-              <span className="text-foreground font-medium">esp32-wake-on-lan-remote</span> is a
-              private PC control stack: an ESP32 firmware plus a React dashboard for waking,
-              checking, and managing a desktop over MQTT or Telegram.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-4 text-sm leading-6">
-          <ul className="text-muted-foreground list-disc space-y-2 pl-6">
-            <li>Wake your PC with confirmation or force mode.</li>
-            <li>Check online status, ping health, and reboot the controller.</li>
-            <li>Use MQTT over WebSocket for the dashboard, or Telegram for command control.</li>
-            <li>See the setup notes for Wake-on-LAN, MQTT access control, and optional logging.</li>
-          </ul>
-          <Separator />
-          <div className="grid gap-2 text-sm">
-            <span className="text-muted-foreground text-xs tracking-wide uppercase">Jump to</span>
-            <div className="flex flex-wrap gap-2">
-              {ABOUT_DOCS.map((doc) => (
-                <a
-                  key={doc.sourcePath}
-                  href={`#${doc.slug}`}
-                  className="bg-muted text-foreground hover:bg-muted/80 rounded-md border px-3 py-1.5 text-xs font-medium no-underline transition-colors"
-                >
-                  {doc.title}
-                </a>
-              ))}
-            </div>
-          </div>
-          <Separator />
-          <a
-            href={ABOUT_REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-foreground decoration-border hover:decoration-foreground underline underline-offset-4"
-          >
-            View the repository on GitHub
-          </a>
-        </CardContent>
-      </Card>
-
-      {ABOUT_DOCS.map((doc) => (
-        <DocSection
-          key={doc.sourcePath}
-          {...doc}
-          onLocalLinkClick={(href) => {
-            setBackTarget({ href: globalThis.location.hash || '#about-top', label: 'Back' })
-            globalThis.location.hash = href
-          }}
-        />
-      ))}
-
-      <a
-        href={backTarget?.href ?? '#about-top'}
-        onClick={() => setBackTarget(null)}
-        className={cn(
-          buttonVariants({ variant: 'default', size: 'lg' }),
-          'fixed right-10 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
-          !showScrollTop && 'hidden',
-        )}
-        aria-label={backTarget?.label ?? 'Top'}
-        title={backTarget?.label ?? 'Top'}
-      >
-        {backTarget ? <ArrowLeftIcon className="size-5" /> : <ArrowUpIcon className="size-5" />}
-        <span>{backTarget?.label ?? 'Top'}</span>
-      </a>
-    </div>
   )
 }
