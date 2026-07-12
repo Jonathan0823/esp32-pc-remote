@@ -83,8 +83,9 @@ describe('useMqtt', () => {
 
       expect(result.current.connection.connected).toBe(true)
       expect(result.current.connection.error).toBeNull()
-      expect(mockClient.subscribe).toHaveBeenCalledTimes(4)
+      expect(mockClient.subscribe).toHaveBeenCalledTimes(5)
       expect(mockClient.subscribe).toHaveBeenCalledWith('test-topic/state', { qos: 1 })
+      expect(mockClient.subscribe).toHaveBeenCalledWith('test-topic/availability', { qos: 1 })
       expect(mockClient.subscribe).toHaveBeenCalledWith('test-topic/reply', { qos: 0 })
       expect(mockClient.subscribe).toHaveBeenCalledWith('test-topic/event', { qos: 0 })
       expect(mockClient.subscribe).toHaveBeenCalledWith('test-topic/log', { qos: 0 })
@@ -152,6 +153,24 @@ describe('useMqtt', () => {
       })
 
       expect(result.current.state).toEqual(statePayload)
+    })
+
+    // ── Availability parsing ──
+    it('parses and stores availability from /availability topic', () => {
+      const { result } = renderHook(() => useMqtt())
+
+      act(() => {
+        listeners['message']('test-topic/availability', Buffer.from(JSON.stringify({ online: true, reason: 'mqtt_connected', ts: 42 })))
+      })
+
+      expect(result.current.availability).toEqual({ online: true, reason: 'mqtt_connected', ts: 42 })
+
+      // Offline availability without ts
+      act(() => {
+        listeners['message']('test-topic/availability', Buffer.from(JSON.stringify({ online: false, reason: 'shutdown' })))
+      })
+
+      expect(result.current.availability).toEqual({ online: false, reason: 'shutdown' })
     })
 
     // ── Reply parsing ──

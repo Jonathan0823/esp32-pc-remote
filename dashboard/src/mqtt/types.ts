@@ -28,6 +28,12 @@ export interface EspEvent {
   ts: number
 }
 
+export interface AvailabilityPayload {
+  online: boolean
+  reason: string
+  ts?: number
+}
+
 export interface MqttConnectionState {
   connected: boolean
   error: string | null

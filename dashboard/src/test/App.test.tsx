@@ -22,6 +22,7 @@ vi.mock('../mqtt/useMqtt', () => ({
   useMqtt: () => ({
     connection: { connected: false, error: 'VITE_MQTT_BROKER_URL is not set', reconnecting: false },
     state: null,
+    availability: null,
     replies: [],
     events: [],
     logs: [],
