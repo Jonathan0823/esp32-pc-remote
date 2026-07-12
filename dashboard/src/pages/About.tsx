@@ -137,8 +137,12 @@ const markdownComponents: Components = {
     if (!src) return null
     let resolved = src
     if (!src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('//')) {
-      const normalized = src.replace(/^\.?\//, '')
-      resolved = `https://raw.githubusercontent.com/Jonathan0823/esp32-wake-on-lan-remote/main/${normalized}`
+      const normalized = resolveAboutHref('', src)
+      if (normalized.startsWith('http')) {
+        resolved = normalized
+          .replace('https://github.com/', 'https://raw.githubusercontent.com/')
+          .replace('/blob/', '/')
+      }
     }
     const isBadge = resolved.includes('shields.io')
     return (
