@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMqtt } from '@/mqtt/useMqtt'
 import {
@@ -8,11 +8,8 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import type { Theme } from '@/components/ui/theme-provider'
 import { useTheme } from '@/hooks/use-theme'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
@@ -20,6 +17,9 @@ import { PC_NAME, BROKER_URL } from '@/lib/types'
 import type { LayoutContext } from '@/lib/layout-context'
 import LiveTime from '@/components/LiveTime'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
+import { ClockTimer } from '@/components/layout/ClockTimer'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
+import { NavItem } from '@/components/layout/NavItem'
 import {
   LayoutIcon,
   FileTextIcon,
@@ -27,8 +27,6 @@ import {
   WifiHighIcon,
   ChartBarIcon,
   ClockIcon,
-  SunIcon,
-  MoonIcon,
   GithubLogoIcon,
 } from '@phosphor-icons/react'
 
@@ -228,58 +226,4 @@ export default function Layout() {
   )
 }
 
-/* ─── Sub-components ─── */
 
-function ClockTimer() {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <span>
-      {new Intl.DateTimeFormat(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(now)}
-    </span>
-  )
-}
-
-function ThemeToggle({
-  theme,
-  setTheme,
-}: Readonly<{ theme: Theme; setTheme: (t: Theme) => void }>) {
-  const next = theme === 'dark' ? 'light' : 'dark'
-  return (
-    <button
-      onClick={() => setTheme(next)}
-      className="text-muted-foreground hover:text-foreground flex size-8 items-center justify-center rounded-none transition-colors"
-      aria-label={`Switch to ${next} theme`}
-    >
-      {theme === 'dark' ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
-    </button>
-  )
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: Readonly<{
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  active?: boolean
-  onClick?: () => void
-}>) {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton isActive={active} tooltip={label} onClick={onClick}>
-        <Icon className="size-4" />
-        <span>{label}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
-  )
-}
