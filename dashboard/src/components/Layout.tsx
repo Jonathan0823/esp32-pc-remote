@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMqtt } from '@/mqtt/useMqtt'
 import {
   SidebarProvider,
@@ -13,11 +13,11 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar'
 import type { Theme } from '@/components/ui/theme-provider'
-import { useTheme } from '@/components/ui/theme-provider'
+import { useTheme } from '@/hooks/use-theme'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
 import { PC_NAME, BROKER_URL } from '@/lib/types'
-import type { EspState } from '@/mqtt/types'
+import type { LayoutContext } from '@/lib/layout-context'
 import LiveTime from '@/components/LiveTime'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
 import {
@@ -49,25 +49,6 @@ const STATIC_DEVICE: DeviceData = {
   lastWakeStatus: 'WOL packet sent',
   stateRefreshedAt: Date.now(),
   uptimeSeconds: 608,
-}
-
-export interface LayoutContext {
-  device: DeviceData
-  state: EspState | null
-  connected: boolean
-  connection: ReturnType<typeof useMqtt>['connection']
-  send: (cmd: string, payload?: Record<string, unknown>) => void
-  replies: ReturnType<typeof useMqtt>['replies']
-  events: ReturnType<typeof useMqtt>['events']
-  logs: string[]
-  markReplyHandled: (id: string) => void
-  isReplyHandled: (id: string) => boolean
-}
-
-export function useLayoutContext(): LayoutContext {
-  const ctx = useOutletContext<LayoutContext>()
-  if (!ctx) throw new Error('useLayoutContext must be used inside a Layout route')
-  return ctx
 }
 
 export default function Layout() {

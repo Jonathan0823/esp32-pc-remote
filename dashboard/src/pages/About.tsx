@@ -5,10 +5,10 @@ import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { cn } from '@/lib/utils'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
-import { useTheme } from '@/components/ui/theme-provider'
+import { useTheme } from '@/hooks/use-theme'
 import mermaid from 'mermaid'
 
 function MermaidBlock({ diagram }: Readonly<{ diagram: string }>) {

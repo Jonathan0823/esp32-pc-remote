@@ -1,5 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { useLayoutContext } from '@/components/Layout'
+import { useLayoutContext } from '@/lib/layout-context'
 import { toast } from 'sonner'
 import PCControl from '@/components/PCControl'
 import Controller from '@/components/Controller'
@@ -166,7 +166,7 @@ export default function Dashboard() {
       })
       markReplyHandled(last.id)
     }
-  }, [replies, device.name, markReplyHandled, isReplyHandled])
+  }, [replies, device.name, markReplyHandled, isReplyHandled, state])
 
   // Auto-close wake dialog after success
   useEffect(() => {
