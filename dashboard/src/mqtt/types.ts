@@ -1,3 +1,4 @@
+// Payload shapes match src/services/mqtt_service.cpp (firmware)
 export interface EspState {
   online: boolean
   ip?: string
@@ -6,12 +7,9 @@ export interface EspState {
   uptime_s?: number
   pc_online: boolean
   pc_status?: string
-  mqtt_connected?: boolean
   last_wake_result?: string
   last_wake_at?: number
   wake_pending?: boolean
-  wake_expires_at?: number
-  grafana_last_sent_at?: number
   ts?: number
   reset_reason?: string
 }
