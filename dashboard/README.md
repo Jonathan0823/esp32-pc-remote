@@ -25,7 +25,7 @@ The broker URL for HiveMQ Cloud WebSocket is typically `wss://<host>:8884/mqtt`.
 ### 2. Build
 
 ```bash
-npm run build
+bun run build
 ```
 
 ### 3. Deploy to Cloudflare Pages
@@ -33,14 +33,14 @@ npm run build
 **Option A — CLI:**
 
 ```bash
-npx wrangler pages deploy dist --branch production
+bunx wrangler pages deploy dist --branch production
 ```
 
 **Option B — Dashboard (easier):**
 1. Go to **Cloudflare Dashboard > Workers & Pages > Create application > Pages**
 2. Connect your Git repository
 3. Framework preset: **Vite**
-4. Build command: `npm run build`
+4. Build command: `bun run build`
 5. Build output directory: `dist`
 6. Environment variables: add `VITE_*` variables above
 
@@ -79,7 +79,7 @@ This limits damage if the credentials are extracted from the browser.
 ## Development
 
 ```bash
-npm run dev     # local dev server
-npm run test    # run tests
-npm run build   # production build
+bun run dev     # local dev server
+bun run test    # run tests
+bun run build   # production build
 ```

@@ -63,18 +63,18 @@ beforeEach(() => {
 })
 
 describe('Activity page', () => {
-  it('shows the activity tabs', () => {
+  it('shows the activity tabs', async () => {
     render(<App />)
 
-    expect(screen.getByRole('button', { name: /replies/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /replies/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /events/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /logs/i })).toBeInTheDocument()
   })
 
-  it('filters the active tab only', () => {
+  it('filters the active tab only', async () => {
     render(<App />)
 
-    fireEvent.change(screen.getByPlaceholderText('Search replies'), {
+    fireEvent.change(await screen.findByPlaceholderText('Search replies'), {
       target: { value: 'ping' },
     })
 
@@ -93,7 +93,7 @@ describe('Activity page', () => {
   it('expands reply details and copies the reply summary', async () => {
     render(<App />)
 
-    fireEvent.click(screen.getAllByLabelText('Expand reply details')[1])
+    fireEvent.click((await screen.findAllByLabelText('Expand reply details'))[1])
     expect(await screen.findByText('confirm_token')).toBeInTheDocument()
     expect(screen.getByText('expires_at')).toBeInTheDocument()
 

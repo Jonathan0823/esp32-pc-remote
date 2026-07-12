@@ -3,6 +3,8 @@
 
 #include <Arduino.h>
 
+// Payload shapes match dashboard/src/mqtt/types.ts
+
 void mqtt_setup();
 void mqtt_loop();
 bool mqtt_enabled();

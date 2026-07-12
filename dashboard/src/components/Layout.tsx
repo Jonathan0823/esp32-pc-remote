@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { Suspense, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMqtt } from '@/mqtt/useMqtt'
 import {
@@ -8,11 +8,8 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import type { Theme } from '@/components/ui/theme-provider'
 import { useTheme } from '@/hooks/use-theme'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { DeviceData } from '@/lib/types'
@@ -20,6 +17,9 @@ import { PC_NAME, BROKER_URL } from '@/lib/types'
 import type { LayoutContext } from '@/lib/layout-context'
 import LiveTime from '@/components/LiveTime'
 import { formatAgo, formatDuration, formatBroker, signalQuality } from '@/lib/helpers'
+import { ClockTimer } from '@/components/layout/ClockTimer'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
+import { NavItem } from '@/components/layout/NavItem'
 import {
   LayoutIcon,
   FileTextIcon,
@@ -27,8 +27,6 @@ import {
   WifiHighIcon,
   ChartBarIcon,
   ClockIcon,
-  SunIcon,
-  MoonIcon,
   GithubLogoIcon,
 } from '@phosphor-icons/react'
 
@@ -52,8 +50,17 @@ const STATIC_DEVICE: DeviceData = {
 }
 
 export default function Layout() {
-  const { connection, state, replies, events, logs, send, markReplyHandled, isReplyHandled } =
-    useMqtt()
+  const {
+    connection,
+    state,
+    availability,
+    replies,
+    events,
+    logs,
+    send,
+    markReplyHandled,
+    isReplyHandled,
+  } = useMqtt()
 
   const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
@@ -142,6 +149,14 @@ export default function Layout() {
         </SidebarContent>
 
         <SidebarFooter className="p-4 pt-0">
+          {availability && (
+            <div className="mb-3 flex items-center gap-1.5 text-xs">
+              <span
+                className={`size-2 shrink-0 rounded-full ${availability.online ? 'bg-green-500' : 'bg-red-500'}`}
+              />
+              <span className="text-sidebar-foreground/60 truncate">{availability.reason}</span>
+            </div>
+          )}
           <a
             href="https://github.com/Jonathan0823/esp32-wake-on-lan-remote"
             target="_blank"
@@ -198,80 +213,32 @@ export default function Layout() {
 
         {/* Page content via router outlet */}
         <div className="flex-1 overflow-auto p-5">
-          <Outlet
-            context={
-              {
-                device,
-                state,
-                connected,
-                connection,
-                send,
-                replies,
-                events,
-                logs,
-                markReplyHandled,
-                isReplyHandled,
-              } satisfies LayoutContext
+          <Suspense
+            fallback={
+              <div className="text-muted-foreground flex min-h-full items-center justify-center text-sm">
+                Loading…
+              </div>
             }
-          />
+          >
+            <Outlet
+              context={
+                {
+                  device,
+                  state,
+                  connected,
+                  connection,
+                  send,
+                  replies,
+                  events,
+                  logs,
+                  markReplyHandled,
+                  isReplyHandled,
+                } satisfies LayoutContext
+              }
+            />
+          </Suspense>
         </div>
       </div>
     </SidebarProvider>
-  )
-}
-
-/* ─── Sub-components ─── */
-
-function ClockTimer() {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <span>
-      {new Intl.DateTimeFormat(undefined, {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(now)}
-    </span>
-  )
-}
-
-function ThemeToggle({
-  theme,
-  setTheme,
-}: Readonly<{ theme: Theme; setTheme: (t: Theme) => void }>) {
-  const next = theme === 'dark' ? 'light' : 'dark'
-  return (
-    <button
-      onClick={() => setTheme(next)}
-      className="text-muted-foreground hover:text-foreground flex size-8 items-center justify-center rounded-none transition-colors"
-      aria-label={`Switch to ${next} theme`}
-    >
-      {theme === 'dark' ? <SunIcon className="size-4" /> : <MoonIcon className="size-4" />}
-    </button>
-  )
-}
-
-function NavItem({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: Readonly<{
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  active?: boolean
-  onClick?: () => void
-}>) {
-  return (
-    <SidebarMenuItem>
-      <SidebarMenuButton isActive={active} tooltip={label} onClick={onClick}>
-        <Icon className="size-4" />
-        <span>{label}</span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
   )
 }

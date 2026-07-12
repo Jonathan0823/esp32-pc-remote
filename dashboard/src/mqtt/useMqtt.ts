@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
-import type { EspState, CommandReply, EspEvent, MqttConnectionState } from './types'
+import type {
+  EspState,
+  CommandReply,
+  EspEvent,
+  AvailabilityPayload,
+  MqttConnectionState,
+} from './types'
 
 export interface UseMqttReturn {
   connection: MqttConnectionState
   state: EspState | null
+  availability: AvailabilityPayload | null
   replies: CommandReply[]
   events: EspEvent[]
   logs: string[]
@@ -30,6 +37,7 @@ export function useMqtt(): UseMqttReturn {
     reconnecting: false,
   })
   const [state, setState] = useState<EspState | null>(null)
+  const [availability, setAvailability] = useState<AvailabilityPayload | null>(null)
   const [replies, setReplies] = useState<CommandReply[]>([])
   const [events, setEvents] = useState<EspEvent[]>([])
   const [logs, setLogs] = useState<string[]>([])
@@ -69,6 +77,7 @@ export function useMqtt(): UseMqttReturn {
     client.on('connect', () => {
       setConnection({ connected: true, error: null, reconnecting: false })
       client.subscribe(baseTopic + '/state', { qos: 1 })
+      client.subscribe(baseTopic + '/availability', { qos: 1 })
       client.subscribe(baseTopic + '/reply', { qos: 0 })
       client.subscribe(baseTopic + '/event', { qos: 0 })
       client.subscribe(baseTopic + '/log', { qos: 0 })
@@ -100,6 +109,9 @@ export function useMqtt(): UseMqttReturn {
         switch (relTopic) {
           case 'state':
             setState(parsed as EspState)
+            break
+          case 'availability':
+            setAvailability(parsed as AvailabilityPayload)
             break
           case 'reply':
             setReplies((prev) => append(prev, parsed as CommandReply, MAX_REPLIES))
@@ -156,6 +168,7 @@ export function useMqtt(): UseMqttReturn {
   return {
     connection,
     state,
+    availability,
     replies,
     events,
     logs,
