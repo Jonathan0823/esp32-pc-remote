@@ -11,7 +11,7 @@ import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
 import { useTheme } from '@/components/ui/theme-provider'
 import mermaid from 'mermaid'
 
-function MermaidBlock({ diagram }: { diagram: string }) {
+function MermaidBlock({ diagram }: Readonly<{ diagram: string }>) {
   const { theme } = useTheme()
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,7 +107,7 @@ const markdownComponents: Components = {
   },
   code: ({ children, className }) => {
     if (className === 'language-mermaid') {
-      return <MermaidBlock diagram={String(children)} />
+      return <MermaidBlock diagram={children as string} />
     }
     const inline = !className
     return (
