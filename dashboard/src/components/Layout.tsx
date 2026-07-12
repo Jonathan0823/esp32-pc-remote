@@ -50,8 +50,17 @@ const STATIC_DEVICE: DeviceData = {
 }
 
 export default function Layout() {
-  const { connection, state, availability, replies, events, logs, send, markReplyHandled, isReplyHandled } =
-    useMqtt()
+  const {
+    connection,
+    state,
+    availability,
+    replies,
+    events,
+    logs,
+    send,
+    markReplyHandled,
+    isReplyHandled,
+  } = useMqtt()
 
   const { theme, setTheme } = useTheme()
   const isMobile = useIsMobile()
