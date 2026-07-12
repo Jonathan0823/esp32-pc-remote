@@ -9,6 +9,7 @@
 
 An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Control it remotely through Telegram, MQTT automation, or the included browser dashboard.
 
+![Demo](docs/demo.gif)
 
 ## Why this exists
 
@@ -72,14 +73,14 @@ See [Telegram bot setup](docs/telegram.md) for the complete guide.
 
 ## Telegram commands
 
-| Command | What it does |
-|---------|-------------|
-| `/help` or `/start` | Show the command menu |
-| `/ping` | Show ESP32 diagnostics |
-| `/status` | Show ESP32 health and PC online status |
-| `/wake` | Request wake confirmation |
-| `/wake force` | Send the Wake-on-LAN packet immediately |
-| `/reboot` | Reboot the ESP32 |
+| Command             | What it does                            |
+| ------------------- | --------------------------------------- |
+| `/help` or `/start` | Show the command menu                   |
+| `/ping`             | Show ESP32 diagnostics                  |
+| `/status`           | Show ESP32 health and PC online status  |
+| `/wake`             | Request wake confirmation               |
+| `/wake force`       | Send the Wake-on-LAN packet immediately |
+| `/reboot`           | Reboot the ESP32                        |
 
 Leave `BOT_TOKEN` blank to disable Telegram and use MQTT only.
 
@@ -101,14 +102,14 @@ arduino-cli lib install PubSubClient
 
 Topics under `MQTT_BASE_TOPIC`:
 
-| Topic | Retain | Purpose |
-|-------|--------|---------|
-| `/availability` | Yes | ESP32 online/offline state |
-| `/state` | Yes | Latest ESP32 and PC status |
-| `/cmd` | No | Action commands |
-| `/reply` | No | Command replies |
-| `/event` | No | One-time events |
-| `/log` | No | Live debug logs |
+| Topic           | Retain | Purpose                    |
+| --------------- | ------ | -------------------------- |
+| `/availability` | Yes    | ESP32 online/offline state |
+| `/state`        | Yes    | Latest ESP32 and PC status |
+| `/cmd`          | No     | Action commands            |
+| `/reply`        | No     | Command replies            |
+| `/event`        | No     | One-time events            |
+| `/log`          | No     | Live debug logs            |
 
 Commands on `/cmd`:
 
@@ -125,7 +126,14 @@ reboot_confirm
 Example wake request:
 
 ```json
-{"id":"wake-001","cmd":"wake_request","target":"desktop-pc","force":true,"expires_in_s":30,"ts":1783586658}
+{
+  "id": "wake-001",
+  "cmd": "wake_request",
+  "target": "desktop-pc",
+  "force": true,
+  "expires_in_s": 30,
+  "ts": 1783586658
+}
 ```
 
 If Telegram and MQTT are both configured, both control paths remain available.
