@@ -183,9 +183,7 @@ export function LogRow({ line }: Readonly<{ line: string }>) {
           <DotsThreeIcon className="size-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
-          <DropdownMenuItem onClick={onCopy}>
-            Copy line
-          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onCopy}>Copy line</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

@@ -12,11 +12,7 @@ import {
   logSearchText,
 } from '@/lib/activity-helpers'
 import { ReplyRow, EventRow, LogRow, EmptyState } from '@/components/activity/Rows'
-import {
-  PulseIcon,
-  MonitorIcon,
-  TerminalIcon,
-} from '@phosphor-icons/react'
+import { PulseIcon, MonitorIcon, TerminalIcon } from '@phosphor-icons/react'
 
 type ActivityTab = 'replies' | 'events' | 'logs'
 type ReplyStatusFilter = 'all' | 'ok' | 'fail'

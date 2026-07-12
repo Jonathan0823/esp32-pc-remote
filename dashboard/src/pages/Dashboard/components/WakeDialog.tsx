@@ -28,7 +28,12 @@ export function WakeDialog({
   onConfirmWake: () => void
 }>) {
   return (
-    <Dialog open={open} onOpenChange={(open) => { if (!open) onCancel() }}>
+    <Dialog
+      open={open}
+      onOpenChange={(open) => {
+        if (!open) onCancel()
+      }}
+    >
       <DialogContent className="sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
@@ -72,9 +77,7 @@ export function WakeDialog({
               </Button>
             </>
           )}
-          {phase === 'success' && (
-            <span className="text-muted-foreground text-xs">Closing…</span>
-          )}
+          {phase === 'success' && <span className="text-muted-foreground text-xs">Closing…</span>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

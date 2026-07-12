@@ -1,8 +1,5 @@
 import type { ComponentType } from 'react'
-import {
-  SidebarMenuItem,
-  SidebarMenuButton,
-} from '@/components/ui/sidebar'
+import { SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar'
 
 export function NavItem({
   icon: Icon,
