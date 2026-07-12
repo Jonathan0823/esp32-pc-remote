@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import mqtt from 'mqtt'
-import type { EspState, CommandReply, EspEvent, AvailabilityPayload, MqttConnectionState } from './types'
+import type {
+  EspState,
+  CommandReply,
+  EspEvent,
+  AvailabilityPayload,
+  MqttConnectionState,
+} from './types'
 
 export interface UseMqttReturn {
   connection: MqttConnectionState

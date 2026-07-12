@@ -160,14 +160,24 @@ describe('useMqtt', () => {
       const { result } = renderHook(() => useMqtt())
 
       act(() => {
-        listeners['message']('test-topic/availability', Buffer.from(JSON.stringify({ online: true, reason: 'mqtt_connected', ts: 42 })))
+        listeners['message'](
+          'test-topic/availability',
+          Buffer.from(JSON.stringify({ online: true, reason: 'mqtt_connected', ts: 42 })),
+        )
       })
 
-      expect(result.current.availability).toEqual({ online: true, reason: 'mqtt_connected', ts: 42 })
+      expect(result.current.availability).toEqual({
+        online: true,
+        reason: 'mqtt_connected',
+        ts: 42,
+      })
 
       // Offline availability without ts
       act(() => {
-        listeners['message']('test-topic/availability', Buffer.from(JSON.stringify({ online: false, reason: 'shutdown' })))
+        listeners['message'](
+          'test-topic/availability',
+          Buffer.from(JSON.stringify({ online: false, reason: 'shutdown' })),
+        )
       })
 
       expect(result.current.availability).toEqual({ online: false, reason: 'shutdown' })
