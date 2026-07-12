@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode, isValidElement } from 'react'
+import { useState, useEffect, useRef, type ReactNode, isValidElement } from 'react'
 import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -248,9 +248,21 @@ function DocSection({
 
 export default function About() {
   const [backTarget, setBackTarget] = useState<{ href: string; label: string } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    // Find the scrollable parent (Layout wraps outlet in overflow-auto)
+    const el = scrollRef.current?.closest('.overflow-auto') as HTMLElement | null
+    if (!el) return
+    const check = () => setShowScrollTop(el.scrollTop > 200)
+    el.addEventListener('scroll', check, { passive: true })
+    check()
+    return () => el.removeEventListener('scroll', check)
+  }, [])
 
   return (
-    <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
+    <div ref={scrollRef} id="about-top" className="mx-auto grid max-w-5xl gap-5">
       <Card className="overflow-hidden">
         <CardHeader className="space-y-4">
           <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
@@ -320,6 +332,7 @@ export default function About() {
         className={cn(
           buttonVariants({ variant: 'default', size: 'lg' }),
           'fixed right-10 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
+          !showScrollTop && 'hidden',
         )}
         aria-label={backTarget?.label ?? 'Top'}
         title={backTarget?.label ?? 'Top'}
