@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { useLayoutContext } from '@/components/Layout'
+import { useLayoutContext } from '@/lib/layout-context'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'

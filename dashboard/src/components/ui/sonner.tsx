@@ -8,7 +8,7 @@ import {
   XCircleIcon,
   SpinnerIcon,
 } from '@phosphor-icons/react'
-import { useTheme } from '@/components/ui/theme-provider'
+import { useTheme } from '@/hooks/use-theme'
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = 'system' } = useTheme()

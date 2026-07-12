@@ -1,13 +1,57 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode, isValidElement } from 'react'
 import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { buttonVariants } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button-variants'
 import { cn } from '@/lib/utils'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
+import { useTheme } from '@/hooks/use-theme'
+import mermaid from 'mermaid'
+
+function MermaidBlock({ diagram }: Readonly<{ diagram: string }>) {
+  const { theme } = useTheme()
+  const [svg, setSvg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = 'mermaid-' + Math.random().toString(36).slice(2, 8)
+    const mermaidTheme = theme === 'dark' ? 'dark' : 'default'
+    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme })
+    mermaid
+      .render(uid, diagram)
+      .then((result) => {
+        if (!cancelled) setSvg(result.svg)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(String(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [diagram, theme])
+
+  if (error)
+    return (
+      <pre className="text-destructive my-4 overflow-x-auto rounded-lg border border-red-300 bg-red-50 p-4 text-sm dark:bg-red-950">
+        Mermaid error: {error}
+      </pre>
+    )
+  if (!svg)
+    return (
+      <div className="text-muted-foreground my-4 p-4 text-center text-sm">Rendering diagram…</div>
+    )
+  return (
+    <div
+      data-mermaid="true"
+      className="my-4 flex justify-center"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  )
+}
 
 const githubMarkdownFont =
   'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
@@ -62,6 +106,9 @@ const markdownComponents: Components = {
     )
   },
   code: ({ children, className }) => {
+    if (className === 'language-mermaid') {
+      return <MermaidBlock diagram={children as string} />
+    }
     const inline = !className
     return (
       <code
@@ -75,11 +122,37 @@ const markdownComponents: Components = {
       </code>
     )
   },
-  pre: ({ children }) => (
-    <pre className="bg-muted text-foreground my-4 overflow-x-auto rounded-lg border p-4 text-sm leading-6">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    const child = Array.isArray(children) ? children[0] : children
+    if (isValidElement(child) && child.type === MermaidBlock) {
+      return child
+    }
+    return (
+      <pre className="bg-muted text-foreground my-4 overflow-x-auto rounded-lg border p-4 text-sm leading-6">
+        {children}
+      </pre>
+    )
+  },
+  img: ({ src, alt }) => {
+    if (!src) return null
+    let resolved = src
+    if (!src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('//')) {
+      const normalized = resolveAboutHref('', src)
+      if (normalized.startsWith('http')) {
+        resolved = normalized
+          .replace('https://github.com/', 'https://raw.githubusercontent.com/')
+          .replace('/blob/', '/')
+      }
+    }
+    const isBadge = resolved.includes('shields.io')
+    return (
+      <img
+        src={resolved}
+        alt={alt || ''}
+        className={isBadge ? 'inline h-5 align-middle' : 'my-4 h-auto max-w-full rounded-lg'}
+      />
+    )
+  },
   table: ({ children }) => (
     <div className="my-4 overflow-x-auto">
       <table className="text-muted-foreground w-full border-collapse text-left text-sm">
@@ -179,12 +252,24 @@ function DocSection({
 
 export default function About() {
   const [backTarget, setBackTarget] = useState<{ href: string; label: string } | null>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  useEffect(() => {
+    // Find the scrollable parent (Layout wraps outlet in overflow-auto)
+    const el = scrollRef.current?.closest('.overflow-auto') as HTMLElement | null
+    if (!el) return
+    const check = () => setShowScrollTop(el.scrollTop > 200)
+    el.addEventListener('scroll', check, { passive: true })
+    check()
+    return () => el.removeEventListener('scroll', check)
+  }, [])
 
   return (
-    <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
+    <div ref={scrollRef} id="about-top" className="mx-auto grid max-w-5xl gap-5">
       <Card className="overflow-hidden">
         <CardHeader className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
             <Badge variant="secondary">ESP32</Badge>
             <Badge variant="secondary">MQTT</Badge>
             <Badge variant="secondary">Telegram</Badge>
@@ -251,6 +336,7 @@ export default function About() {
         className={cn(
           buttonVariants({ variant: 'default', size: 'lg' }),
           'fixed right-10 bottom-4 z-50 h-12 gap-2 px-4 text-sm shadow-xl',
+          !showScrollTop && 'hidden',
         )}
         aria-label={backTarget?.label ?? 'Top'}
         title={backTarget?.label ?? 'Top'}
