@@ -8,17 +8,19 @@ import { Separator } from '@/components/ui/separator'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
+import { useTheme } from '@/components/ui/theme-provider'
 import mermaid from 'mermaid'
 
-mermaid.initialize({ startOnLoad: false, theme: 'default' })
-
 function MermaidBlock({ diagram }: { diagram: string }) {
+  const { theme } = useTheme()
   const [svg, setSvg] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const uid = 'mermaid-' + Math.random().toString(36).slice(2, 8)
+    const mermaidTheme = theme === 'dark' ? 'dark' : 'default'
+    mermaid.initialize({ startOnLoad: false, theme: mermaidTheme })
     mermaid
       .render(uid, diagram)
       .then((result) => {
@@ -30,7 +32,7 @@ function MermaidBlock({ diagram }: { diagram: string }) {
     return () => {
       cancelled = true
     }
-  }, [diagram])
+  }, [diagram, theme])
 
   if (error)
     return (
