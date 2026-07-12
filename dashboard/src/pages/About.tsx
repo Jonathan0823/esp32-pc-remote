@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode, isValidElement } from 'react'
 import { ArrowLeftIcon, ArrowUpIcon } from '@phosphor-icons/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,6 +8,48 @@ import { Separator } from '@/components/ui/separator'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ABOUT_DOCS, ABOUT_REPO_URL, resolveAboutHref } from '@/lib/about-docs'
+import mermaid from 'mermaid'
+
+mermaid.initialize({ startOnLoad: false, theme: 'default' })
+
+function MermaidBlock({ diagram }: { diagram: string }) {
+  const [svg, setSvg] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const uid = 'mermaid-' + Math.random().toString(36).slice(2, 8)
+    mermaid
+      .render(uid, diagram)
+      .then((result) => {
+        if (!cancelled) setSvg(result.svg)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(String(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [diagram])
+
+  if (error)
+    return (
+      <pre className="text-destructive my-4 overflow-x-auto rounded-lg border border-red-300 bg-red-50 p-4 text-sm dark:bg-red-950">
+        Mermaid error: {error}
+      </pre>
+    )
+  if (!svg)
+    return (
+      <div className="text-muted-foreground my-4 p-4 text-center text-sm">Rendering diagram…</div>
+    )
+  return (
+    <div
+      data-mermaid="true"
+      className="my-4 flex justify-center"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  )
+}
 
 const githubMarkdownFont =
   'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji"'
@@ -62,6 +104,9 @@ const markdownComponents: Components = {
     )
   },
   code: ({ children, className }) => {
+    if (className === 'language-mermaid') {
+      return <MermaidBlock diagram={String(children)} />
+    }
     const inline = !className
     return (
       <code
@@ -75,11 +120,33 @@ const markdownComponents: Components = {
       </code>
     )
   },
-  pre: ({ children }) => (
-    <pre className="bg-muted text-foreground my-4 overflow-x-auto rounded-lg border p-4 text-sm leading-6">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => {
+    const child = Array.isArray(children) ? children[0] : children
+    if (isValidElement(child) && child.props?.['data-mermaid']) {
+      return child
+    }
+    return (
+      <pre className="bg-muted text-foreground my-4 overflow-x-auto rounded-lg border p-4 text-sm leading-6">
+        {children}
+      </pre>
+    )
+  },
+  img: ({ src, alt }) => {
+    if (!src) return null
+    let resolved = src
+    if (!src.startsWith('http://') && !src.startsWith('https://') && !src.startsWith('//')) {
+      const normalized = src.replace(/^\.?\//, '')
+      resolved = `https://raw.githubusercontent.com/Jonathan0823/esp32-wake-on-lan-remote/main/${normalized}`
+    }
+    const isBadge = resolved.includes('shields.io')
+    return (
+      <img
+        src={resolved}
+        alt={alt || ''}
+        className={isBadge ? 'inline h-5 align-middle' : 'my-4 h-auto max-w-full rounded-lg'}
+      />
+    )
+  },
   table: ({ children }) => (
     <div className="my-4 overflow-x-auto">
       <table className="text-muted-foreground w-full border-collapse text-left text-sm">
@@ -184,7 +251,7 @@ export default function About() {
     <div id="about-top" className="mx-auto grid max-w-5xl gap-5">
       <Card className="overflow-hidden">
         <CardHeader className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1">
             <Badge variant="secondary">ESP32</Badge>
             <Badge variant="secondary">MQTT</Badge>
             <Badge variant="secondary">Telegram</Badge>
