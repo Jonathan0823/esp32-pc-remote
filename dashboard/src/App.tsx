@@ -1,12 +1,14 @@
+import { lazy } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '@/components/ui/theme-provider'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { Toaster } from '@/components/ui/sonner'
 import Layout from '@/components/Layout'
 import Dashboard from '@/pages/Dashboard'
-import Activity from '@/pages/Activity'
-import About from '@/pages/About'
 import './App.css'
+
+const Activity = lazy(() => import('@/pages/Activity'))
+const About = lazy(() => import('@/pages/About'))
 
 function AppWrapper() {
   return (

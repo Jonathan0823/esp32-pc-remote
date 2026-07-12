@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { Suspense, useEffect, useState, useMemo } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useMqtt } from '@/mqtt/useMqtt'
 import {
@@ -198,22 +198,30 @@ export default function Layout() {
 
         {/* Page content via router outlet */}
         <div className="flex-1 overflow-auto p-5">
-          <Outlet
-            context={
-              {
-                device,
-                state,
-                connected,
-                connection,
-                send,
-                replies,
-                events,
-                logs,
-                markReplyHandled,
-                isReplyHandled,
-              } satisfies LayoutContext
+          <Suspense
+            fallback={
+              <div className="text-muted-foreground flex min-h-full items-center justify-center text-sm">
+                Loading…
+              </div>
             }
-          />
+          >
+            <Outlet
+              context={
+                {
+                  device,
+                  state,
+                  connected,
+                  connection,
+                  send,
+                  replies,
+                  events,
+                  logs,
+                  markReplyHandled,
+                  isReplyHandled,
+                } satisfies LayoutContext
+              }
+            />
+          </Suspense>
         </div>
       </div>
     </SidebarProvider>
