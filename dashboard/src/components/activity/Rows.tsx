@@ -28,6 +28,11 @@ import {
 import type { CommandReply, EspEvent } from '@/mqtt/types'
 import { toast } from 'sonner'
 
+function replyResult(reply: CommandReply): string {
+  if (typeof reply.message === 'string' && reply.message) return reply.message
+  return reply.ok ? 'ok' : 'failed'
+}
+
 function ReplyDetails({ reply }: Readonly<{ reply: CommandReply }>) {
   return (
     <div className="border-border/50 bg-background/40 mt-2 border p-2 dark:border-slate-800 dark:bg-slate-900/60">
@@ -64,9 +69,7 @@ export function ReplyRow({
 }>) {
   const summary = formatReplySummary(reply)
   const json = JSON.stringify(reply, null, 2)
-  // ponytail: readText removed from import; inline via stringify
-  const result =
-    typeof reply.message === 'string' && reply.message ? reply.message : reply.ok ? 'ok' : 'failed'
+  const result = replyResult(reply)
 
   if (!detail) {
     return (

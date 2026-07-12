@@ -79,7 +79,7 @@ export function formatEventCopySummary(event: EspEvent): string {
 }
 
 export async function copyText(text: string): Promise<boolean> {
-  if (!navigator.clipboard?.writeText) return Promise.resolve(false)
+  if (!navigator.clipboard?.writeText) return false
   return navigator.clipboard.writeText(text).then(
     () => true,
     () => false,
