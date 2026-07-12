@@ -124,7 +124,7 @@ const markdownComponents: Components = {
   },
   pre: ({ children }) => {
     const child = Array.isArray(children) ? children[0] : children
-    if (isValidElement(child) && (child.props as Record<string, unknown>)?.['data-mermaid']) {
+    if (isValidElement(child) && child.type === MermaidBlock) {
       return child
     }
     return (
