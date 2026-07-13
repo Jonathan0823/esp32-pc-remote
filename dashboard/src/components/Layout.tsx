@@ -75,10 +75,11 @@ export default function Layout() {
 
     // Convert firmware relative timestamps (seconds since boot) to wall clock
     let lastWakeFormatted = STATIC_DEVICE.lastWake
+    let lastWakeAbsMs: number | undefined
     if (typeof s?.ts === 'number' && typeof s?.last_wake_at === 'number') {
       const bootOffset = now - s.ts * 1000
-      const absMs = bootOffset + s.last_wake_at * 1000
-      lastWakeFormatted = formatAgo(absMs)
+      lastWakeAbsMs = bootOffset + s.last_wake_at * 1000
+      lastWakeFormatted = formatAgo(lastWakeAbsMs)
     }
 
     return {
@@ -99,6 +100,7 @@ export default function Layout() {
       signalQuality:
         typeof s?.rssi === 'number' ? signalQuality(s.rssi) : STATIC_DEVICE.signalQuality,
       lastWake: lastWakeFormatted,
+      lastWakeAbsMs,
       lastWakeStatus: s?.last_wake_result || STATIC_DEVICE.lastWakeStatus,
     }
   }, [state])

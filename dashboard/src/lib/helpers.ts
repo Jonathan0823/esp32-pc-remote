@@ -33,9 +33,15 @@ export function resolveExpiresAt(
 
 export function formatDuration(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds))
-  const hours = Math.floor(total / 3600)
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
   const minutes = Math.floor((total % 3600) / 60)
   const secs = total % 60
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${minutes}m`
+  }
+
   const parts = [
     hours ? `${hours}h` : null,
     hours || minutes ? `${minutes}m` : null,
