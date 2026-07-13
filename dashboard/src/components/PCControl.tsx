@@ -2,6 +2,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { DeviceData } from '@/lib/types'
+import LiveTime from '@/components/LiveTime'
 import {
   MonitorIcon,
   ClockIcon,
@@ -58,7 +59,14 @@ export default function PCControl({
             <div className="grid grid-cols-[auto_auto_1fr] gap-x-2 gap-y-1.5 text-xs">
               <ClockIcon className="text-muted-foreground size-3.5 self-center" />
               <span className="text-foreground self-center font-medium">Last Wake</span>
-              <span className="text-muted-foreground self-center">: {device.lastWake}</span>
+              <span className="text-muted-foreground self-center">
+                :{' '}
+                {device.lastWakeAbsMs ? (
+                  <LiveTime refTimestamp={device.lastWakeAbsMs} />
+                ) : (
+                  device.lastWake
+                )}
+              </span>
               <CheckCircleIcon className="text-muted-foreground size-3.5 self-center" />
               <span className="text-foreground self-center font-medium">Last Wake Status</span>
               <span

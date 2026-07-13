@@ -12,6 +12,7 @@ export interface DeviceData {
   broker: string
   signalQuality: number
   lastWake: string
+  lastWakeAbsMs?: number
   lastWakeStatus: string
   stateRefreshedAt: number
   uptimeSeconds: number
