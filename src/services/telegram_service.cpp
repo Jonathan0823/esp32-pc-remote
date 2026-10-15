@@ -303,7 +303,12 @@ static void handleCommand(String chatId, String text) {
                      args.indexOf("-f") >= 0;
     if (forceWake) {
       log_print("[telegram] /wake force start\n");
-      wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+      if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT)) {
+        log_print("[telegram] /wake force WoL packet submission failed\n");
+        telegram_send_text_once(chatId, "⚠️ Couldn't send the wake packet. Check the PC MAC, broadcast address, port, and Wi-Fi.", "");
+        return;
+      }
+      log_print("[telegram] WoL packet submitted to %s\n", PC_NAME);
       wake_start_polling(chatId, PC_NAME, PC_IP, PC_TCP_PORT);
       telegram_send_text_once(chatId,
                               "⚡ Wake signal sent to " + String(PC_NAME) +
@@ -352,7 +357,12 @@ static void handleCallback(const TelegramUpdate &msg) {
   if (msg.text == "wake_confirm") {
     log_print("[telegram] callback confirm start\n");
     telegram_send_callback_answer_once(msg.query_id, "", false, "", 0);
-    wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+    if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT)) {
+      log_print("[telegram] confirmed WoL packet submission failed\n");
+      telegram_send_text_once(msg.chat_id, "⚠️ Couldn't send the wake packet. Check the PC MAC, broadcast address, port, and Wi-Fi.", "");
+      return;
+    }
+    log_print("[telegram] WoL packet submitted to %s\n", PC_NAME);
     wake_start_polling(msg.chat_id, PC_NAME, PC_IP, PC_TCP_PORT);
     telegram_send_text_once(msg.chat_id,
                             "⚡ Wake signal sent to " + String(PC_NAME) +

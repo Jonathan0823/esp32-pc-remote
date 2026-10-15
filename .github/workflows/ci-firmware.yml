@@ -8,26 +8,23 @@ on:
 
 jobs:
   compile:
-    name: Compile
+    name: Compile ESP32-S3 firmware
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Arduino CLI
-        uses: arduino/setup-arduino-cli@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Install ESP32 core
-        run: |
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32
-
-      - name: Install libraries
-        run: |
-          arduino-cli lib install "ArduinoJson"
-          arduino-cli lib install "PubSubClient"
+      - name: Install PlatformIO
+        run: python -m pip install platformio==6.2.0
 
       - name: Create config.h from template
         run: cp config.example.h config.h
 
-      - name: Compile
-        run: arduino-cli compile --fqbn esp32:esp32:esp32 .
+      - name: Run host tests
+        run: ./scripts/test_host.sh
+
+      - name: Build firmware and speech model image
+        run: pio run

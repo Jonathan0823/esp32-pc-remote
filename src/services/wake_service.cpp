@@ -4,8 +4,7 @@
 #include "src/services/wake_service.h"
 #include "src/services/telegram_service.h"
 #include "src/services/log_service.h"
-
-static WiFiUDP wakeUdp;
+#include "src/services/wol_packet.h"
 
 static bool wakePending = false;
 static unsigned long wakeStartMs = 0;
@@ -61,20 +60,24 @@ void wake_poll() {
   lastWakeCheck = millis();
 }
 
-void wake_send_magic(const String& mac, const String& bcast, int port) {
-  byte macBytes[6];
-  sscanf(mac.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx",
-         &macBytes[0], &macBytes[1], &macBytes[2],
-         &macBytes[3], &macBytes[4], &macBytes[5]);
+bool wake_send_magic(const String& mac, const String& bcast, int port) {
+  if (port < 1 || port > 65535) return false;
+
   byte packet[102];
-  memset(packet, 0xFF, 6);
-  for (int i = 0; i < 16; i++) memcpy(&packet[6 + i * 6], macBytes, 6);
+  if (!wol_build_magic_packet(mac.c_str(), packet)) return false;
+
   IPAddress bcastAddr;
-  bcastAddr.fromString(bcast);
-  wakeUdp.beginPacket(bcastAddr, port);
-  wakeUdp.write(packet, 102);
-  wakeUdp.endPacket();
-  log_print("WoL sent to %s via %s:%d\n", mac.c_str(), bcast.c_str(), port);
+  if (!bcastAddr.fromString(bcast)) return false;
+
+  WiFiUDP udp;
+  if (!udp.beginPacket(bcastAddr, port)) return false;
+  if (udp.write(packet, sizeof(packet)) != sizeof(packet)) {
+    udp.stop();
+    return false;
+  }
+  const bool sent = udp.endPacket() == 1;
+  udp.stop();
+  return sent;
 }
 
 bool wake_is_pc_reachable(const String& ip, int port) {
