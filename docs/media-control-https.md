@@ -13,24 +13,25 @@ This contract is for the ESP32 client and the future Windows agent. Task 002 imp
 
 One HTTPS `POST` with `Content-Type: application/json` and a body no larger than 512 bytes:
 
+The `/v1` path selects the API version; the body carries no separate version field.
+
 ```json
-{"v":1,"id":"0123456789abcdef0123456789abcdef","cmd":"pause","issued_at_ms":1783586658000,"expires_at_ms":1783586663000}
+{"id":"0123456789abcdef0123456789abcdef","cmd":"pause","issued_at_ms":1783586658000,"expires_at_ms":1783586663000}
 ```
 
-- `v`: integer `1`.
 - `id`: exactly 32 lowercase hexadecimal characters from 128 random bits; unique per request.
 - `cmd`: exactly one of `play`, `pause`, `next`, `previous`, `mute`, `unmute`.
 - `issued_at_ms`, `expires_at_ms`: unsigned Unix milliseconds; expiry must equal issue time plus 5000 ms.
-- Reject unknown or missing fields, wrong types, oversized input, unsupported commands/versions, and invalid IDs.
+- Reject unknown or missing fields, wrong types, oversized input, unsupported commands, and invalid IDs.
 - Expiry begins when the ESP recognizes the command. The receiver allows at most 1000 ms future issue-time skew and rejects at `now >= expires_at_ms`. Do not grant expiry grace. The ESP also checks monotonic age before enqueue and send; expired requests are discarded, never refreshed or retried.
 
 ## Responses and duplicates
 
-- `202 Accepted` with `{"v":1,"id":"<same-id>","status":"accepted"}` means validated/accepted, **not executed**. The test server only returns this state.
-- `200 OK` with the same ID and `{"status":"executed"}` means the future Windows agent issued the native media action; it does not prove playback state.
-- Correlate both version and ID. Never display an execution-success indication for `202`, a malformed response, or a mismatched ID.
+- `202 Accepted` with `{"id":"<same-id>","status":"accepted"}` means validated/accepted, **not executed**. The test server only returns this state.
+- `200 OK` with `{"id":"<same-id>","status":"executed"}` means the future Windows agent issued the native media action; it does not prove playback state.
+- The URL path selects the API version; correlate responses by ID. Never display an execution-success indication for `202`, a malformed response, or a mismatched ID.
 - Receiver keeps at most 128 request IDs through their five-second acceptance windows; duplicate is `409`, cache full is `429`. Reject saturation instead of evicting unexpired IDs. No persistent exactly-once guarantee across receiver crashes.
-- Other receiver statuses: `400` malformed/version/time, `401` unauthorized, `404`/`405` wrong path/method, `410` expired, `413` oversized, `5xx` server failure. Response bodies are capped at 512 bytes. Unknown outcome after the request may have been written is not retried.
+- Other receiver statuses: `400` malformed/time, `401` unauthorized, `404`/`405` wrong path/method, `410` expired, `413` oversized, `5xx` server failure. Response bodies are capped at 512 bytes. Unknown outcome after the request may have been written is not retried.
 - The future receiver authenticates and validates the full request before dispatch. It allows only the six built-in media actions; no shell or arbitrary process execution.
 
 ## ESP behavior and feedback

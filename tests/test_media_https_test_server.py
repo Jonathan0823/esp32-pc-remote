@@ -21,7 +21,6 @@ NOW = 1_783_586_658_000
 
 def body(**overrides):
     value = {
-        "v": 1,
         "id": REQUEST_ID,
         "cmd": "pause",
         "issued_at_ms": NOW,
@@ -63,9 +62,9 @@ class MediaHttpsContractTest(unittest.TestCase):
             path, {"Authorization": f"Bearer {TOKEN}"}, body(), TOKEN, NOW, {}
         )
 
-    def test_rejects_unknown_fields_versions_and_commands(self):
+    def test_rejects_unknown_fields_and_commands(self):
         for updates in (
-            {"v": 2},
+            {"v": 1},
             {"cmd": "shutdown"},
             {"extra": True},
             {"cmd": 4},
@@ -74,7 +73,7 @@ class MediaHttpsContractTest(unittest.TestCase):
                 self.assertEqual(self.validate(body(**updates)).status, 400)
 
     def test_rejects_duplicate_json_keys_and_oversize(self):
-        duplicate = (f'{{"v":1,"id":"{REQUEST_ID}","id":"{REQUEST_ID}"}}').encode()
+        duplicate = (f'{{"id":"{REQUEST_ID}","id":"{REQUEST_ID}"}}').encode()
         self.assertEqual(self.validate(duplicate).status, 400)
         self.assertEqual(self.validate(b" " * 513).status, 413)
 
@@ -172,13 +171,13 @@ class MediaHttpsServerIntegrationTest(unittest.TestCase):
     def test_verified_tls_accepts_and_deduplicates_without_execution(self):
         now = int(time.time() * 1000)
         payload = json.dumps({
-            "v": 1, "id": "f" * 32, "cmd": "pause",
+            "id": "f" * 32, "cmd": "pause",
             "issued_at_ms": now, "expires_at_ms": now + 5000,
         }, separators=(",", ":")).encode()
         with self.post(payload) as response:
             self.assertEqual(response.status, 202)
             result = json.loads(response.read())
-            self.assertEqual(result, {"v": 1, "id": "f" * 32, "status": "accepted"})
+            self.assertEqual(result, {"id": "f" * 32, "status": "accepted"})
         with self.assertRaises(urllib.error.HTTPError) as duplicate:
             self.post(payload)
         self.assertEqual(duplicate.exception.code, 409)

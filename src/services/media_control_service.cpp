@@ -91,7 +91,6 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
   }
 
   StaticJsonDocument<256> request;
-  request["v"] = 1;
   request["id"] = intent.id;
   request["cmd"] = media_command_name(intent.command);
   request["issued_at_ms"] = intent.issuedAtUnixMs;
@@ -157,8 +156,7 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
 
   StaticJsonDocument<256> reply;
   if (deserializeJson(reply, response, bytesRead, DeserializationOption::NestingLimit(2)) ||
-      !reply.is<JsonObject>() || reply.size() != 3 ||
-      !reply["v"].is<int>() || reply["v"].as<int>() != 1 ||
+      !reply.is<JsonObject>() || reply.size() != 2 ||
       !reply["id"].is<const char*>() || !reply["status"].is<const char*>()) {
     return MediaResult::Unknown;
   }

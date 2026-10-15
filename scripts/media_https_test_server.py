@@ -18,7 +18,7 @@ MAX_FUTURE_SKEW_MS = 1000
 COMMANDS = {"play", "pause", "next", "previous", "mute", "unmute"}
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
 TOKEN_RE = re.compile(r"^[0-9a-f]{64}$")
-FIELDS = {"v", "id", "cmd", "issued_at_ms", "expires_at_ms"}
+FIELDS = {"id", "cmd", "issued_at_ms", "expires_at_ms"}
 MAX_TIMESTAMP = (1 << 63) - 1
 
 
@@ -39,7 +39,7 @@ def _unique_object(pairs):
 
 
 def _response(status, request_id="", message=""):
-    body = {"v": 1, "status": message}
+    body = {"status": message}
     if request_id:
         body["id"] = request_id
     return Result(status, body)
@@ -69,13 +69,10 @@ def validate_request(path, headers, body, expected_token, now_ms, seen):
     if not isinstance(request, dict) or set(request) != FIELDS:
         return _response(400, message="invalid_fields")
 
-    version = request["v"]
     request_id = request["id"]
     command = request["cmd"]
     issued = request["issued_at_ms"]
     expires = request["expires_at_ms"]
-    if type(version) is not int or version != 1:
-        return _response(400, message="invalid_version")
     if not isinstance(request_id, str) or not ID_RE.fullmatch(request_id):
         return _response(400, message="invalid_id")
     if not isinstance(command, str) or command not in COMMANDS:
@@ -98,7 +95,7 @@ def validate_request(path, headers, body, expected_token, now_ms, seen):
         return _response(429, request_id, "busy")
 
     seen[request_id] = expires
-    return Result(202, {"v": 1, "id": request_id, "status": "accepted"}, command)
+    return Result(202, {"id": request_id, "status": "accepted"}, command)
 
 
 class Handler(BaseHTTPRequestHandler):
