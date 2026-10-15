@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
+#include <esp_system.h>
 #include "config.h"
 #include "src/services/wake_service.h"
 #include "src/services/telegram_service.h"
@@ -60,23 +61,43 @@ void wake_poll() {
   lastWakeCheck = millis();
 }
 
-bool wake_send_magic(const String& mac, const String& bcast, int port) {
-  if (port < 1 || port > 65535) return false;
+String wake_new_id() {
+  char id[9];
+  snprintf(id, sizeof(id), "%08lx", static_cast<unsigned long>(esp_random()));
+  return String(id);
+}
 
-  byte packet[102];
-  if (!wol_build_magic_packet(mac.c_str(), packet)) return false;
-
-  IPAddress bcastAddr;
-  if (!bcastAddr.fromString(bcast)) return false;
-
-  WiFiUDP udp;
-  if (!udp.beginPacket(bcastAddr, port)) return false;
-  if (udp.write(packet, sizeof(packet)) != sizeof(packet)) {
-    udp.stop();
-    return false;
+bool wake_send_magic(const String& mac, const String& bcast, int port,
+                     const char* source, const String& wakeId) {
+  const char* reason = nullptr;
+  bool sent = false;
+  if (port < 1 || port > 65535) {
+    reason = "invalid_port";
+  } else {
+    byte packet[102];
+    if (!wol_build_magic_packet(mac.c_str(), packet)) {
+      reason = "invalid_mac";
+    } else {
+      IPAddress bcastAddr;
+      if (!bcastAddr.fromString(bcast)) {
+        reason = "invalid_broadcast";
+      } else {
+        WiFiUDP udp;
+        if (!udp.beginPacket(bcastAddr, port)) {
+          reason = "udp_begin_failed";
+        } else if (udp.write(packet, sizeof(packet)) != sizeof(packet)) {
+          udp.stop();
+          reason = "udp_write_failed";
+        } else {
+          sent = udp.endPacket() == 1;
+          udp.stop();
+          if (!sent) reason = "udp_send_failed";
+        }
+      }
+    }
   }
-  const bool sent = udp.endPacket() == 1;
-  udp.stop();
+
+  log_wake_event(source, "packet_submission", wakeId.c_str(), reason, true, sent);
   return sent;
 }
 

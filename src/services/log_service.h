@@ -3,8 +3,13 @@
 
 #include <Arduino.h>
 
+void log_prepare();
 void log_init();
 void log_event(const char* level, const char* component, const char* event, const char* msg);
+void log_wake_event(const char* source, const char* event, const char* wakeId,
+                    const char* reason = nullptr, bool packetAttempted = false,
+                    bool sent = false);
+void log_process();
 void log_heartbeat(const String& targetName);
 void log_print(const char* fmt, ...);
 

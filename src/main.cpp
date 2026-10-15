@@ -46,11 +46,12 @@ void setup() {
   log_print("[wdt] configured 120s\n");
 
   log_print("[boot] target=%s\n", PC_NAME);
+  log_prepare();
   voice_service_start();
   wifi_connect();
+  log_init();
   telegram_setup();
   mqtt_setup();
-  log_init();
 
   // log once if previous run was watchdog-triggered (WiFi is up after wifi_connect)
   if (esp_reset_reason() == ESP_RST_TASK_WDT) {
@@ -65,6 +66,7 @@ void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     mqtt_loop();
     wake_poll();
+    log_process();
   }
 
   esp_task_wdt_reset();
