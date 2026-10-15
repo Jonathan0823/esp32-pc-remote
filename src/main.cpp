@@ -9,6 +9,7 @@
 #include "src/services/wake_service.h"
 #include "src/services/mqtt_service.h"
 #include "src/services/log_service.h"
+#include "src/services/indicator_service.h"
 #include "src/services/voice_service.h"
 
 const char* reset_reason_label(esp_reset_reason_t reason) {
@@ -47,6 +48,7 @@ void setup() {
 
   log_print("[boot] target=%s\n", PC_NAME);
   log_prepare();
+  indicator_service_start();
   voice_service_start();
   wifi_connect();
   log_init();

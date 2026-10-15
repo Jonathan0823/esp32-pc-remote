@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 constexpr uint32_t VOICE_LISTEN_WINDOW_MS = 5760;
-constexpr uint32_t VOICE_LED_PULSE_MS = 500;
 
 struct VoiceSession {
   uint32_t startedAt;
@@ -28,8 +27,4 @@ inline bool voice_session_expire(VoiceSession& session, uint32_t now) {
   if (!session.listening || now - session.startedAt < VOICE_LISTEN_WINDOW_MS) return false;
   session.listening = false;
   return true;
-}
-
-inline bool voice_led_pulse_active(uint32_t now, uint32_t pulseStarted) {
-  return now - pulseStarted < VOICE_LED_PULSE_MS;
 }

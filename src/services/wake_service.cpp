@@ -5,6 +5,7 @@
 #include "src/services/wake_service.h"
 #include "src/services/telegram_service.h"
 #include "src/services/log_service.h"
+#include "src/services/indicator_service.h"
 #include "src/services/wol_packet.h"
 
 static bool wakePending = false;
@@ -98,6 +99,7 @@ bool wake_send_magic(const String& mac, const String& bcast, int port,
   }
 
   log_wake_event(source, "packet_submission", wakeId.c_str(), reason, true, sent);
+  indicator_wake_result(source, sent);
   return sent;
 }
 

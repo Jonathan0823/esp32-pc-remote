@@ -3,13 +3,13 @@
 #include <stdio.h>
 #include "ESP_I2S.h"
 #include "ESP_SR.h"
-#include "esp32-hal-rgb-led.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
 
 #include "config.h"
 #include "src/services/voice_policy.h"
+#include "src/services/indicator_service.h"
 #include "src/services/voice_service.h"
 #include "src/services/wake_service.h"
 #include "src/services/log_service.h"
@@ -27,8 +27,6 @@ static const sr_cmd_t SPEECH_COMMANDS[] = {
     {WAKE_COMPUTER_COMMAND, "wake computer"},
 };
 
-enum class VoiceLed { Off, Listening, Success, WifiError };
-
 struct SpeechEvent {
   sr_event_t event;
   int commandId;
@@ -38,20 +36,6 @@ struct SpeechEvent {
 
 I2SClass microphone;
 QueueHandle_t speechQueue = nullptr;
-void set_rgb(uint8_t red, uint8_t green, uint8_t blue) {
-  rgbLedWrite(RGB_BUILTIN, red, green, blue);
-}
-
-void set_led(VoiceLed& state, uint32_t& startedAt, VoiceLed next) {
-  state = next;
-  startedAt = millis();
-  switch (next) {
-    case VoiceLed::Listening: set_rgb(0, 0, RGB_BRIGHTNESS); break;
-    case VoiceLed::Success: set_rgb(0, RGB_BRIGHTNESS, 0); break;
-    case VoiceLed::WifiError: set_rgb(RGB_BRIGHTNESS, 0, 0); break;
-    case VoiceLed::Off: set_rgb(0, 0, 0); break;
-  }
-}
 
 void on_speech_event(sr_event_t event, int commandId, int) {
   if (speechQueue == nullptr) return;
@@ -78,28 +62,9 @@ void on_speech_event(sr_event_t event, int commandId, int) {
 void voice_worker(void*) {
   VoiceSession session = {};
   char sessionWakeId[9] = {};
-  VoiceLed led = VoiceLed::Off;
-  uint32_t ledStartedAt = 0;
-  set_led(led, ledStartedAt, VoiceLed::Off);
-
   for (;;) {
-    const uint32_t now = millis();
-    TickType_t wait = portMAX_DELAY;
-    if (led == VoiceLed::Success || led == VoiceLed::WifiError) {
-      const uint32_t elapsed = now - ledStartedAt;
-      if (!voice_led_pulse_active(now, ledStartedAt)) {
-        set_led(led, ledStartedAt, VoiceLed::Off);
-      } else {
-        wait = pdMS_TO_TICKS(VOICE_LED_PULSE_MS - elapsed);
-        if (wait == 0) wait = 1;
-      }
-    }
-
     SpeechEvent event;
-    if (xQueueReceive(speechQueue, &event, wait) != pdPASS) {
-      set_led(led, ledStartedAt, VoiceLed::Off);
-      continue;
-    }
+    if (xQueueReceive(speechQueue, &event, portMAX_DELAY) != pdPASS) continue;
 
     if (event.event == SR_EVENT_WAKEWORD) {
       if (session.listening) {
@@ -118,7 +83,7 @@ void voice_worker(void*) {
         continue;
       }
       log_wake_event("voice", "listening_started", sessionWakeId);
-      set_led(led, ledStartedAt, VoiceLed::Listening);
+      indicator_set_voice_listening(true);
       printf("[voice] id=%s Hi ESP detected; listening for wake computer\n",
                     sessionWakeId);
       continue;
@@ -128,7 +93,7 @@ void voice_worker(void*) {
       if (session.listening) {
         session.listening = false;
         log_wake_event("voice", "listening_timeout", sessionWakeId);
-        set_led(led, ledStartedAt, VoiceLed::Off);
+        indicator_set_voice_listening(false);
         printf("[voice] id=%s command listening timed out\n", sessionWakeId);
       }
       if (!ESP_SR.setMode(SR_MODE_WAKEWORD)) {
@@ -156,7 +121,7 @@ void voice_worker(void*) {
                      event.commandId == WAKE_COMPUTER_COMMAND
                          ? "command_after_timeout"
                          : "unrecognized_command");
-      set_led(led, ledStartedAt, VoiceLed::Off);
+      indicator_set_voice_listening(false);
       if (!ESP_SR.setMode(SR_MODE_WAKEWORD)) {
         puts("[voice] failed to restore wake-word mode after rejected command");
       }
@@ -164,10 +129,10 @@ void voice_worker(void*) {
       continue;
     }
 
+    indicator_set_voice_listening(false);
     if (!ESP_SR.setMode(SR_MODE_WAKEWORD)) {
       log_wake_event("voice", "request_rejected", sessionWakeId,
                      "wakeword_mode_failed");
-      set_led(led, ledStartedAt, VoiceLed::Off);
       sessionWakeId[0] = '\0';
       puts("[voice] failed to restore wake-word mode after command");
       continue;
@@ -180,7 +145,7 @@ void voice_worker(void*) {
       log_wake_event("voice", "request_rejected", sessionWakeId,
                      "wifi_disconnected");
       puts("[voice] WoL discarded: Wi-Fi disconnected");
-      set_led(led, ledStartedAt, VoiceLed::WifiError);
+      indicator_wake_result("voice", false);
       sessionWakeId[0] = '\0';
       continue;
     }
@@ -188,13 +153,11 @@ void voice_worker(void*) {
     const String wakeId(sessionWakeId);
     if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT, "voice", wakeId)) {
       puts("[voice] WoL packet submission failed");
-      set_led(led, ledStartedAt, VoiceLed::Off);
       sessionWakeId[0] = '\0';
       continue;
     }
 
     puts("[voice] WoL packet submitted; PC startup not yet confirmed");
-    set_led(led, ledStartedAt, VoiceLed::Success);
     sessionWakeId[0] = '\0';
   }
 }
