@@ -11,6 +11,7 @@
 #include "src/services/voice_policy.h"
 #include "src/services/voice_service.h"
 #include "src/services/wake_service.h"
+#include "src/services/log_service.h"
 
 namespace {
 constexpr int MIC_BCLK_GPIO = 5;
@@ -22,6 +23,7 @@ constexpr uint32_t VOICE_WORKER_STACK_BYTES = 4096;
 struct WakeEvent {
   uint32_t detectedAt;
   bool wifiConnected;
+  char wakeId[9];
 };
 
 I2SClass microphone;
@@ -55,10 +57,12 @@ void voice_worker(void*) {
     if (xQueueReceive(wakeQueue, &event, wait) != pdPASS) continue;
 
     Serial.printf("[voice] wake word detected at %lu ms\n", static_cast<unsigned long>(event.detectedAt));
+    const String wakeId(event.wakeId);
     const uint32_t now = millis();
     const bool connected = event.wifiConnected && WiFi.status() == WL_CONNECTED;
     if (!connected) {
       Serial.println("[voice] WoL discarded: Wi-Fi disconnected");
+      log_wake_event("voice", "request_rejected", event.wakeId, "wifi_disconnected");
       set_rgb(RGB_BRIGHTNESS, 0, 0);
       pulseStarted = now;
       ledOn = true;
@@ -67,10 +71,11 @@ void voice_worker(void*) {
 
     if (!voice_wake_allowed(now, connected, hasSuccessfulWake, lastSuccessfulWake)) {
       Serial.println("[voice] wake ignored: five-second cooldown");
+      log_wake_event("voice", "request_rejected", event.wakeId, "cooldown");
       continue;
     }
 
-    if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT)) {
+    if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT, "voice", wakeId)) {
       Serial.println("[voice] WoL packet submission failed");
       continue;
     }
@@ -87,8 +92,15 @@ void voice_worker(void*) {
 void on_speech_event(sr_event_t event, int, int) {
   if (event != SR_EVENT_WAKEWORD || wakeQueue == nullptr) return;
 
-  const WakeEvent detection = {millis(), WiFi.status() == WL_CONNECTED};
-  xQueueSend(wakeQueue, &detection, 0);
+  WakeEvent detection = {};
+  detection.detectedAt = millis();
+  detection.wifiConnected = WiFi.status() == WL_CONNECTED;
+  const String wakeId = wake_new_id();
+  snprintf(detection.wakeId, sizeof(detection.wakeId), "%s", wakeId.c_str());
+  log_wake_event("voice", "request_received", detection.wakeId);
+  if (xQueueSend(wakeQueue, &detection, 0) != pdPASS) {
+    log_wake_event("voice", "request_rejected", detection.wakeId, "voice_queue_full");
+  }
 }
 }  // namespace
 

@@ -3,13 +3,34 @@
 #include <HTTPClient.h>
 #include <time.h>
 #include <stdarg.h>
+#include <ArduinoJson.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 #include "config.h"
 #include "src/services/log_service.h"
 
 static bool grafanaConfigured = false;
+static QueueHandle_t wakeLogQueue = nullptr;
 static unsigned long lastHeartbeatMs = 0;
 const unsigned long HEARTBEAT_MS = 60000;
 static log_callback_t externalLogCb = NULL;
+
+namespace {
+constexpr size_t WAKE_LOG_QUEUE_LENGTH = 8;
+struct WakeLogRecord {
+  char source[12];
+  char event[24];
+  char wakeId[9];
+  char reason[32];
+  bool packetAttempted;
+  bool sent;
+  uint32_t uptimeMs;
+};
+
+void copy_log_field(char* destination, size_t size, const char* value) {
+  snprintf(destination, size, "%s", value ? value : "");
+}
+}  // namespace
 
 static void escape_json(const char* in, char* out, size_t out_len) {
   size_t pos = 0;
@@ -75,11 +96,22 @@ static void send_loki_line(const char* log_line) {
   free(payload);
 }
 
-void log_init() {
+void log_prepare() {
+  if (wakeLogQueue == nullptr) {
+    wakeLogQueue = xQueueCreate(WAKE_LOG_QUEUE_LENGTH, sizeof(WakeLogRecord));
+  }
+  if (wakeLogQueue == nullptr) {
+    log_print("[log] wake log queue allocation failed\n");
+  }
+
   grafanaConfigured =
     strlen(GRAFANA_LOGS_URL) > 0 &&
     strlen(GRAFANA_LOGS_USER) > 0 &&
     strlen(GRAFANA_LOGS_TOKEN) > 0;
+}
+
+void log_init() {
+  log_prepare();
 
   if (!grafanaConfigured) {
     log_print("[log] Grafana Cloud not configured — skipping\n");
@@ -126,6 +158,62 @@ void log_event(const char* level, const char* component,
 
   free(escaped);
   free(log_line);
+}
+
+void log_wake_event(const char* source, const char* event, const char* wakeId,
+                    const char* reason, bool packetAttempted, bool sent) {
+  if (!grafanaConfigured || wakeLogQueue == nullptr) return;
+
+  WakeLogRecord record = {};
+  copy_log_field(record.source, sizeof(record.source), source);
+  copy_log_field(record.event, sizeof(record.event), event);
+  copy_log_field(record.wakeId, sizeof(record.wakeId), wakeId);
+  copy_log_field(record.reason, sizeof(record.reason), reason);
+  record.packetAttempted = packetAttempted;
+  record.sent = sent;
+  record.uptimeMs = millis();
+  if (xQueueSend(wakeLogQueue, &record, 0) != pdPASS) {
+    Serial.printf("[log] wake event dropped queue full source=%s id=%s event=%s\n",
+                  record.source, record.wakeId, record.event);
+  }
+}
+
+void log_process() {
+  if (!grafanaConfigured || wakeLogQueue == nullptr ||
+      WiFi.status() != WL_CONNECTED) return;
+
+  WakeLogRecord record;
+  if (xQueueReceive(wakeLogQueue, &record, 0) != pdPASS) return;
+
+  DynamicJsonDocument fields(384);
+  fields["source"] = record.source;
+  fields["wake_id"] = record.wakeId;
+  fields["target"] = PC_NAME;
+  if (record.reason[0]) fields["reason"] = record.reason;
+  if (record.packetAttempted) {
+    fields["sent"] = record.sent;
+    fields["target_mac"] = PC_MAC;
+    fields["broadcast"] = WOL_BCAST;
+    fields["port"] = WOL_PORT;
+  }
+
+  DynamicJsonDocument doc(768);
+  doc["level"] = record.reason[0] || (record.packetAttempted && !record.sent) ? "warn" : "info";
+  doc["component"] = "wake";
+  doc["event"] = record.event;
+  for (JsonPairConst field : fields.as<JsonObjectConst>()) {
+    doc[field.key()] = field.value();
+  }
+  doc["uptime_ms"] = record.uptimeMs;
+  doc["uptime_s"] = record.uptimeMs / 1000;
+  doc["heap"] = ESP.getFreeHeap();
+  doc["rssi"] = WiFi.RSSI();
+  doc["ip"] = WiFi.localIP().toString();
+
+  String line;
+  serializeJson(doc, line);
+  if (line.length() < 1024) send_loki_line(line.c_str());
+  else log_print("[log] oversized wake event skipped\n");
 }
 
 void log_print(const char* fmt, ...) {

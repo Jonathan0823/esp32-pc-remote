@@ -36,6 +36,7 @@ static bool mqttWakePending = false;
 static unsigned long wakeStartMs = 0;
 static unsigned long lastWakeCheckMs = 0;
 static String wakeTarget = "";
+static String mqttWakeId = "";
 static String wakeTargetIp = "";
 static int wakeProbePort = 0;
 
@@ -171,8 +172,8 @@ static void handle_ping(const String& reqId) {
 }
 
 static void mqtt_begin_wake(const char* target, const String& reqId,
-                            const char* cmdName, bool forced) {
-  if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT)) {
+                            const char* cmdName, bool forced, const String& wakeId) {
+  if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT, "mqtt", wakeId)) {
     lastWakeResult = "send_failed";
     lastWakeAt = millis() / 1000;
     DynamicJsonDocument extra(128);
@@ -186,6 +187,7 @@ static void mqtt_begin_wake(const char* target, const String& reqId,
     return;
   }
   log_print("[mqtt] WoL packet submitted target=%s\n", target);
+  mqttWakeId = wakeId;
 
   lastWakeResult = "wol_sent";
   lastWakeAt = millis() / 1000;
@@ -215,13 +217,20 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
   const char* target = doc["target"] | "";
   unsigned long expiresIn = doc["expires_in_s"] | 30;
   bool forceWake = doc["force"] | false;
+  const String requestWakeId = wake_new_id();
+  log_wake_event("mqtt", "request_received", requestWakeId.c_str());
 
   if (forceWake) {
-    mqtt_begin_wake(target, reqId, "wake_request", true);
+    if (mqttWakeId.length() > 0 &&
+        (mqttWakePending || wakeConfirmToken.length() > 0)) {
+      log_wake_event("mqtt", "request_superseded", mqttWakeId.c_str(), "new_force_request");
+    }
+    mqtt_begin_wake(target, reqId, "wake_request", true, requestWakeId);
     return;
   }
 
   if (mqttWakePending) {
+    log_wake_event("mqtt", "request_rejected", requestWakeId.c_str(), "already_pending");
     DynamicJsonDocument extra(64);
     extra["status"] = "already_pending";
     extra["target"] = wakeTarget;
@@ -235,9 +244,14 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
     expiresIn = CONFIRM_EXPIRES_MAX_S;
   }
 
+  if (mqttWakeId.length() > 0 && wakeConfirmToken.length() > 0) {
+    log_wake_event("mqtt", "request_superseded", mqttWakeId.c_str(), "new_confirmation_request");
+  }
   wakeConfirmToken = generate_token();
   wakeConfirmExpiresMs = millis() + (expiresIn * 1000UL);
   wakeTarget = target;
+  mqttWakeId = requestWakeId;
+  log_wake_event("mqtt", "confirmation_required", mqttWakeId.c_str());
 
   DynamicJsonDocument extra(128);
   extra["status"] = "confirmation_required";
@@ -252,8 +266,11 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
 static void handle_wake_confirm(const String& reqId, DynamicJsonDocument& doc) {
   const char* token = doc["confirm_token"] | "";
   const char* target = doc["target"] | "";
+  const String attemptId = mqttWakeId.length() > 0 ? mqttWakeId : wake_new_id();
+  log_wake_event("mqtt", "confirmation_received", attemptId.c_str());
 
   if (!mqttWakePending && wakeConfirmToken.length() == 0) {
+    log_wake_event("mqtt", "request_rejected", attemptId.c_str(), "no_pending_request");
     DynamicJsonDocument extra(64);
     extra["status"] = "no_pending_request";
     mqtt_publish_reply(reqId, "wake_confirm", false, extra);
@@ -262,6 +279,7 @@ static void handle_wake_confirm(const String& reqId, DynamicJsonDocument& doc) {
   }
 
   if (String(token) != wakeConfirmToken) {
+    log_wake_event("mqtt", "request_rejected", attemptId.c_str(), "invalid_token");
     DynamicJsonDocument extra(64);
     extra["status"] = "invalid_token";
     mqtt_publish_reply(reqId, "wake_confirm", false, extra);
@@ -270,21 +288,28 @@ static void handle_wake_confirm(const String& reqId, DynamicJsonDocument& doc) {
   }
 
   if (millis() > wakeConfirmExpiresMs) {
+    log_wake_event("mqtt", "request_rejected", attemptId.c_str(), "token_expired");
     DynamicJsonDocument extra(64);
     extra["status"] = "token_expired";
     mqtt_publish_reply(reqId, "wake_confirm", false, extra);
     wakeConfirmToken = "";
+    mqttWakeId = "";
     log_print("[mqtt] wake_confirm ignored: token expired\n");
     return;
   }
 
   // Token valid — send WoL
-  mqtt_begin_wake(target, reqId, "wake_confirm", false);
+  log_wake_event("mqtt", "confirmation_accepted", attemptId.c_str());
+  mqtt_begin_wake(target, reqId, "wake_confirm", false, attemptId);
   log_print("[mqtt] wake confirmed WOL sent target=%s\n", target);
 }
 
 static void handle_wake_cancel(const String& reqId) {
+  if (mqttWakeId.length() > 0) {
+    log_wake_event("mqtt", "request_cancelled", mqttWakeId.c_str());
+  }
   wakeConfirmToken = "";
+  mqttWakeId = "";
   mqttWakePending = false;
   DynamicJsonDocument extra(64);
   extra["status"] = "cancelled";
@@ -578,20 +603,24 @@ void mqtt_loop() {
 
     if (wake_is_pc_reachable(wakeTargetIp, wakeProbePort)) {
       // PC is online!
+      log_wake_event("mqtt", "pc_online", mqttWakeId.c_str());
       mqttWakePending = false;
       lastWakeResult = "pc_online";
       lastWakeAt = millis() / 1000;
       mqtt_publish_state(true);
       mqtt_publish_event("pc_online", wakeTarget.c_str());
+      mqttWakeId = "";
       log_print("[mqtt] wake complete: %s online in %lums\n",
                 wakeTarget.c_str(), millis() - wakeStartMs);
     } else if (millis() - wakeStartMs >= WAKE_TIMEOUT_MS) {
       // Timeout
+      log_wake_event("mqtt", "pc_timeout", mqttWakeId.c_str(), "probe_timeout");
       mqttWakePending = false;
       lastWakeResult = "timeout";
       lastWakeAt = millis() / 1000;
       mqtt_publish_state(true);
       mqtt_publish_event("pc_timeout", wakeTarget.c_str());
+      mqttWakeId = "";
       log_print("[mqtt] wake timeout: %s not online after %lums\n",
                 wakeTarget.c_str(), WAKE_TIMEOUT_MS);
     }
@@ -599,7 +628,9 @@ void mqtt_loop() {
 
   // Clean up expired confirmation tokens
   if (wakeConfirmToken.length() > 0 && millis() > wakeConfirmExpiresMs) {
+    log_wake_event("mqtt", "request_rejected", mqttWakeId.c_str(), "confirmation_expired");
     wakeConfirmToken = "";
+    mqttWakeId = "";
     log_print("[mqtt] wake confirm token expired\n");
   }
   if (rebootConfirmToken.length() > 0 && millis() > rebootConfirmExpiresMs) {
