@@ -172,7 +172,20 @@ static void handle_ping(const String& reqId) {
 
 static void mqtt_begin_wake(const char* target, const String& reqId,
                             const char* cmdName, bool forced) {
-  wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT);
+  if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT)) {
+    lastWakeResult = "send_failed";
+    lastWakeAt = millis() / 1000;
+    DynamicJsonDocument extra(128);
+    extra["target"] = target;
+    extra["result"] = "send_failed";
+    if (forced) extra["forced"] = true;
+    mqtt_publish_reply(reqId, cmdName, false, extra);
+    mqtt_publish_state(true);
+    mqtt_publish_event("wol_failed", target);
+    log_print("[mqtt] WoL packet submission failed target=%s\n", target);
+    return;
+  }
+  log_print("[mqtt] WoL packet submitted target=%s\n", target);
 
   lastWakeResult = "wol_sent";
   lastWakeAt = millis() / 1000;
