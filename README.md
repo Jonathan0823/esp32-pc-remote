@@ -45,10 +45,10 @@ This is the simplest way to verify the project works.
 
 ### You need
 
-- Any ESP32 board
+- ESP32-S3-DevKitC-1 N16R8
 - A PC with Wake-on-LAN enabled in BIOS, the OS, and the network adapter
 - WiFi access for the ESP32
-- [Arduino CLI](https://arduino.github.io/arduino-cli/)
+- [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html)
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
 
 First, enable and test Wake-on-LAN on the PC using the [Wake-on-LAN setup guide](docs/wake-on-lan.md). If the PC cannot wake from another WoL tool, the ESP32 cannot fix it.
@@ -56,16 +56,15 @@ First, enable and test Wake-on-LAN on the PC using the [Wake-on-LAN setup guide]
 ### Build and flash
 
 ```bash
-arduino-cli core update-index
-arduino-cli core install esp32:esp32
 cp config.example.h config.h
 # Fill in WiFi, BOT_TOKEN, PC_MAC, PC_IP, and WOL_BCAST in config.h
 
-arduino-cli compile --fqbn esp32:esp32:esp32 .
-arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
+pio run
+pio run -t upload --upload-port /dev/ttyACM0
+pio device monitor --port /dev/ttyACM0 --baud 115200
 ```
 
-Replace `/dev/ttyUSB0` with your ESP32's serial port. At least one control method must be configured: Telegram or MQTT.
+Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pinned platform and declared libraries. At least one control method must be configured: Telegram or MQTT.
 
 After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet.
 
@@ -94,11 +93,7 @@ MQTT is optional. Configure these values in `config.h` to enable MQTT over TLS, 
 - `MQTT_PASS`
 - `MQTT_BASE_TOPIC` (for example, `home/pc-remote/desktop-01`)
 
-Install the MQTT library if you enable it:
-
-```bash
-arduino-cli lib install PubSubClient
-```
+The PlatformIO configuration installs the MQTT library automatically; leave the broker settings blank to disable MQTT.
 
 Topics under `MQTT_BASE_TOPIC`:
 
@@ -186,8 +181,8 @@ Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check i
 
 ## Requirements and limitations
 
-- Any ESP32 board supported by the `esp32:esp32` Arduino core
-- `PubSubClient` if MQTT is enabled
+- ESP32-S3-DevKitC-1 N16R8
+- PlatformIO Core; the PlatformIO project pins the pioarduino platform and Arduino-ESP32 version
 - Wake-on-LAN must work from the same LAN before using this project
 - The ESP32 needs power and WiFi while the PC is off
 - The dashboard requires an MQTT broker with WebSocket support

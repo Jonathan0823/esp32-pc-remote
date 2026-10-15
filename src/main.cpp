@@ -1,16 +1,4 @@
-/*
- * ESP32 Telegram Bot — esp32-pc-remote
- *
- * Dependencies (install via Arduino CLI):
- *   arduino-cli core install esp32:esp32
- *
- * Setup:
- *   1. Copy config.example.h → config.h
- *   2. Fill in WIFI_SSID, WIFI_PASS, BOT_TOKEN and/or MQTT settings
- *   3. Compile & upload:
- *      arduino-cli compile --fqbn esp32:esp32:esp32 .
- *      arduino-cli upload --fqbn esp32:esp32:esp32 -p /dev/ttyUSB0 .
- */
+/* ESP32-S3 Wake-on-LAN remote with Telegram and MQTT control. */
 
 #include <WiFi.h>
 #include <esp_system.h>
