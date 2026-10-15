@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <time.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <ArduinoJson.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
@@ -173,7 +174,7 @@ void log_wake_event(const char* source, const char* event, const char* wakeId,
   record.sent = sent;
   record.uptimeMs = millis();
   if (xQueueSend(wakeLogQueue, &record, 0) != pdPASS) {
-    Serial.printf("[log] wake event dropped queue full source=%s id=%s event=%s\n",
+    printf("[log] wake event dropped queue full source=%s id=%s event=%s\n",
                   record.source, record.wakeId, record.event);
   }
 }
@@ -222,7 +223,8 @@ void log_print(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(buf, sizeof(buf), fmt, args);
   va_end(args);
-  Serial.printf("[%lums] %s", millis(), buf);
+  // Use the ESP-IDF console, which also carries the speech model's output.
+  printf("[%lums] %s", millis(), buf);
   if (externalLogCb) {
     externalLogCb(buf);
   }
