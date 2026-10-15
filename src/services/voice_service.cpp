@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <stdio.h>
 #include "ESP_I2S.h"
 #include "ESP_SR.h"
 #include "esp32-hal-rgb-led.h"
@@ -69,7 +70,7 @@ void on_speech_event(sr_event_t event, int commandId, int) {
       log_wake_event("voice", "listening_rejected", notification.wakeId,
                      "speech_event_queue_full");
     } else {
-      Serial.println("[voice] speech event queue full");
+      puts("[voice] speech event queue full");
     }
   }
 }
@@ -113,12 +114,12 @@ void voice_worker(void*) {
         log_wake_event("voice", "listening_rejected", sessionWakeId,
                        "command_mode_failed");
         sessionWakeId[0] = '\0';
-        Serial.println("[voice] failed to enter MultiNet command mode");
+        puts("[voice] failed to enter MultiNet command mode");
         continue;
       }
       log_wake_event("voice", "listening_started", sessionWakeId);
       set_led(led, ledStartedAt, VoiceLed::Listening);
-      Serial.printf("[voice] id=%s Hi ESP detected; listening for wake computer\n",
+      printf("[voice] id=%s Hi ESP detected; listening for wake computer\n",
                     sessionWakeId);
       continue;
     }
@@ -128,14 +129,14 @@ void voice_worker(void*) {
         session.listening = false;
         log_wake_event("voice", "listening_timeout", sessionWakeId);
         set_led(led, ledStartedAt, VoiceLed::Off);
-        Serial.printf("[voice] id=%s command listening timed out\n", sessionWakeId);
+        printf("[voice] id=%s command listening timed out\n", sessionWakeId);
       }
       if (!ESP_SR.setMode(SR_MODE_WAKEWORD)) {
         if (sessionWakeId[0] != '\0') {
           log_wake_event("voice", "request_rejected", sessionWakeId,
                          "wakeword_mode_failed");
         }
-        Serial.println("[voice] failed to restore wake-word mode after timeout");
+        puts("[voice] failed to restore wake-word mode after timeout");
       }
       sessionWakeId[0] = '\0';
       continue;
@@ -157,7 +158,7 @@ void voice_worker(void*) {
                          : "unrecognized_command");
       set_led(led, ledStartedAt, VoiceLed::Off);
       if (!ESP_SR.setMode(SR_MODE_WAKEWORD)) {
-        Serial.println("[voice] failed to restore wake-word mode after rejected command");
+        puts("[voice] failed to restore wake-word mode after rejected command");
       }
       sessionWakeId[0] = '\0';
       continue;
@@ -168,17 +169,17 @@ void voice_worker(void*) {
                      "wakeword_mode_failed");
       set_led(led, ledStartedAt, VoiceLed::Off);
       sessionWakeId[0] = '\0';
-      Serial.println("[voice] failed to restore wake-word mode after command");
+      puts("[voice] failed to restore wake-word mode after command");
       continue;
     }
 
     log_wake_event("voice", "request_received", sessionWakeId);
-    Serial.printf("[voice] id=%s wake computer recognized; wake-word mode restored\n",
+    printf("[voice] id=%s wake computer recognized; wake-word mode restored\n",
                   sessionWakeId);
     if (WiFi.status() != WL_CONNECTED) {
       log_wake_event("voice", "request_rejected", sessionWakeId,
                      "wifi_disconnected");
-      Serial.println("[voice] WoL discarded: Wi-Fi disconnected");
+      puts("[voice] WoL discarded: Wi-Fi disconnected");
       set_led(led, ledStartedAt, VoiceLed::WifiError);
       sessionWakeId[0] = '\0';
       continue;
@@ -186,13 +187,13 @@ void voice_worker(void*) {
 
     const String wakeId(sessionWakeId);
     if (!wake_send_magic(PC_MAC, WOL_BCAST, WOL_PORT, "voice", wakeId)) {
-      Serial.println("[voice] WoL packet submission failed");
+      puts("[voice] WoL packet submission failed");
       set_led(led, ledStartedAt, VoiceLed::Off);
       sessionWakeId[0] = '\0';
       continue;
     }
 
-    Serial.println("[voice] WoL packet submitted; PC startup not yet confirmed");
+    puts("[voice] WoL packet submitted; PC startup not yet confirmed");
     set_led(led, ledStartedAt, VoiceLed::Success);
     sessionWakeId[0] = '\0';
   }
@@ -202,13 +203,13 @@ void voice_worker(void*) {
 bool voice_service_start() {
   speechQueue = xQueueCreate(VOICE_EVENT_QUEUE_LENGTH, sizeof(SpeechEvent));
   if (speechQueue == nullptr) {
-    Serial.println("ERROR: voice speech-event queue allocation failed");
+    puts("ERROR: voice speech-event queue allocation failed");
     return false;
   }
 
   if (xTaskCreate(voice_worker, "voice_wake", VOICE_WORKER_STACK_BYTES,
                   nullptr, 1, nullptr) != pdPASS) {
-    Serial.println("ERROR: voice worker start failed");
+    puts("ERROR: voice worker start failed");
     vQueueDelete(speechQueue);
     speechQueue = nullptr;
     return false;
@@ -217,14 +218,14 @@ bool voice_service_start() {
   microphone.setPins(MIC_BCLK_GPIO, MIC_WS_GPIO, -1, MIC_DATA_GPIO);
   if (!microphone.begin(I2S_MODE_STD, 16000, I2S_DATA_BIT_WIDTH_32BIT,
                         I2S_SLOT_MODE_MONO, I2S_STD_SLOT_LEFT)) {
-    Serial.println("ERROR: I2S microphone initialization failed");
+    puts("ERROR: I2S microphone initialization failed");
     return false;
   }
 
   if (!microphone.configureRX(16000, I2S_DATA_BIT_WIDTH_32BIT,
                               I2S_SLOT_MODE_MONO, I2S_RX_TRANSFORM_32_TO_16,
                               I2S_STD_SLOT_LEFT)) {
-    Serial.println("ERROR: I2S microphone receive configuration failed");
+    puts("ERROR: I2S microphone receive configuration failed");
     microphone.end();
     return false;
   }
@@ -233,11 +234,11 @@ bool voice_service_start() {
   if (!ESP_SR.begin(microphone, SPEECH_COMMANDS,
                     sizeof(SPEECH_COMMANDS) / sizeof(SPEECH_COMMANDS[0]),
                     SR_CHANNELS_MONO, SR_MODE_WAKEWORD, "M")) {
-    Serial.println("ERROR: ESP_SR initialization failed");
+    puts("ERROR: ESP_SR initialization failed");
     microphone.end();
     return false;
   }
 
-  Serial.println("[voice] listening for Hi ESP");
+  puts("[voice] listening for Hi ESP");
   return true;
 }
