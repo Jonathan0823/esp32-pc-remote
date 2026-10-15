@@ -7,7 +7,7 @@
 
 **Turn on your gaming or home PC from Telegram, MQTT, or a private web dashboard — without port forwarding or a cloud subscription.**
 
-An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Control it remotely through Telegram, MQTT automation, or the included browser dashboard.
+An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Wake it with the “Hi ESP” phrase or control it remotely through Telegram, MQTT automation, or the included browser dashboard.
 
 ![Demo](docs/demo.gif)
 
@@ -20,6 +20,7 @@ Useful for gaming PCs, Moonlight/Sunshine streaming, home labs, and desktops tha
 ```mermaid
 flowchart LR
     Telegram[Telegram] --> ESP32[ESP32 on your LAN]
+    Voice["Hi ESP"] --> ESP32
     MQTT[MQTT] --> Dashboard[Web dashboard]
     Dashboard --> MQTT
     MQTT --> ESP32
@@ -31,7 +32,8 @@ The ESP32 must remain connected to your local network. Telegram and MQTT provide
 
 ## What it does
 
-- **Wake your PC** with a confirmation step or immediate force mode
+- **Wake your PC by voice** by saying “Hi ESP”; Telegram and MQTT keep their confirmation and force options
+- **Wake your PC remotely** with a confirmation step or immediate force mode
 - **Check PC status** with a TCP probe
 - **Diagnose the ESP32** with reset reason, heap, WiFi RSSI, uptime, and poll health
 - **Recover automatically** with a watchdog and WiFi reconnect backoff
@@ -39,13 +41,17 @@ The ESP32 must remain connected to your local network. Telegram and MQTT provide
 - **Use the private web dashboard** over MQTT WebSocket
 - **Send important health events to Grafana Cloud Loki** optionally
 
+## Voice wake
+
+Say **“Hi ESP”** to immediately submit a Wake-on-LAN packet for `PC_MAC` through `WOL_BCAST` and `WOL_PORT`. Voice requests have a five-second cooldown. Requests detected while Wi-Fi is disconnected are discarded, not replayed after reconnection. The onboard RGB LED flashes green for 500 ms after packet submission or red for 500 ms when Wi-Fi prevents submission, then turns off. Green confirms packet submission only; it does not mean the PC is online. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4.
+
 ## Quickstart: Telegram
 
 This is the simplest way to verify the project works.
 
 ### You need
 
-- ESP32-S3-DevKitC-1 N16R8
+- ESP32-S3-DevKitC-1 N16R8 with the I2S microphone connected to BCLK GPIO5, WS GPIO6, and DATA GPIO4
 - A PC with Wake-on-LAN enabled in BIOS, the OS, and the network adapter
 - WiFi access for the ESP32
 - [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html)
@@ -57,18 +63,28 @@ First, enable and test Wake-on-LAN on the PC using the [Wake-on-LAN setup guide]
 
 ```bash
 cp config.example.h config.h
-# Fill in WiFi, BOT_TOKEN, PC_MAC, PC_IP, and WOL_BCAST in config.h
+# Set WIFI_SSID, WIFI_PASS, PC_MAC, and WOL_BCAST in config.h.
+# Set PC_IP and PC_TCP_PORT if you want PC status polling.
+# BOT_TOKEN and MQTT settings are optional.
 
 pio run
 pio run -t upload --upload-port /dev/ttyACM0
 pio device monitor --port /dev/ttyACM0 --baud 115200
 ```
 
-Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pinned platform and declared libraries. At least one control method must be configured: Telegram or MQTT.
+Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pinned platform and declared libraries. Voice wake works without Telegram or MQTT configuration; those remote-control services remain optional.
 
-After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet.
+After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet. For voice testing, say “Hi ESP” while the PC is off and confirm the Serial Monitor reports packet submission; the green LED indicates submission, not that the PC is online.
 
 See [Telegram bot setup](docs/telegram.md) for the complete guide.
+
+## Hardware validation
+
+- Confirm Serial prints `[voice] listening for Hi ESP` after successful microphone/ESP_SR initialization.
+- Say “Hi ESP”; verify one WoL submission, a green RGB flash lasting about 500 ms, and the PC waking.
+- Repeat within five seconds (no second voice packet), then after five seconds (eligible again).
+- Disconnect Wi-Fi and say “Hi ESP”; verify a red flash and no delayed WoL after reconnecting.
+- Verify Telegram and MQTT/dashboard controls still work.
 
 ## Telegram commands
 
@@ -81,7 +97,7 @@ See [Telegram bot setup](docs/telegram.md) for the complete guide.
 | `/wake force`       | Send the Wake-on-LAN packet immediately |
 | `/reboot`           | Reboot the ESP32                        |
 
-Leave `BOT_TOKEN` blank to disable Telegram and use MQTT only.
+Leave `BOT_TOKEN` blank to disable Telegram; voice wake remains available, and MQTT can be configured independently.
 
 ## MQTT control
 
@@ -181,7 +197,7 @@ Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check i
 
 ## Requirements and limitations
 
-- ESP32-S3-DevKitC-1 N16R8
+- ESP32-S3-DevKitC-1 N16R8 and the supported I2S microphone wiring listed above
 - PlatformIO Core; the PlatformIO project pins the pioarduino platform and Arduino-ESP32 version
 - Wake-on-LAN must work from the same LAN before using this project
 - The ESP32 needs power and WiFi while the PC is off
