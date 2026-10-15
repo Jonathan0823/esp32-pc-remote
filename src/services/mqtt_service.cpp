@@ -183,11 +183,11 @@ static void mqtt_begin_wake(const char* target, const String& reqId,
     mqtt_publish_reply(reqId, cmdName, false, extra);
     mqtt_publish_state(true);
     mqtt_publish_event("wol_failed", target);
-    if (mqttWakeId == wakeId) mqttWakeId = "";
     log_print("[mqtt] WoL packet submission failed target=%s\n", target);
     return;
   }
   log_print("[mqtt] WoL packet submitted target=%s\n", target);
+  mqttWakeId = wakeId;
 
   lastWakeResult = "wol_sent";
   lastWakeAt = millis() / 1000;
@@ -225,7 +225,6 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
         (mqttWakePending || wakeConfirmToken.length() > 0)) {
       log_wake_event("mqtt", "request_superseded", mqttWakeId.c_str(), "new_force_request");
     }
-    mqttWakeId = requestWakeId;
     mqtt_begin_wake(target, reqId, "wake_request", true, requestWakeId);
     return;
   }
@@ -245,6 +244,9 @@ static void handle_wake_request(const String& reqId, DynamicJsonDocument& doc) {
     expiresIn = CONFIRM_EXPIRES_MAX_S;
   }
 
+  if (mqttWakeId.length() > 0 && wakeConfirmToken.length() > 0) {
+    log_wake_event("mqtt", "request_superseded", mqttWakeId.c_str(), "new_confirmation_request");
+  }
   wakeConfirmToken = generate_token();
   wakeConfirmExpiresMs = millis() + (expiresIn * 1000UL);
   wakeTarget = target;
