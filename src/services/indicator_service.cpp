@@ -14,12 +14,13 @@ namespace {
 constexpr int INDICATOR_QUEUE_LENGTH = 4;
 constexpr uint32_t INDICATOR_WORKER_STACK_BYTES = 2048;
 
-enum class IndicatorEventType { Listening, WakeResult };
+enum class IndicatorEventType { Listening, WakeResult, MediaFeedback };
 
 struct IndicatorEvent {
   IndicatorEventType type;
   bool active;
   bool sent;
+  MediaResult mediaResult;
   char source[12];
 };
 
@@ -61,7 +62,9 @@ void indicator_worker(void*) {
                             : IndicatorColor{0, 0, 0});
       }
     } else {
-      pulseColor = indicator_wake_color(event.source, event.sent, RGB_BRIGHTNESS);
+      pulseColor = event.type == IndicatorEventType::WakeResult
+                       ? indicator_wake_color(event.source, event.sent, RGB_BRIGHTNESS)
+                       : indicator_media_color(event.mediaResult, RGB_BRIGHTNESS);
       pulseStartedAt = millis();
       pulseActive = true;
       show(pulseColor);
@@ -105,5 +108,12 @@ void indicator_wake_result(const char* source, bool sent) {
   event.type = IndicatorEventType::WakeResult;
   event.sent = sent;
   snprintf(event.source, sizeof(event.source), "%s", source ? source : "");
+  send_indicator_event(event);
+}
+
+void indicator_media_result(MediaResult result) {
+  IndicatorEvent event = {};
+  event.type = IndicatorEventType::MediaFeedback;
+  event.mediaResult = result;
   send_indicator_event(event);
 }

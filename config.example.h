@@ -22,6 +22,12 @@
 #define MQTT_PASS       ""                                     // MQTT password
 #define MQTT_BASE_TOPIC ""                                     // e.g. "ejo-pc-remote-8f3k29/desktop-01"
 
+// Optional LAN media control (ESP client; Windows HTTPS server is a future task)
+#define PC_MEDIA_HOST ""                                       // stable PC DNS name or IPv4; blank disables media control
+#define PC_MEDIA_PORT 8443
+#define PC_MEDIA_CA_CERT ""                                    // trusted PEM CA certificate; match PC_MEDIA_HOST in server SAN
+#define PC_MEDIA_API_TOKEN ""                                  // 64 lowercase hex characters (32 random bytes)
+
 // Grafana Cloud Loki (optional — leave blank to skip cloud logging)
 #define GRAFANA_LOGS_URL   ""                                 // e.g. "https://<instance>.grafana.net"
 #define GRAFANA_LOGS_USER  ""                                 // Logs instance ID (username)

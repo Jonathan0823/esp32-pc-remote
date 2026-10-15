@@ -4,6 +4,14 @@
 #include "../src/services/voice_policy.h"
 
 int main() {
+  assert(voice_command_from_id(1).kind == VoiceCommandKind::Wake);
+  for (int id = MEDIA_COMMAND_FIRST_ID; id < MEDIA_COMMAND_FIRST_ID + 6; ++id) {
+    assert(voice_command_from_id(id).kind == VoiceCommandKind::Media);
+    assert(static_cast<int>(voice_command_from_id(id).media) == id - MEDIA_COMMAND_FIRST_ID);
+  }
+  assert(voice_command_from_id(0).kind == VoiceCommandKind::Invalid);
+  assert(voice_command_from_id(MEDIA_COMMAND_FIRST_ID + 6).kind == VoiceCommandKind::Invalid);
+
   VoiceSession session = {};
   assert(!voice_session_accept(session, 0));
   assert(!voice_session_expire(session, 0));

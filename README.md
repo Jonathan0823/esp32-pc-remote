@@ -43,7 +43,9 @@ The ESP32 must remain connected to your local network. Telegram and MQTT provide
 
 ## Voice wake
 
-Say **“Hi ESP”** to open a blue command-listening window, then say **“wake computer”** within ESP_SR's built-in approximately 5.76-second MultiNet timeout. “Hi ESP” alone never sends a packet. Each window accepts at most one command; a new attempt requires a fresh “Hi ESP,” with no extra cooldown. Timeout returns to wake-word listening. The RGB LED is blue while listening and briefly identifies each submitted WoL packet: voice is green, MQTT is cyan, and Telegram is purple. Red indicates a failed packet submission. These colors report packet submission only, not whether the PC came online. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4.
+Say **“Hi ESP”** to open a blue command-listening window. Within ESP_SR's built-in approximately 5.76-second MultiNet timeout, say **“wake computer”** for local WoL or one of the configured media phrases: “play music”, “pause music”, “next track”, “previous track”, “mute computer”, or “unmute computer”. “Hi ESP” alone never sends a command. Each window accepts at most one command; timeout returns to wake-word listening. The RGB LED is blue while listening and identifies submitted WoL packets: voice green, MQTT cyan, Telegram purple; red indicates WoL submission failure. Media feedback uses dim 500-ms pulses: yellow queued/accepted, white only for a correlated execution acknowledgement, red for rejection/failure/unknown. These signals do not prove playback state. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4.
+
+**Media-control limitation:** This firmware implements the ESP HTTPS client, but the Windows daemon is not included yet. Until it exists, commands can be checked with the non-actioning HTTPS fixture: it returns “accepted” (yellow), never executes media or returns “executed” (white). See [LAN media-control HTTPS setup](docs/media-control-https.md).
 
 ## Quickstart: Telegram
 
@@ -88,7 +90,8 @@ See [Telegram bot setup](docs/telegram.md) for the complete guide.
 - Disconnect Wi-Fi, say “Hi ESP” and “wake computer”; verify a red flash and no delayed WoL after reconnecting.
 - Submit a confirmed Telegram wake and an MQTT wake; verify a purple Telegram flash and cyan MQTT flash, each lasting about 500 ms.
 - Verify a request waiting for confirmation does not flash a submission color.
-- Check voice logs distinguish listening start/timeout, accepted command, and packet submission; verify Telegram and MQTT/dashboard controls still work.
+- Check voice logs distinguish listening start/timeout, media queued/accepted/rejected/unknown, and WoL packet submission; verify Telegram and MQTT/dashboard controls still work.
+- With disposable settings and the LAN HTTPS test fixture, try all six media phrases; verify one matching accepted request/yellow pulse per session. Stop the fixture or use an untrusted certificate; verify red feedback and no retry after reconnect. The fixture does not execute media, so white execution feedback awaits the Windows daemon.
 
 ## Telegram commands
 
@@ -197,7 +200,7 @@ Copy `config.example.h` to `config.h` and fill in the values for your setup:
 #define PC_TCP_PORT   47989                 // Moonlight, SSH, SMB, etc.
 ```
 
-Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check its status.
+Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check its status. Optional LAN media control uses `PC_MEDIA_HOST`, `PC_MEDIA_PORT`, `PC_MEDIA_CA_CERT`, and `PC_MEDIA_API_TOKEN`; see the [HTTPS contract and test setup](docs/media-control-https.md). Leave `PC_MEDIA_HOST` blank to disable it. Never commit `config.h` or use production tokens in tests.
 
 ## Requirements and limitations
 

@@ -21,6 +21,14 @@ int main() {
   assert(same(indicator_wake_color("telegram", true, brightness), purple));
   assert(same(indicator_wake_color("unknown", true, brightness), green));
   assert(same(indicator_wake_color("mqtt", false, brightness), red));
+  assert(same(indicator_media_color(MediaResult::Queued, brightness),
+               {brightness / 2, brightness / 2, 0}));
+  assert(same(indicator_media_color(MediaResult::Accepted, brightness),
+               {brightness / 2, brightness / 2, 0}));
+  assert(same(indicator_media_color(MediaResult::Executed, brightness),
+               {brightness / 3, brightness / 3, brightness / 3}));
+  assert(same(indicator_media_color(MediaResult::Unknown, brightness), red));
+  assert(same(indicator_media_color(MediaResult::Rejected, brightness), red));
 
   assert(indicator_pulse_active(200, 200));
   assert(indicator_pulse_active(699, 200));
