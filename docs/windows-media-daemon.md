@@ -71,6 +71,19 @@ Do not disable TLS verification. The server certificate includes `localhost`, `1
 
 If pairing fails: connection refused/timeout points to listener address, firewall, or LAN routing; TLS failures point to an outdated/wrong CA, IP SAN mismatch, or clock; `401` means the token does not match. Fix the corresponding layer rather than bypassing TLS. Changing the bind IP requires exporting the new CA and reflashing the ESP with the new host/CA. **Rotate token and TLS trust** invalidates both values; re-export the CA, copy the new token, and reflash every paired client. Until pairing is complete, leave `PC_MEDIA_HOST` blank to keep ESP media control disabled.
 
+## ESP transport diagnostics
+
+For a failed HTTPS `POST`, firmware prints a bounded, local diagnostic before the usual outcome line:
+
+```text
+[media] transport failure cmd=play id=<request-id> http=-1 (connection refused) tls=<code> (<mbedTLS detail>)
+[media] outcome unknown cmd=play id=<request-id> status=-1; not retrying
+```
+
+`http=-1` is HTTPClient's generic secure-connect failure: its “connection refused” label can also mean TLS failed, not just a refused TCP socket. Use the accompanying TLS code/detail to distinguish certificate parsing/verification, handshake, and network errors. `tls=0 (no TLS error recorded)` is inconclusive, not proof that TLS succeeded. HTTP `401` is different: TLS completed and the daemon rejected authentication. No token, headers, payload, or certificate contents are logged; keep global HTTP debug logging disabled.
+
+Windows curl's `CERT_TRUST_IS_UNTRUSTED_ROOT` is a separate PC-side trust-chain failure. Confirm the exported CA belongs to the current listener (especially after changing the bind IP or rotating credentials); it does not establish the ESP's failure cause. Rebuild/flash these diagnostics, reproduce once, and inspect the TLS detail without disabling verification or retrying an uncertain action.
+
 ## Tray and Settings lifecycle
 
 The tray and HTTPS runtime run in the background process; Settings runs in a separate on-demand process using the same installed executable's internal `--settings` mode. The background process never creates the egui/winit event loop or graphics renderer. Left-click opens Settings; right-click retains the Settings, pause/resume, and Quit menu. Closing Settings exits its process; opening it again starts a fresh UI using current daemon state. Repeated tray clicks or launching the executable again activate the existing Settings process instead of creating another UI or listener. Quitting the daemon closes Settings too. The daemon requests a normal Settings close, then terminates only its owned Settings child after a short timeout (for example, if a native file picker is modal). A Windows job object also ends the Settings child if the daemon process exits unexpectedly.

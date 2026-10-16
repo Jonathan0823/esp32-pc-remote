@@ -41,6 +41,8 @@ int main() {
   assert(media_classify_response(200, false, "executed") == MediaResult::Unknown);
   assert(media_classify_response(401, true, "rejected") == MediaResult::Rejected);
   assert(media_classify_response(503, true, "error") == MediaResult::Unknown);
+  assert(media_classify_response(-1, false, nullptr) == MediaResult::Unknown);
+  assert(media_classify_response(-11, false, nullptr) == MediaResult::Unknown);
 
   const char* token = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   assert(media_config_status("192.168.1.8", 8443, "ca", token) ==

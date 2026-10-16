@@ -133,6 +133,14 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
   }
 
   httpStatus = http.POST(reinterpret_cast<uint8_t*>(payload), payloadLength);
+  if (httpStatus < 0) {
+    char tlsDetail[160] = {};
+    const int tlsError = client.lastError(tlsDetail, sizeof(tlsDetail));
+    printf("[media] transport failure cmd=%s id=%s http=%d (%s) tls=%d (%s)\n",
+           media_command_name(intent.command), intent.id, httpStatus,
+           HTTPClient::errorToString(httpStatus).c_str(), tlsError,
+           tlsError == 0 ? "no TLS error recorded" : tlsDetail);
+  }
   if (httpStatus >= 400 && httpStatus < 500) {
     http.end();
     return MediaResult::Rejected;
@@ -171,7 +179,8 @@ void media_worker(void*) {
   for (;;) {
     if (xQueueReceive(mediaQueue, &intent, portMAX_DELAY) != pdPASS) continue;
     int status = 0;
-    report_result(send_intent(intent, status), intent, status);
+    const MediaResult result = send_intent(intent, status);
+    report_result(result, intent, status);
   }
 }
 }  // namespace
