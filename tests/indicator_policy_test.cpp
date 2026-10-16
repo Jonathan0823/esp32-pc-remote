@@ -29,6 +29,13 @@ int main() {
                {brightness / 3, brightness / 3, brightness / 3}));
   assert(same(indicator_media_color(MediaResult::Unknown, brightness), red));
   assert(same(indicator_media_color(MediaResult::Rejected, brightness), red));
+  assert(same(indicator_ota_color(IndicatorOtaState::Closed, brightness), {0, 0, 0}));
+  assert(same(indicator_ota_color(IndicatorOtaState::WindowOpen, brightness),
+               {brightness / 2, brightness / 4, 0}));
+  assert(same(indicator_ota_color(IndicatorOtaState::Transferring, brightness),
+               {0, brightness / 4, brightness / 2}));
+  assert(same(indicator_ota_result_color(true, brightness), {0, brightness / 2, 0}));
+  assert(same(indicator_ota_result_color(false, brightness), {brightness / 2, 0, 0}));
 
   assert(indicator_pulse_active(200, 200));
   assert(indicator_pulse_active(699, 200));

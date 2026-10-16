@@ -27,6 +27,7 @@
 #define PC_MEDIA_PORT 8443
 #define PC_MEDIA_CA_CERT ""                                    // trusted PEM CA certificate; match PC_MEDIA_HOST in server SAN
 #define PC_MEDIA_API_TOKEN ""                                  // 64 lowercase hex characters (32 random bytes)
+#define PC_OTA_PASSWORD ""                                    // optional; 64 lowercase hex characters; leave blank to disable OTA
 
 // Grafana Cloud Loki (optional — leave blank to skip cloud logging)
 #define GRAFANA_LOGS_URL   ""                                 // e.g. "https://<instance>.grafana.net"
