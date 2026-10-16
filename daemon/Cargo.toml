@@ -57,8 +57,12 @@ windows = { version = "0.61", features = [
   "Win32_System_Variant",
   "Win32_System_WinRT",
   "Win32_UI_Shell",
+  "Win32_UI_Shell_Common",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+[build-dependencies]
+winresource = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }

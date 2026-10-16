@@ -12,6 +12,8 @@ InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32
 
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
+!define MUI_ICON "assets\app.ico"
+!define MUI_UNICON "assets\app.ico"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -28,6 +30,7 @@ Section "Install"
   CreateShortcut "$SMPROGRAMS\ESP32 Media Daemon\ESP32 Media Daemon.lnk" "$INSTDIR\esp32-media-daemon.exe"
   CreateShortcut "$SMPROGRAMS\ESP32 Media Daemon\Uninstall.lnk" "$INSTDIR\uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "DisplayName" "ESP32 Media Daemon"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "DisplayIcon" "$\"$INSTDIR\esp32-media-daemon.exe$\",0"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "DisplayVersion" "${APP_VERSION}"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "InstallLocation" "$INSTDIR"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""

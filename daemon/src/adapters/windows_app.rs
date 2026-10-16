@@ -11,13 +11,14 @@ use std::{
 use eframe::egui;
 use tokio::runtime::Handle;
 use tray_icon::{
-    Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
+    MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem},
 };
 use winit::event_loop::EventLoop;
 
 use super::{
-    windows_host,
+    windows_file_picker::{self, FileKind},
+    windows_host, windows_icon,
     windows_runtime::{WindowsRuntime, acquire_single_instance},
 };
 use crate::domain::{ActionId, ConfiguredAction, CustomAction};
@@ -208,7 +209,9 @@ fn open_settings(
         run_and_return: true,
         viewport: egui::ViewportBuilder::default()
             .with_title("ESP32 Media Daemon")
-            .with_inner_size([560.0, 520.0]),
+            .with_icon(windows_icon::settings_icon())
+            .with_inner_size([760.0, 680.0])
+            .with_min_inner_size([620.0, 480.0]),
         ..Default::default()
     };
     eframe::create_native(
@@ -243,8 +246,7 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
         signals.tray_event(event);
     }));
 
-    let icon = Icon::from_rgba([0x35, 0x9f, 0xe8, 0xff].repeat(16 * 16), 16, 16)
-        .map_err(|error| error.to_string())?;
+    let icon = windows_icon::tray_icon()?;
     TrayIconBuilder::new()
         .with_tooltip("ESP32 Media Daemon")
         .with_icon(icon)
@@ -254,7 +256,17 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
         .map_err(|error| error.to_string())
 }
 
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+enum SettingsTab {
+    #[default]
+    Overview,
+    Actions,
+    Connection,
+}
+
 struct SettingsApp {
+    tab: SettingsTab,
+    logo: egui::TextureHandle,
     signals: Arc<UiSignals>,
     service: Arc<WindowsRuntime>,
     handle: Handle,
@@ -290,7 +302,22 @@ impl SettingsApp {
         }
         signals.settings_initialized.store(true, Ordering::Release);
         let config = service.config();
+        let mut style = (*creation.egui_ctx.style()).clone();
+        style.spacing.item_spacing = egui::vec2(10.0, 10.0);
+        style.spacing.button_padding = egui::vec2(12.0, 6.0);
+        creation.egui_ctx.set_style(style);
+        let icon = windows_icon::settings_icon();
+        let logo = creation.egui_ctx.load_texture(
+            "daemon-logo",
+            egui::ColorImage::from_rgba_unmultiplied(
+                [icon.width as usize, icon.height as usize],
+                &icon.rgba,
+            ),
+            egui::TextureOptions::LINEAR,
+        );
         Self {
+            tab: SettingsTab::default(),
+            logo,
             signals,
             service,
             handle,
@@ -408,6 +435,290 @@ impl SettingsApp {
         self.action_path.clear();
         self.save_actions(actions);
     }
+
+    fn overview(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Ready for your commands");
+        ui.label(
+            "This agent runs in the tray. Closing Settings keeps the HTTPS service available.",
+        );
+        ui.add_space(6.0);
+        egui::Frame::group(ui.style())
+            .inner_margin(14)
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.strong("HTTPS listener");
+                let changed = ui
+                    .add_enabled(
+                        !self.listener_pending,
+                        egui::Checkbox::new(&mut self.listener_enabled, "Accept HTTPS commands"),
+                    )
+                    .changed();
+                if changed {
+                    self.request_listener(self.listener_enabled);
+                }
+                let config = self.service.config();
+                ui.monospace(format!("https://{}:{}", config.bind_address, config.port));
+                ui.weak("Paused means the port is closed. Enable it before testing in RESTerm.");
+            });
+        ui.add_space(6.0);
+        egui::Frame::group(ui.style())
+            .inner_margin(14)
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.strong("Windows startup");
+                if ui
+                    .add_enabled(
+                        !self.startup_pending,
+                        egui::Checkbox::new(&mut self.start_after_login, "Start after login"),
+                    )
+                    .changed()
+                {
+                    self.set_startup(self.start_after_login);
+                }
+                ui.weak("Runs as your Windows user, without administrator privileges.");
+            });
+        ui.add_space(6.0);
+        egui::CollapsingHeader::new("Recent activity")
+            .default_open(true)
+            .show(ui, |ui| {
+                let events = self.service.diagnostics();
+                if events.is_empty() {
+                    ui.weak("No commands received yet.");
+                }
+                for event in events.iter().rev().take(10) {
+                    ui.group(|ui| {
+                        ui.strong(event.category);
+                        if let Some(id) = &event.request_id {
+                            ui.small(format!("Request: {id}"));
+                        }
+                        if let Some(id) = &event.action_id {
+                            ui.small(format!("Action: {id}"));
+                        }
+                    });
+                }
+            });
+    }
+
+    fn actions(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Configured actions");
+        ui.label("Choose a file locally, then trigger it remotely using only its action ID.");
+        let actions = self.service.config().actions;
+        if actions.is_empty() {
+            ui.weak("No custom actions yet. Add an application or script below.");
+        }
+        for action in actions {
+            ui.push_id(action.id.as_str(), |ui| {
+                egui::Frame::group(ui.style())
+                    .inner_margin(12)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.strong(&action.name);
+                        ui.monospace(action.id.as_str());
+                        let description = match &action.action {
+                            ConfiguredAction::Media { command } => {
+                                format!("Media: {}", command.as_str())
+                            }
+                            ConfiguredAction::Launch { program, .. } => {
+                                format!("Application: {}", program.display())
+                            }
+                            ConfiguredAction::Batch { script, .. } => {
+                                format!("Batch: {}", script.display())
+                            }
+                            ConfiguredAction::PowerShell { script, .. } => {
+                                format!("PowerShell: {}", script.display())
+                            }
+                        };
+                        ui.add(egui::Label::new(description).wrap());
+                        ui.horizontal(|ui| {
+                            let mut enabled = action.enabled;
+                            if ui
+                                .add_enabled(
+                                    !self.actions_pending,
+                                    egui::Checkbox::new(&mut enabled, "Enabled"),
+                                )
+                                .changed()
+                            {
+                                let mut updated = self.service.config().actions;
+                                if let Some(item) =
+                                    updated.iter_mut().find(|item| item.id == action.id)
+                                {
+                                    item.enabled = enabled;
+                                }
+                                self.save_actions(updated);
+                            }
+                            if ui
+                                .add_enabled(
+                                    action.enabled && !self.actions_pending,
+                                    egui::Button::new("Test…"),
+                                )
+                                .clicked()
+                            {
+                                self.confirm_action = Some(action.id.as_str().to_string());
+                            }
+                            if ui
+                                .add_enabled(!self.actions_pending, egui::Button::new("Remove"))
+                                .clicked()
+                            {
+                                let mut remaining = self.service.config().actions;
+                                remaining.retain(|existing| existing.id != action.id);
+                                self.save_actions(remaining);
+                            }
+                        });
+                    });
+            });
+        }
+        ui.add_space(8.0);
+        egui::CollapsingHeader::new("Add an action")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.add_enabled_ui(!self.actions_pending, |ui| {
+                    egui::Grid::new("action_identity")
+                        .num_columns(2)
+                        .spacing([12.0, 10.0])
+                        .show(ui, |ui| {
+                            ui.label("Action ID").on_hover_text(
+                                "1–64 characters: lowercase letter first, then lowercase letters, digits, or underscores.",
+                            );
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.action_id)
+                                    .hint_text("open_spotify")
+                                    .desired_width(360.0),
+                            );
+                            ui.end_row();
+                            ui.label("Display name");
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.action_name)
+                                    .hint_text("Open Spotify")
+                                    .desired_width(360.0),
+                            );
+                            ui.end_row();
+                        });
+                    ui.horizontal(|ui| {
+                        ui.label("Run type");
+                        ui.selectable_value(&mut self.action_kind, 0, "Application");
+                        ui.selectable_value(&mut self.action_kind, 1, "Batch");
+                        ui.selectable_value(&mut self.action_kind, 2, "PowerShell");
+                    });
+                    let (label, kind) = match self.action_kind {
+                        0 => ("Application (.exe)", FileKind::Executable),
+                        1 => ("Batch script (.bat / .cmd)", FileKind::Batch),
+                        _ => ("PowerShell script (.ps1)", FileKind::PowerShell),
+                    };
+                    ui.label(label);
+                    if let Some(error) = file_path_field(ui, &mut self.action_path, kind) {
+                        self.status = Some(error);
+                    }
+                    if self.action_kind == 2 {
+                        ui.label("PowerShell interpreter (.exe)");
+                        if let Some(error) =
+                            file_path_field(ui, &mut self.interpreter_path, FileKind::Executable)
+                        {
+                            self.status = Some(error);
+                        }
+                        ui.weak("Choose Windows PowerShell (powershell.exe) or PowerShell 7 (pwsh.exe).");
+                    }
+                    ui.label("Arguments (optional JSON array)");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.action_args_json)
+                            .desired_width(f32::INFINITY),
+                    );
+                    ui.weak("Leave [] for no arguments. Example: [\"--profile\", \"work\"]");
+                    if ui.button("Add action").clicked() {
+                        self.add_action();
+                    }
+                    ui.weak("Selecting or adding a file does not run it. Test requires confirmation.");
+                });
+            });
+    }
+
+    fn connection(&mut self, ui: &mut egui::Ui, context: &egui::Context) {
+        ui.heading("Connection & security");
+        egui::Frame::group(ui.style())
+            .inner_margin(14)
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.strong("Listener address");
+                ui.weak("Pause the listener in Overview before changing its address.");
+                ui.add_enabled_ui(!self.listener_enabled && !self.listener_pending, |ui| {
+                    egui::Grid::new("listener_address")
+                        .num_columns(2)
+                        .spacing([12.0, 10.0])
+                        .show(ui, |ui| {
+                            ui.label("Bind IP");
+                            ui.text_edit_singleline(&mut self.bind_address);
+                            ui.end_row();
+                            ui.label("Port");
+                            ui.add(egui::TextEdit::singleline(&mut self.port).desired_width(90.0));
+                            ui.end_row();
+                        });
+                    if ui.button("Apply address").clicked() {
+                        match (
+                            self.bind_address.parse::<IpAddr>(),
+                            self.port.parse::<u16>(),
+                        ) {
+                            (Ok(address), Ok(port)) => {
+                                let service = Arc::clone(&self.service);
+                                let signals = Arc::clone(&self.signals);
+                                self.handle.spawn(async move {
+                                    let success = service.reconfigure(address, port).await.is_ok();
+                                    signals.wake(UiEvent::ConfigState(success));
+                                });
+                            }
+                            _ => self.status = Some("Enter a valid IP address and port".into()),
+                        }
+                    }
+                });
+                ui.weak("Changing the bind IP regenerates the CA. Pair clients again afterwards.");
+            });
+        ui.add_space(6.0);
+        egui::Frame::group(ui.style()).inner_margin(14).show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.strong("Client pairing");
+            ui.label("The pairing token authorizes every enabled action. Keep it private.");
+            ui.horizontal(|ui| {
+                if ui.button("Show pairing token").clicked() {
+                    self.pairing_token = self.service.token_for_pairing().ok();
+                }
+                if ui.button("Export trusted CA PEM").clicked() {
+                    self.status = Some(match self.service.export_ca() {
+                        Ok(path) => format!("CA exported to {}", path.display()),
+                        Err(_) => "Could not export the trusted CA".into(),
+                    });
+                }
+            });
+            if let Some(token) = &self.pairing_token {
+                ui.add(egui::Label::new(egui::RichText::new(token).monospace()).wrap());
+                if ui.button("Copy token").clicked() {
+                    context.copy_text(token.clone());
+                }
+            }
+            ui.separator();
+            ui.weak("Only rotate credentials to revoke paired clients. Existing clients will stop working.");
+            if ui.button("Rotate token and TLS trust…").clicked() {
+                self.confirm_rotation = true;
+            }
+        });
+    }
+}
+
+fn file_path_field(ui: &mut egui::Ui, path: &mut String, kind: FileKind) -> Option<String> {
+    let mut error = None;
+    ui.horizontal(|ui| {
+        let width = (ui.available_width() - 105.0).max(120.0);
+        ui.add(
+            egui::TextEdit::singleline(path)
+                .desired_width(width)
+                .hint_text("Browse or enter an absolute path"),
+        );
+        if ui.button("Browse…").clicked() {
+            match windows_file_picker::pick_file(kind) {
+                Ok(Some(selected)) => *path = selected,
+                Ok(None) => {}
+                Err(reason) => error = Some(format!("Could not select a file: {reason}")),
+            }
+        }
+    });
+    error
 }
 
 impl Drop for SettingsApp {
@@ -493,160 +804,89 @@ impl eframe::App for SettingsApp {
                 UiEvent::OpenSettings | UiEvent::ToggleListener | UiEvent::Quit => {}
             }
         }
+        egui::TopBottomPanel::top("settings_header").show(context, |ui| {
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                ui.image((self.logo.id(), egui::vec2(46.0, 46.0)));
+                ui.vertical(|ui| {
+                    ui.heading("ESP32 Media Daemon");
+                    ui.weak("Local actions. Secure voice control.");
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let (label, color) = if self.listener_pending {
+                        ("Updating…", ui.visuals().weak_text_color())
+                    } else if self.listener_enabled {
+                        ("Listener enabled", ui.visuals().text_color())
+                    } else {
+                        ("Listener paused", ui.visuals().weak_text_color())
+                    };
+                    ui.colored_label(color, label);
+                });
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.tab, SettingsTab::Overview, "Overview");
+                ui.selectable_value(&mut self.tab, SettingsTab::Actions, "Actions");
+                ui.selectable_value(
+                    &mut self.tab,
+                    SettingsTab::Connection,
+                    "Connection & security",
+                );
+            });
+        });
+        egui::TopBottomPanel::bottom("settings_footer").show(context, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("Close to tray").clicked() {
+                    context.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                ui.add(
+                    egui::Label::new(
+                        self.status
+                            .as_deref()
+                            .unwrap_or("Settings closes; your tray agent keeps running."),
+                    )
+                    .wrap(),
+                );
+            });
+        });
         egui::CentralPanel::default().show(context, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("ESP32 Media Daemon");
-            let listener_changed = ui
-                .add_enabled(
-                    !self.listener_pending,
-                    egui::Checkbox::new(&mut self.listener_enabled, "HTTPS listener enabled"),
-                )
-                .changed();
-            if listener_changed {
-                self.request_listener(self.listener_enabled);
-            }
-            ui.horizontal(|ui| {
-                ui.label("Bind IP");
-                ui.add_enabled(
-                    !self.listener_enabled,
-                    egui::TextEdit::singleline(&mut self.bind_address),
-                );
-                ui.label("Port");
-                ui.add_enabled(
-                    !self.listener_enabled,
-                    egui::TextEdit::singleline(&mut self.port).desired_width(70.0),
-                );
-                if ui
-                    .add_enabled(!self.listener_enabled, egui::Button::new("Apply"))
-                    .clicked()
-                {
-                    let parsed = self.bind_address.parse::<IpAddr>();
-                    let port = self.port.parse::<u16>();
-                    match (parsed, port) {
-                        (Ok(address), Ok(port)) => {
-                            let service = Arc::clone(&self.service);
-                            let signals = Arc::clone(&self.signals);
-                            self.handle.spawn(async move {
-                                let success = service.reconfigure(address, port).await.is_ok();
-                                signals.wake(UiEvent::ConfigState(success));
-                            });
-                        }
-                        _ => self.status = Some("Enter a valid IP address and port".into()),
-                    }
-                }
-            });
-            ui.separator();
-            ui.label("Pairing credentials authorize configured actions.");
-            if ui.button("Show pairing token").clicked() {
-                self.pairing_token = self.service.token_for_pairing().ok();
-            }
-            if let Some(token) = &self.pairing_token {
-                ui.monospace(token);
-                if ui.button("Copy token").clicked() {
-                    context.copy_text(token.clone());
-                }
-            }
-            if ui.button("Rotate token and TLS trust…").clicked() {
-                self.confirm_rotation = true;
-            }
-            if ui.button("Export trusted CA PEM").clicked() {
-                self.status = Some(match self.service.export_ca() {
-                    Ok(path) => format!("CA exported to {}", path.display()),
-                    Err(_) => "Could not export the trusted CA".into(),
-                });
-            }
-            if ui
-                .add_enabled(
-                    !self.startup_pending,
-                    egui::Checkbox::new(&mut self.start_after_login, "Start after login"),
-                )
-                .changed()
-            {
-                self.set_startup(self.start_after_login);
-            }
-            ui.label("Changing the bind IP regenerates the CA; pair clients again.");
-            ui.separator();
-            ui.heading("Configured actions");
-            ui.horizontal(|ui| {
-                ui.label("ID");
-                ui.text_edit_singleline(&mut self.action_id);
-                ui.label("Name");
-                ui.text_edit_singleline(&mut self.action_name);
-            });
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.action_kind, 0, "Application");
-                ui.selectable_value(&mut self.action_kind, 1, "Batch");
-                ui.selectable_value(&mut self.action_kind, 2, "PowerShell");
-            });
-            ui.text_edit_singleline(&mut self.action_path);
-            if self.action_kind == 2 {
-                ui.text_edit_singleline(&mut self.interpreter_path);
-                ui.label("PowerShell 5.1 powershell.exe or installed PowerShell 7 pwsh.exe");
-            }
-            ui.label("Arguments as a JSON string array, e.g. [\"--play\"]");
-            ui.text_edit_singleline(&mut self.action_args_json);
-            if ui
-                .add_enabled(!self.actions_pending, egui::Button::new("Add action"))
-                .clicked()
-            {
-                self.add_action();
-            }
-            let actions = self.service.config().actions;
-            for action in actions {
-                ui.horizontal(|ui| {
-                    let mut enabled = action.enabled;
-                    if ui
-                        .add_enabled(!self.actions_pending, egui::Checkbox::new(&mut enabled, ""))
-                        .changed()
-                    {
-                        let mut updated = self.service.config().actions;
-                        if let Some(item) = updated.iter_mut().find(|item| item.id == action.id) {
-                            item.enabled = enabled;
-                        }
-                        self.save_actions(updated);
-                    }
-                    ui.label(format!("{} ({})", action.name, action.id.as_str()));
-                    if ui.button("Test…").clicked() {
-                        self.confirm_action = Some(action.id.as_str().to_string());
-                    }
-                    if ui
-                        .add_enabled(!self.actions_pending, egui::Button::new("Remove"))
-                        .clicked()
-                    {
-                        let mut remaining = self.service.config().actions;
-                        remaining.retain(|existing| existing.id != action.id);
-                        self.save_actions(remaining);
+            egui::ScrollArea::vertical()
+                .id_salt(self.tab as u8)
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    match self.tab {
+                        SettingsTab::Overview => self.overview(ui),
+                        SettingsTab::Actions => self.actions(ui),
+                        SettingsTab::Connection => self.connection(ui, context),
                     }
                 });
-            }
-            if let Some(action_id) = self.confirm_action.clone() {
-                egui::Window::new("Confirm action test")
-                    .collapsible(false)
-                    .show(context, |ui| {
-                        ui.label(
-                            "This runs the configured action with your Windows user permissions.",
-                        );
-                        ui.horizontal(|ui| {
-                            if ui.button("Run test").clicked() {
-                                self.confirm_action = None;
-                                if let Ok(id) = ActionId::parse(action_id) {
-                                    let service = Arc::clone(&self.service);
-                                    let signals = Arc::clone(&self.signals);
-                                    self.handle.spawn(async move {
-                                        signals.wake(UiEvent::ActionTestResult(
-                                            service.test_action(&id).await.is_ok(),
-                                        ));
-                                    });
-                                }
+        });
+        if let Some(action_id) = self.confirm_action.clone() {
+            egui::Window::new("Confirm action test")
+                .collapsible(false)
+                .show(context, |ui| {
+                    ui.label("This runs the configured action with your Windows user permissions.");
+                    ui.horizontal(|ui| {
+                        if ui.button("Run test").clicked() {
+                            self.confirm_action = None;
+                            if let Ok(id) = ActionId::parse(action_id) {
+                                let service = Arc::clone(&self.service);
+                                let signals = Arc::clone(&self.signals);
+                                self.handle.spawn(async move {
+                                    signals.wake(UiEvent::ActionTestResult(
+                                        service.test_action(&id).await.is_ok(),
+                                    ));
+                                });
                             }
-                            if ui.button("Cancel").clicked() {
-                                self.confirm_action = None;
-                            }
-                        });
+                        }
+                        if ui.button("Cancel").clicked() {
+                            self.confirm_action = None;
+                        }
                     });
-            }
-            if self.confirm_rotation {
-                egui::Window::new("Confirm credential rotation")
+                });
+        }
+        if self.confirm_rotation {
+            egui::Window::new("Confirm credential rotation")
                     .collapsible(false)
                     .show(context, |ui| {
                         ui.label("This pauses the listener and invalidates the current token and trusted CA. Existing clients must be paired again.");
@@ -664,31 +904,26 @@ impl eframe::App for SettingsApp {
                             }
                         });
                     });
-            }
-            egui::CollapsingHeader::new("Recent diagnostics")
-                .default_open(false)
-                .show(ui, |ui| {
-                    for event in self.service.diagnostics().iter().rev().take(10) {
-                        ui.small(format!(
-                            "{} | request {:?} | action {:?}",
-                            event.category, event.request_id, event.action_id
-                        ));
-                    }
-                });
-            if let Some(status) = &self.status {
-                ui.label(status);
-            }
-            if ui.button("Close to tray").clicked() {
-                context.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-            });
-        });
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rendering_a_file_field_does_not_change_or_run_its_path() {
+        let context = egui::Context::default();
+        let mut path = String::from(r"C:\Apps\Music Player\player.exe");
+        let original = path.clone();
+        let _ = context.run(egui::RawInput::default(), |context| {
+            egui::CentralPanel::default().show(context, |ui| {
+                assert!(file_path_field(ui, &mut path, FileKind::Executable).is_none());
+            });
+        });
+        assert_eq!(path, original);
+    }
 
     #[test]
     fn menu_commands_are_delivered_without_a_settings_context() {
