@@ -49,7 +49,10 @@ jobs:
       - name: Package per-user installer
         run: |
           New-Item -ItemType Directory -Force target/release | Out-Null
-          makensis /DAPP_VERSION=0.1.0 installer.nsi
+          $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+          $makensis = Join-Path $programFilesX86 'NSIS\makensis.exe'
+          if (-not (Test-Path $makensis)) { throw "NSIS compiler not found: $makensis" }
+          & $makensis /DAPP_VERSION=0.1.0 installer.nsi
       - uses: actions/upload-artifact@v4
         with:
           name: esp32-media-daemon-windows-x64
