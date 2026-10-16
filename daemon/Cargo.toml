@@ -1,0 +1,67 @@
+[package]
+name = "esp32-media-daemon"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+description = "Windows tray agent for authenticated ESP32 media control"
+
+[lib]
+name = "media_daemon"
+path = "src/lib.rs"
+
+[[bin]]
+name = "esp32-media-daemon"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["http1", "json", "tokio"] }
+axum-server = { version = "0.7", default-features = false, features = ["tls-rustls-no-provider"] }
+rand = "0.9"
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
+thiserror = "2"
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "process", "signal", "sync", "time"] }
+tower-http = { version = "0.6", features = ["limit", "timeout"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+zeroize = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow"] }
+tray-icon = "0.21"
+process-wrap = { version = "10", default-features = false, features = ["job-object", "kill-on-drop", "tokio1"] }
+windows-future = "0.2"
+windows = { version = "0.61", features = [
+  "Foundation",
+  "Foundation_Collections",
+  "Media_Control",
+  "Security_Cryptography",
+  "Storage_Streams",
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_Media_Audio_Endpoints",
+  "Win32_Security_Cryptography",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Memory",
+  "Win32_System_Registry",
+  "Win32_System_Threading",
+  "Win32_System_Variant",
+  "Win32_System_WinRT",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

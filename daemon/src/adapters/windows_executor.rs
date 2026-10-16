@@ -1,0 +1,342 @@
+use crate::{
+    application::{ActionExecutor, ExecutorError},
+    domain::{self, ConfiguredAction, MediaCommand},
+};
+use process_wrap::tokio::{ChildWrapper, CommandWrap, CommandWrapper, JobObject, KillOnDrop};
+use std::{future::Future, path::Path, pin::Pin, process::Stdio, sync::Arc, time::Duration};
+use tokio::sync::Semaphore;
+use windows::{
+    Media::Control::GlobalSystemMediaTransportControlsSessionManager,
+    Win32::{
+        Media::Audio::{EDataFlow, ERole, Endpoints::IAudioEndpointVolume, MMDeviceEnumerator},
+        System::Com::{CLSCTX_ALL, CoCreateInstance},
+        System::{
+            Threading::CREATE_NO_WINDOW,
+            WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
+        },
+    },
+};
+use windows_future::{AsyncStatus, IAsyncOperation};
+
+const SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
+const MEDIA_OPERATION_TIMEOUT: Duration = Duration::from_secs(1);
+
+pub struct WindowsExecutor {
+    running_scripts: Arc<Semaphore>,
+    native_action: Arc<Semaphore>,
+}
+
+impl Default for WindowsExecutor {
+    fn default() -> Self {
+        Self {
+            running_scripts: Arc::new(Semaphore::new(1)),
+            native_action: Arc::new(Semaphore::new(1)),
+        }
+    }
+}
+
+impl ActionExecutor for WindowsExecutor {
+    fn execute<'a>(
+        &'a self,
+        action: &'a ConfiguredAction,
+    ) -> Pin<Box<dyn Future<Output = Result<(), ExecutorError>> + Send + 'a>> {
+        let action = action.clone();
+        let scripts = Arc::clone(&self.running_scripts);
+        let native_action = Arc::clone(&self.native_action);
+        Box::pin(async move {
+            match action {
+                ConfiguredAction::Media { command } => {
+                    let permit = native_action
+                        .try_acquire_owned()
+                        .map_err(|_| ExecutorError::Busy)?;
+                    tokio::task::spawn_blocking(move || {
+                        let _permit = permit;
+                        execute_media(command)
+                    })
+                    .await
+                    .map_err(|_| ExecutorError::Failed)?
+                }
+                ConfiguredAction::Launch {
+                    program,
+                    args,
+                    working_dir,
+                } => {
+                    let mut process = base_command(&program, &args, working_dir.as_deref());
+                    process.spawn().map_err(|_| ExecutorError::Failed)?;
+                    Ok(())
+                }
+                action @ (ConfiguredAction::Batch { .. } | ConfiguredAction::PowerShell { .. }) => {
+                    let permit = scripts
+                        .try_acquire_owned()
+                        .map_err(|_| ExecutorError::Busy)?;
+                    let command = script_command(&action)?;
+                    let mut wrapped = CommandWrap::from(command);
+                    wrapped.wrap(JobObject).wrap(KillOnDrop);
+                    let mut child = wrapped.spawn().map_err(|_| ExecutorError::Failed)?;
+                    tokio::spawn(async move {
+                        match tokio::time::timeout(SCRIPT_TIMEOUT, child.wait()).await {
+                            Ok(Ok(status)) if status.success() => {
+                                tracing::debug!("configured script completed");
+                            }
+                            Ok(Ok(_)) => {
+                                tracing::warn!("configured script returned a failure status")
+                            }
+                            Ok(Err(_)) => {
+                                tracing::warn!("configured script could not be monitored")
+                            }
+                            Err(_) => {
+                                tracing::warn!(
+                                    "configured script exceeded its time limit; terminating process tree"
+                                );
+                                if child.kill().await.is_err() {
+                                    tracing::error!(
+                                        "configured script process-tree cleanup failed"
+                                    );
+                                }
+                            }
+                        }
+                        drop(permit);
+                    });
+                    Ok(())
+                }
+            }
+        })
+    }
+}
+
+fn base_command(
+    program: &Path,
+    args: &[String],
+    working_dir: Option<&Path>,
+) -> tokio::process::Command {
+    let mut command = tokio::process::Command::new(program);
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    if let Some(working_dir) = working_dir {
+        command.current_dir(working_dir);
+    }
+    use std::os::windows::process::CommandExt;
+    command.as_std_mut().creation_flags(CREATE_NO_WINDOW.0);
+    command
+}
+
+fn script_command(action: &ConfiguredAction) -> Result<tokio::process::Command, ExecutorError> {
+    match action {
+        ConfiguredAction::Batch {
+            script,
+            args,
+            working_dir,
+        } => {
+            let script = cmd_literal(script)?;
+            let arguments = args
+                .iter()
+                .map(|argument| cmd_literal(argument))
+                .collect::<Result<Vec<_>, _>>()?
+                .into_iter()
+                .map(|argument| format!(" \"{argument}\""))
+                .collect::<String>();
+            let command_line = format!("call \"{script}\"{arguments}");
+            let mut command = tokio::process::Command::new("cmd.exe");
+            command
+                .args(["/D", "/V:OFF", "/S", "/C"])
+                .arg(format!("\"{command_line}\""))
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            if let Some(working_dir) = working_dir {
+                command.current_dir(working_dir);
+            }
+            use std::os::windows::process::CommandExt;
+            command.as_std_mut().creation_flags(CREATE_NO_WINDOW.0);
+            Ok(command)
+        }
+        ConfiguredAction::PowerShell {
+            interpreter,
+            script,
+            args,
+            working_dir,
+        } => {
+            if !script.is_absolute()
+                || !interpreter.is_absolute()
+                || !script
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("ps1"))
+            {
+                return Err(ExecutorError::Failed);
+            }
+            let mut command = base_command(interpreter, &[], working_dir.as_deref());
+            command
+                .args(["-NoProfile", "-NonInteractive", "-File"])
+                .arg(script)
+                .args(args);
+            Ok(command)
+        }
+        _ => Err(ExecutorError::Failed),
+    }
+}
+
+/// cmd.exe expands `%` and treats quotes as syntax; reject both instead of interpreting user data.
+fn cmd_literal(value: &str) -> Result<&str, ExecutorError> {
+    if domain::is_safe_batch_literal(value) {
+        Ok(value)
+    } else {
+        Err(ExecutorError::Failed)
+    }
+}
+
+fn execute_media(command: MediaCommand) -> Result<(), ExecutorError> {
+    unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.map_err(|_| ExecutorError::Failed)?;
+    let _apartment = ComApartment;
+    match command {
+        MediaCommand::Mute | MediaCommand::Unmute => {
+            set_default_output_mute(command == MediaCommand::Mute)
+        }
+        MediaCommand::Play | MediaCommand::Pause | MediaCommand::Next | MediaCommand::Previous => {
+            let manager = wait_media_operation(
+                GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+                    .map_err(|_| ExecutorError::Failed)?,
+            )?;
+            let session = manager
+                .GetCurrentSession()
+                .map_err(|_| ExecutorError::Failed)?;
+            let operation = match command {
+                MediaCommand::Play => session.TryPlayAsync(),
+                MediaCommand::Pause => session.TryPauseAsync(),
+                MediaCommand::Next => session.TrySkipNextAsync(),
+                MediaCommand::Previous => session.TrySkipPreviousAsync(),
+                MediaCommand::Mute | MediaCommand::Unmute => return Err(ExecutorError::Failed),
+            }
+            .map_err(|_| ExecutorError::Failed)?;
+            let issued = wait_media_operation(operation)?;
+            if issued {
+                Ok(())
+            } else {
+                Err(ExecutorError::Failed)
+            }
+        }
+    }
+}
+
+fn wait_media_operation<T: windows::core::RuntimeType + 'static>(
+    operation: IAsyncOperation<T>,
+) -> Result<T, ExecutorError> {
+    let deadline = std::time::Instant::now() + MEDIA_OPERATION_TIMEOUT;
+    loop {
+        match operation.Status().map_err(|_| ExecutorError::Failed)? {
+            AsyncStatus::Completed => {
+                return operation.GetResults().map_err(|_| ExecutorError::Failed);
+            }
+            AsyncStatus::Canceled | AsyncStatus::Error => return Err(ExecutorError::Failed),
+            AsyncStatus::Started if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            AsyncStatus::Started => {
+                let _ = operation.Cancel();
+                return Err(ExecutorError::Failed);
+            }
+            _ => return Err(ExecutorError::Failed),
+        }
+    }
+}
+
+struct ComApartment;
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        unsafe { RoUninitialize() };
+    }
+}
+
+fn set_default_output_mute(muted: bool) -> Result<(), ExecutorError> {
+    let enumerator: windows::Win32::Media::Audio::IMMDeviceEnumerator =
+        unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
+            .map_err(|_| ExecutorError::Failed)?;
+    let device =
+        unsafe { enumerator.GetDefaultAudioEndpoint(EDataFlow::eRender, ERole::eMultimedia) }
+            .map_err(|_| ExecutorError::Failed)?;
+    let endpoint: IAudioEndpointVolume =
+        unsafe { device.Activate(CLSCTX_ALL, None) }.map_err(|_| ExecutorError::Failed)?;
+    let event_context = windows::core::GUID::zeroed();
+    unsafe { endpoint.SetMute(muted, &event_context) }.map_err(|_| ExecutorError::Failed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{fs, path::PathBuf};
+
+    async fn finish(command: tokio::process::Command) {
+        let mut wrapped = CommandWrap::from(command);
+        wrapped.wrap(JobObject).wrap(KillOnDrop);
+        let mut child = wrapped.spawn().unwrap();
+        let status = tokio::time::timeout(Duration::from_secs(10), child.wait())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    #[test]
+    fn batch_rejects_shell_syntax_before_spawning() {
+        let action = ConfiguredAction::Batch {
+            script: Path::new(r"C:\Actions\safe.cmd").to_path_buf(),
+            args: vec!["x&echo injected".into()],
+            working_dir: None,
+        };
+        assert!(script_command(&action).is_err());
+    }
+
+    #[tokio::test]
+    async fn batch_preserves_quoted_arguments_in_a_path_with_spaces() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("with spaces");
+        fs::create_dir(&directory).unwrap();
+        let script = directory.join("fixture.cmd");
+        let output = directory.join("args.txt");
+        let script_text = format!(
+            "@echo off\r\n> \"{}\" echo %~1\r\n>> \"{}\" echo %~2\r\n",
+            output.display(),
+            output.display()
+        );
+        fs::write(&script, script_text).unwrap();
+        let action = ConfiguredAction::Batch {
+            script,
+            args: vec!["first arg".into(), "(second)".into()],
+            working_dir: Some(directory.clone()),
+        };
+        finish(script_command(&action).unwrap()).await;
+        assert_eq!(
+            fs::read_to_string(output).unwrap(),
+            "first arg\r\n(second)\r\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn powershell_passes_arguments_without_shell_interpretation() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().join("with spaces");
+        fs::create_dir(&directory).unwrap();
+        let script = directory.join("fixture.ps1");
+        let output = directory.join("args.txt");
+        fs::write(
+            &script,
+            "[IO.File]::WriteAllText((Join-Path $PSScriptRoot 'args.txt'), $args[0] + '|' + $args[1], [Text.UTF8Encoding]::new($false))",
+        )
+        .unwrap();
+        let interpreter = std::env::var_os("SystemRoot")
+            .map(PathBuf::from)
+            .unwrap()
+            .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let action = ConfiguredAction::PowerShell {
+            interpreter,
+            script,
+            args: vec!["left & right".into(), "%PATH%".into()],
+            working_dir: Some(directory),
+        };
+        finish(script_command(&action).unwrap()).await;
+        assert_eq!(fs::read_to_string(output).unwrap(), "left & right|%PATH%");
+    }
+}
