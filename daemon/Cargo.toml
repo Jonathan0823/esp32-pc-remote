@@ -34,6 +34,7 @@ zeroize = { version = "1", features = ["derive"] }
 [target.'cfg(windows)'.dependencies]
 eframe = { version = "0.33", default-features = false, features = ["default_fonts", "glow"] }
 tray-icon = "0.21"
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 process-wrap = { version = "10", default-features = false, features = ["job-object", "kill-on-drop", "tokio1"] }
 windows-future = "0.2"
 windows = { version = "0.61", features = [
@@ -43,11 +44,13 @@ windows = { version = "0.61", features = [
   "Security_Cryptography",
   "Storage_Streams",
   "Win32_Foundation",
+  "Win32_Graphics_Gdi",
   "Win32_Media_Audio",
   "Win32_Media_Audio_Endpoints",
   "Win32_Security_Cryptography",
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
+  "Win32_System_LibraryLoader",
   "Win32_System_Memory",
   "Win32_System_Registry",
   "Win32_System_Threading",

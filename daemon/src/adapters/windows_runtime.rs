@@ -17,7 +17,6 @@ use std::{
 use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
 use windows::{
-    Win32::UI::WindowsAndMessaging::{FindWindowW, SW_SHOW, SetForegroundWindow, ShowWindow},
     Win32::{
         Foundation::{
             CloseHandle, ERROR_ALREADY_EXISTS, ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, GetLastError,
@@ -70,14 +69,7 @@ pub fn acquire_single_instance() -> Result<Option<SingleInstance>, RuntimeError>
         .map_err(|_| RuntimeError)?;
     if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
         unsafe { CloseHandle(handle) }.ok();
-        let title: Vec<u16> = "ESP32 Media Daemon\0".encode_utf16().collect();
-        if let Ok(window) = unsafe { FindWindowW(PCWSTR::null(), PCWSTR::from_raw(title.as_ptr())) }
-        {
-            unsafe {
-                let _ = ShowWindow(window, SW_SHOW);
-                let _ = SetForegroundWindow(window);
-            }
-        }
+        super::windows_host::activate_existing_instance();
         return Ok(None);
     }
     Ok(Some(SingleInstance(handle)))

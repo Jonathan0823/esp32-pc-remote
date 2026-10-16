@@ -36,6 +36,12 @@ The installer appears at `daemon/target/release/esp32-media-daemon-setup.exe`. U
 
 Do not disable TLS verification. The server certificate includes `localhost`, `127.0.0.1`, and the selected bind IP. A localhost request validates the daemon/API on that machine only; it does **not** prove ESP32 TLS compatibility, LAN reachability, firewall behavior, or hardware media behavior.
 
+## Tray and Settings lifecycle
+
+The tray and HTTPS runtime stay alive independently of Settings. Startup creates no settings window or OpenGL renderer. Left-click opens Settings; right-click retains the Settings, pause/resume, and Quit menu. Closing Settings (including its X button) destroys the settings window and renderer; opening it again creates a fresh UI from the current configuration. Launching the executable again activates the existing agent's Settings instead of creating another listener.
+
+For Windows acceptance, verify Quit and pause/resume before ever opening Settings, then open/close Settings repeatedly, restore it from minimized through the tray, and relaunch the executable both with Settings open and closed. Check HTTPS still works after closing Settings. Compare Task Manager private working set and GPU memory before opening, while open, and after closing; repeat to check for growth. Graphics drivers, the reusable event loop, and allocator caches may retain some memory; resource savings are not claimed until measured on Windows.
+
 ## Configuration and execution safety
 
 - The token and TLS private keys are DPAPI-protected for the current Windows user. The trusted CA is public and is exported only through Settings. Changing the bind IP creates new TLS trust material; explicitly re-pair clients.

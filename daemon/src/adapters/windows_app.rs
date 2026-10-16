@@ -1,18 +1,25 @@
 use std::{
     net::IpAddr,
     path::PathBuf,
-    sync::{Arc, Mutex, mpsc},
-    time::Duration,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc,
+    },
 };
 
 use eframe::egui;
 use tokio::runtime::Handle;
 use tray_icon::{
-    Icon, TrayIconBuilder,
+    Icon, MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuItem},
 };
+use winit::event_loop::EventLoop;
 
-use super::windows_runtime::{WindowsRuntime, acquire_single_instance};
+use super::{
+    windows_host,
+    windows_runtime::{WindowsRuntime, acquire_single_instance},
+};
 use crate::domain::{ActionId, ConfiguredAction, CustomAction};
 
 #[derive(Clone, Copy)]
@@ -26,27 +33,74 @@ enum UiEvent {
     StartupState(bool),
     CredentialsRotated(bool),
     Quit,
-    QuitComplete(bool),
 }
 
-#[derive(Default)]
 struct UiSignals {
     context: Mutex<Option<egui::Context>>,
-    sender: Mutex<Option<mpsc::Sender<UiEvent>>>,
+    sender: mpsc::Sender<UiEvent>,
+    receiver: Mutex<mpsc::Receiver<UiEvent>>,
+    updates_sender: mpsc::Sender<UiEvent>,
+    updates_receiver: Mutex<mpsc::Receiver<UiEvent>>,
+    thread_id: u32,
+    settings_initialized: AtomicBool,
 }
 
 impl UiSignals {
-    fn wake(&self, event: UiEvent) {
-        if let Ok(sender) = self.sender.lock()
-            && let Some(sender) = sender.as_ref()
-        {
-            let _ = sender.send(event);
+    fn new() -> Self {
+        let (sender, receiver) = mpsc::channel();
+        let (updates_sender, updates_receiver) = mpsc::channel();
+        Self {
+            context: Mutex::new(None),
+            sender,
+            receiver: Mutex::new(receiver),
+            updates_sender,
+            updates_receiver: Mutex::new(updates_receiver),
+            thread_id: windows_host::current_thread_id(),
+            settings_initialized: AtomicBool::new(false),
         }
-        if let Ok(context) = self.context.lock()
-            && let Some(context) = context.as_ref()
-        {
+    }
+
+    fn next_event(&self) -> Option<UiEvent> {
+        self.receiver.lock().ok()?.try_recv().ok()
+    }
+
+    fn next_update(&self) -> Option<UiEvent> {
+        self.updates_receiver.lock().ok()?.try_recv().ok()
+    }
+
+    fn publish_update(&self, event: UiEvent) {
+        let context = self.context.lock().ok().and_then(|context| context.clone());
+        if let Some(context) = context {
+            let _ = self.updates_sender.send(event);
             context.request_repaint();
         }
+    }
+
+    fn menu_event(&self, id: &str) {
+        self.wake(match id {
+            "settings" => UiEvent::OpenSettings,
+            "listener" => UiEvent::ToggleListener,
+            "quit" => UiEvent::Quit,
+            _ => return,
+        });
+    }
+
+    fn tray_event(&self, event: TrayIconEvent) {
+        if matches!(
+            event,
+            TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            }
+        ) {
+            self.wake(UiEvent::OpenSettings);
+        }
+    }
+
+    fn wake(&self, event: UiEvent) {
+        let _ = self.sender.send(event);
+        windows_host::wake_thread(self.thread_id);
     }
 }
 
@@ -54,6 +108,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let Some(_instance) = acquire_single_instance()? else {
         return Ok(());
     };
+    // Establish DPI awareness before creating tray/host HWNDs; this creates no renderer.
+    let mut event_loop = EventLoop::with_user_event().build()?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -64,35 +120,111 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("saved listener could not be started; it remains paused");
     }
     let _entered = runtime.enter();
-    let handle = runtime.handle().clone();
-    let (sender, receiver) = mpsc::channel();
-    let signals = Arc::new(UiSignals::default());
-    if let Ok(mut sender_slot) = signals.sender.lock() {
-        *sender_slot = Some(sender);
-    }
+    let signals = Arc::new(UiSignals::new());
+    let _host = windows_host::MessageHost::new()?;
+    let _tray = create_tray(Arc::clone(&signals)).map_err(|error| {
+        windows_host::show_error(&format!("Could not create the system tray: {error}"));
+        std::io::Error::other(error)
+    })?;
 
+    let mut settings: Option<eframe::EframeWinitApplication<'static>> = None;
+    let mut quitting = false;
+    loop {
+        if windows_host::take_open_request() {
+            signals.wake(UiEvent::OpenSettings);
+        }
+        while let Some(event) = signals.next_event() {
+            match event {
+                UiEvent::OpenSettings if !quitting => {
+                    if settings.is_some() {
+                        windows_host::reveal_settings();
+                    } else {
+                        settings = Some(open_settings(
+                            Arc::clone(&signals),
+                            Arc::clone(&service),
+                            runtime.handle().clone(),
+                            startup_error,
+                            &event_loop,
+                        ));
+                    }
+                }
+                UiEvent::ToggleListener if !quitting => {
+                    let service = Arc::clone(&service);
+                    let signals = Arc::clone(&signals);
+                    runtime.spawn(async move {
+                        let enabled = !service.config().listener_enabled;
+                        let _ = service.set_listener(enabled).await;
+                        signals.wake(UiEvent::ListenerState(service.config().listener_enabled));
+                    });
+                }
+                UiEvent::Quit => quitting = true,
+                UiEvent::OpenSettings | UiEvent::ToggleListener => {}
+                update => signals.publish_update(update),
+            }
+        }
+        if quitting {
+            if settings.is_none() {
+                break;
+            }
+            let context = signals
+                .context
+                .lock()
+                .ok()
+                .and_then(|context| context.clone());
+            if let Some(context) = context {
+                windows_host::reveal_settings();
+                context.send_viewport_cmd(egui::ViewportCommand::Close);
+                context.request_repaint();
+            }
+        }
+        if let Some(settings_app) = &mut settings {
+            // Block on OS/repaint events, then dispatch tray commands even if Settings is minimized.
+            if let eframe::EframePumpStatus::Exit(code) =
+                settings_app.pump_eframe_app(&mut event_loop, None)
+            {
+                settings = None;
+                if !signals.settings_initialized.swap(false, Ordering::AcqRel) || code != 0 {
+                    windows_host::show_error(&format!(
+                        "Settings could not run (exit code {code}); check graphics initialization."
+                    ));
+                }
+            }
+        } else if !windows_host::dispatch_message()? {
+            break;
+        }
+    }
+    runtime.block_on(service.shutdown())?;
+    Ok(())
+}
+
+fn open_settings(
+    signals: Arc<UiSignals>,
+    service: Arc<WindowsRuntime>,
+    handle: Handle,
+    startup_error: bool,
+    event_loop: &EventLoop<eframe::UserEvent>,
+) -> eframe::EframeWinitApplication<'static> {
     let options = eframe::NativeOptions {
+        run_and_return: true,
         viewport: egui::ViewportBuilder::default()
             .with_title("ESP32 Media Daemon")
-            .with_visible(false)
             .with_inner_size([560.0, 520.0]),
         ..Default::default()
     };
-    eframe::run_native(
+    eframe::create_native(
         "ESP32 Media Daemon",
         options,
         Box::new(move |creation| {
             Ok(Box::new(SettingsApp::new(
                 creation,
                 signals,
-                receiver,
                 service,
                 handle,
                 startup_error,
             )))
         }),
-    )?;
-    Ok(())
+        event_loop,
+    )
 }
 
 fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
@@ -103,11 +235,12 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
     menu.append(&open).map_err(|error| error.to_string())?;
     menu.append(&toggle).map_err(|error| error.to_string())?;
     menu.append(&quit).map_err(|error| error.to_string())?;
-    MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
-        "settings" => signals.wake(UiEvent::OpenSettings),
-        "listener" => signals.wake(UiEvent::ToggleListener),
-        "quit" => signals.wake(UiEvent::Quit),
-        _ => {}
+    let menu_signals = Arc::clone(&signals);
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        menu_signals.menu_event(event.id.0.as_str());
+    }));
+    TrayIconEvent::set_event_handler(Some(move |event: TrayIconEvent| {
+        signals.tray_event(event);
     }));
 
     let icon = Icon::from_rgba([0x35, 0x9f, 0xe8, 0xff].repeat(16 * 16), 16, 16)
@@ -116,23 +249,19 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
         .with_tooltip("ESP32 Media Daemon")
         .with_icon(icon)
         .with_menu(Box::new(menu))
+        .with_menu_on_left_click(false)
         .build()
         .map_err(|error| error.to_string())
 }
 
 struct SettingsApp {
     signals: Arc<UiSignals>,
-    receiver: mpsc::Receiver<UiEvent>,
     service: Arc<WindowsRuntime>,
     handle: Handle,
-    show_settings: bool,
     listener_enabled: bool,
     listener_pending: bool,
     actions_pending: bool,
     startup_pending: bool,
-    quit_requested: bool,
-    shutdown_pending: bool,
-    tray_error: Option<String>,
     status: Option<String>,
     bind_address: String,
     port: String,
@@ -146,14 +275,12 @@ struct SettingsApp {
     action_kind: usize,
     confirm_action: Option<String>,
     confirm_rotation: bool,
-    _tray: Option<tray_icon::TrayIcon>,
 }
 
 impl SettingsApp {
     fn new(
         creation: &eframe::CreationContext<'_>,
         signals: Arc<UiSignals>,
-        receiver: mpsc::Receiver<UiEvent>,
         service: Arc<WindowsRuntime>,
         handle: Handle,
         startup_error: bool,
@@ -161,28 +288,16 @@ impl SettingsApp {
         if let Ok(mut context_slot) = signals.context.lock() {
             *context_slot = Some(creation.egui_ctx.clone());
         }
+        signals.settings_initialized.store(true, Ordering::Release);
         let config = service.config();
-        let tray_result = create_tray(Arc::clone(&signals));
-        let tray_error = tray_result.as_ref().err().cloned();
-        let show_settings = tray_error.is_some();
-        if show_settings {
-            creation
-                .egui_ctx
-                .send_viewport_cmd(egui::ViewportCommand::Visible(true));
-        }
         Self {
             signals,
-            receiver,
             service,
             handle,
-            show_settings,
             listener_enabled: config.listener_enabled,
             listener_pending: false,
             actions_pending: false,
             startup_pending: false,
-            quit_requested: false,
-            shutdown_pending: false,
-            tray_error,
             status: startup_error
                 .then(|| "Saved listener could not start; check its address and port".into()),
             bind_address: config.bind_address.to_string(),
@@ -197,7 +312,6 @@ impl SettingsApp {
             action_kind: 0,
             confirm_action: None,
             confirm_rotation: false,
-            _tray: tray_result.ok(),
         }
     }
 
@@ -296,15 +410,19 @@ impl SettingsApp {
     }
 }
 
+impl Drop for SettingsApp {
+    fn drop(&mut self) {
+        if let Ok(mut context) = self.signals.context.lock() {
+            *context = None;
+        }
+        while self.signals.next_update().is_some() {}
+    }
+}
+
 impl eframe::App for SettingsApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
-        while let Ok(event) = self.receiver.try_recv() {
+        while let Some(event) = self.signals.next_update() {
             match event {
-                UiEvent::OpenSettings => {
-                    self.show_settings = true;
-                    context.send_viewport_cmd(egui::ViewportCommand::Visible(true));
-                }
-                UiEvent::ToggleListener => self.request_listener(!self.listener_enabled),
                 UiEvent::ListenerState(enabled) => {
                     self.listener_pending = false;
                     self.listener_enabled = enabled;
@@ -372,35 +490,9 @@ impl eframe::App for SettingsApp {
                         .into(),
                     );
                 }
-                UiEvent::Quit => {
-                    if !self.shutdown_pending {
-                        self.shutdown_pending = true;
-                        let service = Arc::clone(&self.service);
-                        let signals = Arc::clone(&self.signals);
-                        self.handle.spawn(async move {
-                            signals.wake(UiEvent::QuitComplete(service.shutdown().await.is_ok()));
-                        });
-                    }
-                }
-                UiEvent::QuitComplete(success) => {
-                    self.quit_requested = true;
-                    if !success {
-                        self.status = Some("Shutdown reported a listener error".into());
-                    }
-                    context.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                UiEvent::OpenSettings | UiEvent::ToggleListener | UiEvent::Quit => {}
             }
         }
-        if context.input(|input| input.viewport().close_requested()) && !self.quit_requested {
-            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            context.send_viewport_cmd(egui::ViewportCommand::Visible(false));
-            self.show_settings = false;
-        }
-        if !self.show_settings {
-            context.request_repaint_after(Duration::from_secs(3600));
-            return;
-        }
-
         egui::CentralPanel::default().show(context, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.heading("ESP32 Media Daemon");
@@ -583,17 +675,79 @@ impl eframe::App for SettingsApp {
                         ));
                     }
                 });
-            if let Some(error) = &self.tray_error {
-                ui.colored_label(egui::Color32::RED, format!("Tray unavailable: {error}"));
-            }
             if let Some(status) = &self.status {
                 ui.label(status);
             }
             if ui.button("Close to tray").clicked() {
-                self.show_settings = false;
-                context.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+                context.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn menu_commands_are_delivered_without_a_settings_context() {
+        let signals = UiSignals::new();
+        signals.menu_event("settings");
+        signals.menu_event("listener");
+        signals.menu_event("quit");
+        signals.menu_event("unknown");
+        assert!(matches!(signals.next_event(), Some(UiEvent::OpenSettings)));
+        assert!(matches!(
+            signals.next_event(),
+            Some(UiEvent::ToggleListener)
+        ));
+        assert!(matches!(signals.next_event(), Some(UiEvent::Quit)));
+        assert!(signals.next_event().is_none());
+        assert!(signals.context.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn ui_updates_do_not_consume_tray_commands() {
+        let signals = UiSignals::new();
+        *signals.context.lock().unwrap() = Some(egui::Context::default());
+        signals.menu_event("quit");
+        signals.publish_update(UiEvent::ListenerState(true));
+        assert!(matches!(signals.next_event(), Some(UiEvent::Quit)));
+        assert!(matches!(
+            signals.next_update(),
+            Some(UiEvent::ListenerState(true))
+        ));
+        assert!(signals.next_update().is_none());
+        *signals.context.lock().unwrap() = None;
+        signals.publish_update(UiEvent::ListenerState(false));
+        assert!(signals.next_update().is_none());
+    }
+
+    #[test]
+    fn only_left_button_release_opens_settings() {
+        let signals = UiSignals::new();
+        for (button, button_state) in [
+            (MouseButton::Left, MouseButtonState::Down),
+            (MouseButton::Right, MouseButtonState::Up),
+        ] {
+            signals.tray_event(TrayIconEvent::Click {
+                id: "test".into(),
+                position: Default::default(),
+                rect: Default::default(),
+                button,
+                button_state,
+            });
+            assert!(signals.next_event().is_none());
+        }
+        signals.tray_event(TrayIconEvent::Click {
+            id: "test".into(),
+            position: Default::default(),
+            rect: Default::default(),
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+        });
+        assert!(matches!(signals.next_event(), Some(UiEvent::OpenSettings)));
+        assert!(signals.context.lock().unwrap().is_none());
     }
 }
