@@ -103,7 +103,7 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
     menu.append(&open).map_err(|error| error.to_string())?;
     menu.append(&toggle).map_err(|error| error.to_string())?;
     menu.append(&quit).map_err(|error| error.to_string())?;
-    MenuEvent::set_event_handler(Some(move |event| match event.id.0.as_str() {
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| match event.id.0.as_str() {
         "settings" => signals.wake(UiEvent::OpenSettings),
         "listener" => signals.wake(UiEvent::ToggleListener),
         "quit" => signals.wake(UiEvent::Quit),

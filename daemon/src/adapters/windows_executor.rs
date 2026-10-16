@@ -2,13 +2,16 @@ use crate::{
     application::{ActionExecutor, ExecutorError},
     domain::{self, ConfiguredAction, MediaCommand},
 };
-use process_wrap::tokio::{ChildWrapper, CommandWrap, CommandWrapper, JobObject, KillOnDrop};
+use process_wrap::tokio::{CommandWrap, JobObject, KillOnDrop};
 use std::{future::Future, path::Path, pin::Pin, process::Stdio, sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
 use windows::{
     Media::Control::GlobalSystemMediaTransportControlsSessionManager,
     Win32::{
-        Media::Audio::{EDataFlow, ERole, Endpoints::IAudioEndpointVolume, MMDeviceEnumerator},
+        Media::Audio::{
+            Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
+            eRender as E_RENDER,
+        },
         System::Com::{CLSCTX_ALL, CoCreateInstance},
         System::{
             Threading::CREATE_NO_WINDOW,
@@ -88,7 +91,7 @@ impl ActionExecutor for WindowsExecutor {
                                 tracing::warn!(
                                     "configured script exceeded its time limit; terminating process tree"
                                 );
-                                if child.kill().await.is_err() {
+                                if Pin::from(child.kill()).await.is_err() {
                                     tracing::error!(
                                         "configured script process-tree cleanup failed"
                                     );
@@ -130,6 +133,7 @@ fn script_command(action: &ConfiguredAction) -> Result<tokio::process::Command, 
             args,
             working_dir,
         } => {
+            let script = script.to_str().ok_or(ExecutorError::Failed)?;
             let script = cmd_literal(script)?;
             let arguments = args
                 .iter()
@@ -254,9 +258,8 @@ fn set_default_output_mute(muted: bool) -> Result<(), ExecutorError> {
     let enumerator: windows::Win32::Media::Audio::IMMDeviceEnumerator =
         unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
             .map_err(|_| ExecutorError::Failed)?;
-    let device =
-        unsafe { enumerator.GetDefaultAudioEndpoint(EDataFlow::eRender, ERole::eMultimedia) }
-            .map_err(|_| ExecutorError::Failed)?;
+    let device = unsafe { enumerator.GetDefaultAudioEndpoint(E_RENDER, E_MULTIMEDIA) }
+        .map_err(|_| ExecutorError::Failed)?;
     let endpoint: IAudioEndpointVolume =
         unsafe { device.Activate(CLSCTX_ALL, None) }.map_err(|_| ExecutorError::Failed)?;
     let event_context = windows::core::GUID::zeroed();
