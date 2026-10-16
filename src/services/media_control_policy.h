@@ -28,8 +28,8 @@ inline const char* media_command_name(MediaCommand command) {
 
 inline const char* media_command_phrase(MediaCommand command) {
   static const char* const phrases[] = {
-      "play music", "pause music", "next track",
-      "previous track", "mute computer", "unmute computer"};
+      "play", "pause", "next",
+      "back", "mute", "unmute"};
   const unsigned index = static_cast<unsigned>(command);
   return index < sizeof(phrases) / sizeof(phrases[0]) ? phrases[index] : "";
 }
