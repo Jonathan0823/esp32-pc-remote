@@ -5,26 +5,30 @@ use crate::{
 use process_wrap::tokio::{CommandWrap, JobObject, KillOnDrop};
 use std::{future::Future, path::Path, pin::Pin, process::Stdio, sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
-use windows::{
-    Media::Control::GlobalSystemMediaTransportControlsSessionManager,
-    Win32::{
-        Media::Audio::{
-            Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
-            eRender as E_RENDER,
-        },
-        System::Com::{
-            CLSCTX_ALL, CO_MTA_USAGE_COOKIE, CoCreateInstance, CoDecrementMTAUsage,
-            CoIncrementMTAUsage,
-        },
-        System::{
-            Threading::CREATE_NO_WINDOW,
-            WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
-        },
+#[cfg(test)]
+use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
+use windows::Win32::{
+    Media::Audio::{
+        Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
+        eRender as E_RENDER,
+    },
+    System::Com::{
+        CLSCTX_ALL, CO_MTA_USAGE_COOKIE, CoCreateInstance, CoDecrementMTAUsage, CoIncrementMTAUsage,
+    },
+    System::{
+        Threading::CREATE_NO_WINDOW,
+        WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
+    },
+    UI::Input::KeyboardAndMouse::{
+        INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
+        VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
     },
 };
+#[cfg(test)]
 use windows_future::{AsyncStatus, IAsyncOperation};
 
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
+#[cfg(test)]
 const MEDIA_OPERATION_TIMEOUT: Duration = Duration::from_secs(1);
 
 pub(super) struct MtaLifetime(CO_MTA_USAGE_COOKIE);
@@ -217,32 +221,43 @@ fn execute_media(command: MediaCommand) -> Result<(), ExecutorError> {
         MediaCommand::Mute | MediaCommand::Unmute => {
             set_default_output_mute(command == MediaCommand::Mute)
         }
-        MediaCommand::Play | MediaCommand::Pause | MediaCommand::Next | MediaCommand::Previous => {
-            let manager = wait_media_operation(
-                GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-                    .map_err(|_| ExecutorError::Failed)?,
-            )?;
-            let session = manager
-                .GetCurrentSession()
-                .map_err(|_| ExecutorError::Failed)?;
-            let operation = match command {
-                MediaCommand::Play => session.TryPlayAsync(),
-                MediaCommand::Pause => session.TryPauseAsync(),
-                MediaCommand::Next => session.TrySkipNextAsync(),
-                MediaCommand::Previous => session.TrySkipPreviousAsync(),
-                MediaCommand::Mute | MediaCommand::Unmute => return Err(ExecutorError::Failed),
-            }
-            .map_err(|_| ExecutorError::Failed)?;
-            let issued = wait_media_operation(operation)?;
-            if issued {
-                Ok(())
-            } else {
-                Err(ExecutorError::Failed)
-            }
-        }
+        _ => send_media_key(media_key_for_command(command).ok_or(ExecutorError::Failed)?),
     }
 }
 
+fn media_key_for_command(
+    command: MediaCommand,
+) -> Option<windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY> {
+    match command {
+        MediaCommand::Play | MediaCommand::Pause => Some(VK_MEDIA_PLAY_PAUSE),
+        MediaCommand::Next => Some(VK_MEDIA_NEXT_TRACK),
+        MediaCommand::Previous => Some(VK_MEDIA_PREV_TRACK),
+        MediaCommand::Mute | MediaCommand::Unmute => None,
+    }
+}
+
+fn send_media_key(
+    key: windows::Win32::UI::Input::KeyboardAndMouse::VIRTUAL_KEY,
+) -> Result<(), ExecutorError> {
+    let input = |flags| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: key,
+                dwFlags: flags,
+                ..Default::default()
+            },
+        },
+    };
+    let inputs = [input(KEYBD_EVENT_FLAGS(0)), input(KEYEVENTF_KEYUP)];
+    if unsafe { SendInput(&inputs, std::mem::size_of::<INPUT>() as i32) } == inputs.len() as u32 {
+        Ok(())
+    } else {
+        Err(ExecutorError::Failed)
+    }
+}
+
+#[cfg(test)]
 fn wait_media_operation<T: windows::core::RuntimeType + 'static>(
     operation: IAsyncOperation<T>,
 ) -> Result<T, ExecutorError> {
@@ -315,6 +330,23 @@ mod tests {
             .join()
             .unwrap();
         }
+    }
+
+    #[test]
+    fn playback_commands_use_global_media_keys() {
+        assert_eq!(
+            media_key_for_command(MediaCommand::Play),
+            media_key_for_command(MediaCommand::Pause)
+        );
+        assert_eq!(
+            media_key_for_command(MediaCommand::Next),
+            Some(VK_MEDIA_NEXT_TRACK)
+        );
+        assert_eq!(
+            media_key_for_command(MediaCommand::Previous),
+            Some(VK_MEDIA_PREV_TRACK)
+        );
+        assert_eq!(media_key_for_command(MediaCommand::Mute), None);
     }
 
     #[test]

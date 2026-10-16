@@ -106,6 +106,10 @@ For Windows acceptance, verify Quit and pause/resume before ever opening Setting
 
 The background daemon retains the COM multithreaded apartment (MTA) until after its Tokio runtime and media workers stop. Each worker still balances its own WinRT initialization. This prevents last-worker teardown from invalidating the Windows bindings' cached media-session activation factory between commands. Windows CI exercises repeated factory access on short-lived threads without issuing playback commands; completion does not require a player. On the installed release, also repeat play/pause/next/previous and mute/unmute with Settings both closed and open, allowing idle gaps between commands. Confirm the tray, listener, and background PID remain alive; ordinary media errors must not terminate the daemon. The native crash fix requires that Windows verification before being considered confirmed.
 
+## Media playback key behavior
+
+Play, pause, next, and previous use synthesized Windows media keyboard keys via `SendInput` (`VK_MEDIA_PLAY_PAUSE`, `VK_MEDIA_NEXT_TRACK`, and `VK_MEDIA_PREV_TRACK`), not GSMTC playback commands or physical keyboard hardware. Play and pause both send the same `VK_MEDIA_PLAY_PAUSE` toggle; either phrase toggles playback, so saying “pause” while already paused starts it, and saying “play” while already playing pauses it. Windows routes these injected keys globally. A successful `SendInput` means Windows accepted the key events, not that playback audibly changed; Windows may block injection into a higher-integrity app. Mute/unmute still use the default audio endpoint.
+
 ## Configuration and execution safety
 
 - The token and TLS private keys are DPAPI-protected for the current Windows user. The trusted CA is public and is exported only through Settings. Changing the bind IP creates new TLS trust material; explicitly re-pair clients.
