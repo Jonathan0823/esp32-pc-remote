@@ -6,6 +6,7 @@ pub mod application;
 pub mod config;
 pub mod domain;
 pub mod http;
+pub mod management;
 pub mod security;
 
 #[cfg(windows)]

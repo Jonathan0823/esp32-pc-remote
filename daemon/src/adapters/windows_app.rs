@@ -1,11 +1,8 @@
 use std::{
     net::IpAddr,
     path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-        mpsc,
-    },
+    sync::{Arc, Mutex, mpsc},
+    time::{Duration, Instant},
 };
 
 use eframe::egui;
@@ -19,71 +16,79 @@ use winit::event_loop::EventLoop;
 use super::{
     windows_file_picker::{self, FileKind},
     windows_host, windows_icon,
+    windows_management::{SettingsClient, SettingsSupervisor},
     windows_runtime::{WindowsRuntime, acquire_single_instance},
 };
 use crate::domain::{ActionId, ConfiguredAction, CustomAction};
 
-#[derive(Clone, Copy)]
 enum UiEvent {
-    OpenSettings,
-    ToggleListener,
     ListenerState(bool),
     ConfigState(bool),
     ActionTestResult(bool),
     ActionsSaved(bool),
     StartupState(bool),
     CredentialsRotated(bool),
-    Quit,
+    PairingToken(Result<String, String>),
+    CaExported(Result<PathBuf, String>),
+    SnapshotUpdated,
+    Disconnected,
 }
 
 struct UiSignals {
     context: Mutex<Option<egui::Context>>,
     sender: mpsc::Sender<UiEvent>,
     receiver: Mutex<mpsc::Receiver<UiEvent>>,
-    updates_sender: mpsc::Sender<UiEvent>,
-    updates_receiver: Mutex<mpsc::Receiver<UiEvent>>,
-    thread_id: u32,
-    settings_initialized: AtomicBool,
 }
 
 impl UiSignals {
     fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
-        let (updates_sender, updates_receiver) = mpsc::channel();
         Self {
             context: Mutex::new(None),
             sender,
             receiver: Mutex::new(receiver),
-            updates_sender,
-            updates_receiver: Mutex::new(updates_receiver),
-            thread_id: windows_host::current_thread_id(),
-            settings_initialized: AtomicBool::new(false),
         }
-    }
-
-    fn next_event(&self) -> Option<UiEvent> {
-        self.receiver.lock().ok()?.try_recv().ok()
     }
 
     fn next_update(&self) -> Option<UiEvent> {
-        self.updates_receiver.lock().ok()?.try_recv().ok()
+        self.receiver.lock().ok()?.try_recv().ok()
     }
 
-    fn publish_update(&self, event: UiEvent) {
-        let context = self.context.lock().ok().and_then(|context| context.clone());
-        if let Some(context) = context {
-            let _ = self.updates_sender.send(event);
+    fn wake(&self, event: UiEvent) {
+        let _ = self.sender.send(event);
+        if let Ok(context) = self.context.lock()
+            && let Some(context) = context.as_ref()
+        {
             context.request_repaint();
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum DaemonEvent {
+    OpenSettings,
+    ToggleListener,
+    Quit,
+}
+
+struct DaemonSignals {
+    sender: mpsc::Sender<DaemonEvent>,
+    thread_id: u32,
+}
+
+impl DaemonSignals {
+    fn send(&self, event: DaemonEvent) {
+        let _ = self.sender.send(event);
+        windows_host::wake_thread(self.thread_id);
+    }
 
     fn menu_event(&self, id: &str) {
-        self.wake(match id {
-            "settings" => UiEvent::OpenSettings,
-            "listener" => UiEvent::ToggleListener,
-            "quit" => UiEvent::Quit,
-            _ => return,
-        });
+        match id {
+            "settings" => self.send(DaemonEvent::OpenSettings),
+            "listener" => self.send(DaemonEvent::ToggleListener),
+            "quit" => self.send(DaemonEvent::Quit),
+            _ => {}
+        }
     }
 
     fn tray_event(&self, event: TrayIconEvent) {
@@ -95,13 +100,8 @@ impl UiSignals {
                 ..
             }
         ) {
-            self.wake(UiEvent::OpenSettings);
+            self.send(DaemonEvent::OpenSettings);
         }
-    }
-
-    fn wake(&self, event: UiEvent) {
-        let _ = self.sender.send(event);
-        windows_host::wake_thread(self.thread_id);
     }
 }
 
@@ -109,8 +109,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let Some(_instance) = acquire_single_instance()? else {
         return Ok(());
     };
-    // Establish DPI awareness before creating tray/host HWNDs; this creates no renderer.
-    let mut event_loop = EventLoop::with_user_event().build()?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -121,86 +119,83 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("saved listener could not be started; it remains paused");
     }
     let _entered = runtime.enter();
-    let signals = Arc::new(UiSignals::new());
     let _host = windows_host::MessageHost::new()?;
+    let (sender, receiver) = mpsc::channel();
+    let signals = Arc::new(DaemonSignals {
+        sender,
+        thread_id: windows_host::current_thread_id(),
+    });
     let _tray = create_tray(Arc::clone(&signals)).map_err(|error| {
         windows_host::show_error(&format!("Could not create the system tray: {error}"));
         std::io::Error::other(error)
     })?;
-
-    let mut settings: Option<eframe::EframeWinitApplication<'static>> = None;
+    let supervisor = SettingsSupervisor::start(
+        Arc::clone(&service),
+        runtime.handle().clone(),
+        startup_error,
+    )?;
     let mut quitting = false;
     loop {
         if windows_host::take_open_request() {
-            signals.wake(UiEvent::OpenSettings);
+            supervisor.open();
         }
-        while let Some(event) = signals.next_event() {
+        while let Ok(event) = receiver.try_recv() {
             match event {
-                UiEvent::OpenSettings if !quitting => {
-                    if settings.is_some() {
-                        windows_host::reveal_settings();
-                    } else {
-                        settings = Some(open_settings(
-                            Arc::clone(&signals),
-                            Arc::clone(&service),
-                            runtime.handle().clone(),
-                            startup_error,
-                            &event_loop,
-                        ));
-                    }
-                }
-                UiEvent::ToggleListener if !quitting => {
+                DaemonEvent::OpenSettings => supervisor.open(),
+                DaemonEvent::ToggleListener => {
                     let service = Arc::clone(&service);
-                    let signals = Arc::clone(&signals);
                     runtime.spawn(async move {
                         let enabled = !service.config().listener_enabled;
                         let _ = service.set_listener(enabled).await;
-                        signals.wake(UiEvent::ListenerState(service.config().listener_enabled));
                     });
                 }
-                UiEvent::Quit => quitting = true,
-                UiEvent::OpenSettings | UiEvent::ToggleListener => {}
-                update => signals.publish_update(update),
+                DaemonEvent::Quit => quitting = true,
             }
         }
-        if quitting {
-            if settings.is_none() {
-                break;
-            }
-            let context = signals
-                .context
-                .lock()
-                .ok()
-                .and_then(|context| context.clone());
-            if let Some(context) = context {
-                windows_host::reveal_settings();
-                context.send_viewport_cmd(egui::ViewportCommand::Close);
-                context.request_repaint();
-            }
-        }
-        if let Some(settings_app) = &mut settings {
-            // Block on OS/repaint events, then dispatch tray commands even if Settings is minimized.
-            if let eframe::EframePumpStatus::Exit(code) =
-                settings_app.pump_eframe_app(&mut event_loop, None)
-            {
-                settings = None;
-                if !signals.settings_initialized.swap(false, Ordering::AcqRel) || code != 0 {
-                    windows_host::show_error(&format!(
-                        "Settings could not run (exit code {code}); check graphics initialization."
-                    ));
-                }
-            }
-        } else if !windows_host::dispatch_message()? {
+        if quitting || !windows_host::dispatch_message()? {
             break;
         }
     }
+    supervisor.quit();
     runtime.block_on(service.shutdown())?;
     Ok(())
 }
 
+pub fn run_settings_mode() -> Result<(), Box<dyn std::error::Error>> {
+    let service = SettingsClient::connect().map_err(std::io::Error::other)?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    let signals = Arc::new(UiSignals::new());
+    let mut event_loop = EventLoop::with_user_event().build()?;
+    let startup_error = service.startup_error();
+    let mut settings = open_settings(
+        signals,
+        service,
+        runtime.handle().clone(),
+        startup_error,
+        &event_loop,
+    );
+    let mut result = Ok(());
+    loop {
+        if let eframe::EframePumpStatus::Exit(code) =
+            settings.pump_eframe_app(&mut event_loop, None)
+        {
+            if code != 0 {
+                result =
+                    Err(std::io::Error::other(format!("Settings exited with code {code}")).into());
+            }
+            break;
+        }
+    }
+    drop(settings);
+    runtime.shutdown_timeout(Duration::from_millis(250));
+    result
+}
+
 fn open_settings(
     signals: Arc<UiSignals>,
-    service: Arc<WindowsRuntime>,
+    service: Arc<SettingsClient>,
     handle: Handle,
     startup_error: bool,
     event_loop: &EventLoop<eframe::UserEvent>,
@@ -230,7 +225,7 @@ fn open_settings(
     )
 }
 
-fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
+fn create_tray(signals: Arc<DaemonSignals>) -> Result<tray_icon::TrayIcon, String> {
     let menu = Menu::new();
     let open = MenuItem::with_id("settings", "Settings", true, None);
     let toggle = MenuItem::with_id("listener", "Pause / resume listener", true, None);
@@ -268,7 +263,7 @@ struct SettingsApp {
     tab: SettingsTab,
     logo: egui::TextureHandle,
     signals: Arc<UiSignals>,
-    service: Arc<WindowsRuntime>,
+    service: Arc<SettingsClient>,
     handle: Handle,
     listener_enabled: bool,
     listener_pending: bool,
@@ -287,20 +282,21 @@ struct SettingsApp {
     action_kind: usize,
     confirm_action: Option<String>,
     confirm_rotation: bool,
+    refresh_pending: bool,
+    last_refresh: Instant,
 }
 
 impl SettingsApp {
     fn new(
         creation: &eframe::CreationContext<'_>,
         signals: Arc<UiSignals>,
-        service: Arc<WindowsRuntime>,
+        service: Arc<SettingsClient>,
         handle: Handle,
         startup_error: bool,
     ) -> Self {
         if let Ok(mut context_slot) = signals.context.lock() {
             *context_slot = Some(creation.egui_ctx.clone());
         }
-        signals.settings_initialized.store(true, Ordering::Release);
         let config = service.config();
         let mut style = (*creation.egui_ctx.style()).clone();
         style.spacing.item_spacing = egui::vec2(10.0, 10.0);
@@ -339,6 +335,8 @@ impl SettingsApp {
             action_kind: 0,
             confirm_action: None,
             confirm_rotation: false,
+            refresh_pending: false,
+            last_refresh: Instant::now(),
         }
     }
 
@@ -487,7 +485,7 @@ impl SettingsApp {
                 }
                 for event in events.iter().rev().take(10) {
                     ui.group(|ui| {
-                        ui.strong(event.category);
+                        ui.strong(&event.category);
                         if let Some(id) = &event.request_id {
                             ui.small(format!("Request: {id}"));
                         }
@@ -677,12 +675,17 @@ impl SettingsApp {
             ui.label("The pairing token authorizes every enabled action. Keep it private.");
             ui.horizontal(|ui| {
                 if ui.button("Show pairing token").clicked() {
-                    self.pairing_token = self.service.token_for_pairing().ok();
+                    let service = Arc::clone(&self.service);
+                    let signals = Arc::clone(&self.signals);
+                    self.handle.spawn(async move {
+                        signals.wake(UiEvent::PairingToken(service.token_for_pairing().await));
+                    });
                 }
                 if ui.button("Export trusted CA PEM").clicked() {
-                    self.status = Some(match self.service.export_ca() {
-                        Ok(path) => format!("CA exported to {}", path.display()),
-                        Err(_) => "Could not export the trusted CA".into(),
+                    let service = Arc::clone(&self.service);
+                    let signals = Arc::clone(&self.signals);
+                    self.handle.spawn(async move {
+                        signals.wake(UiEvent::CaExported(service.export_ca().await));
                     });
                 }
             });
@@ -732,6 +735,20 @@ impl Drop for SettingsApp {
 
 impl eframe::App for SettingsApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        context.request_repaint_after(Duration::from_secs(2));
+        if !self.refresh_pending && self.last_refresh.elapsed() >= Duration::from_secs(2) {
+            self.refresh_pending = true;
+            self.last_refresh = Instant::now();
+            let service = Arc::clone(&self.service);
+            let signals = Arc::clone(&self.signals);
+            self.handle.spawn(async move {
+                signals.wake(if service.refresh().await.is_ok() {
+                    UiEvent::SnapshotUpdated
+                } else {
+                    UiEvent::Disconnected
+                });
+            });
+        }
         while let Some(event) = self.signals.next_update() {
             match event {
                 UiEvent::ListenerState(enabled) => {
@@ -801,7 +818,34 @@ impl eframe::App for SettingsApp {
                         .into(),
                     );
                 }
-                UiEvent::OpenSettings | UiEvent::ToggleListener | UiEvent::Quit => {}
+                UiEvent::PairingToken(result) => {
+                    self.pairing_token = result.as_ref().ok().cloned();
+                    self.status = Some(if result.is_ok() {
+                        "Pairing token revealed".into()
+                    } else {
+                        "Could not retrieve the pairing token".into()
+                    });
+                }
+                UiEvent::CaExported(result) => {
+                    self.status = Some(match result {
+                        Ok(path) => format!("CA exported to {}", path.display()),
+                        Err(_) => "Could not export the trusted CA".into(),
+                    });
+                }
+                UiEvent::SnapshotUpdated => {
+                    self.refresh_pending = false;
+                    let config = self.service.config();
+                    if !self.listener_pending {
+                        self.listener_enabled = config.listener_enabled;
+                    }
+                    if !self.startup_pending {
+                        self.start_after_login = config.start_after_login;
+                    }
+                }
+                UiEvent::Disconnected => {
+                    self.status = Some("Background process disconnected; closing Settings".into());
+                    context.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
             }
         }
         egui::TopBottomPanel::top("settings_header").show(context, |ui| {
@@ -836,7 +880,7 @@ impl eframe::App for SettingsApp {
         });
         egui::TopBottomPanel::bottom("settings_footer").show(context, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Close to tray").clicked() {
+                if ui.button("Close Settings").clicked() {
                     context.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 ui.add(
@@ -926,63 +970,14 @@ mod tests {
     }
 
     #[test]
-    fn menu_commands_are_delivered_without_a_settings_context() {
+    fn settings_updates_are_queued_without_a_background_ui_context() {
         let signals = UiSignals::new();
-        signals.menu_event("settings");
-        signals.menu_event("listener");
-        signals.menu_event("quit");
-        signals.menu_event("unknown");
-        assert!(matches!(signals.next_event(), Some(UiEvent::OpenSettings)));
-        assert!(matches!(
-            signals.next_event(),
-            Some(UiEvent::ToggleListener)
-        ));
-        assert!(matches!(signals.next_event(), Some(UiEvent::Quit)));
-        assert!(signals.next_event().is_none());
-        assert!(signals.context.lock().unwrap().is_none());
-    }
-
-    #[test]
-    fn ui_updates_do_not_consume_tray_commands() {
-        let signals = UiSignals::new();
-        *signals.context.lock().unwrap() = Some(egui::Context::default());
-        signals.menu_event("quit");
-        signals.publish_update(UiEvent::ListenerState(true));
-        assert!(matches!(signals.next_event(), Some(UiEvent::Quit)));
+        signals.wake(UiEvent::ListenerState(true));
         assert!(matches!(
             signals.next_update(),
             Some(UiEvent::ListenerState(true))
         ));
         assert!(signals.next_update().is_none());
-        *signals.context.lock().unwrap() = None;
-        signals.publish_update(UiEvent::ListenerState(false));
-        assert!(signals.next_update().is_none());
-    }
-
-    #[test]
-    fn only_left_button_release_opens_settings() {
-        let signals = UiSignals::new();
-        for (button, button_state) in [
-            (MouseButton::Left, MouseButtonState::Down),
-            (MouseButton::Right, MouseButtonState::Up),
-        ] {
-            signals.tray_event(TrayIconEvent::Click {
-                id: "test".into(),
-                position: Default::default(),
-                rect: Default::default(),
-                button,
-                button_state,
-            });
-            assert!(signals.next_event().is_none());
-        }
-        signals.tray_event(TrayIconEvent::Click {
-            id: "test".into(),
-            position: Default::default(),
-            rect: Default::default(),
-            button: MouseButton::Left,
-            button_state: MouseButtonState::Up,
-        });
-        assert!(matches!(signals.next_event(), Some(UiEvent::OpenSettings)));
         assert!(signals.context.lock().unwrap().is_none());
     }
 }
