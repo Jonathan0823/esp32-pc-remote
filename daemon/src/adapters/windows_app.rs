@@ -14,6 +14,7 @@ use tray_icon::{
 use winit::event_loop::EventLoop;
 
 use super::{
+    windows_executor::MtaLifetime,
     windows_file_picker::{self, FileKind},
     windows_host, windows_icon,
     windows_management::{SettingsClient, SettingsSupervisor},
@@ -109,6 +110,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let Some(_instance) = acquire_single_instance()? else {
         return Ok(());
     };
+    // Outlive the runtime so cached WinRT factories survive worker apartment teardown.
+    let _mta = MtaLifetime::new()?;
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;

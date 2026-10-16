@@ -12,7 +12,10 @@ use windows::{
             Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
             eRender as E_RENDER,
         },
-        System::Com::{CLSCTX_ALL, CoCreateInstance},
+        System::Com::{
+            CLSCTX_ALL, CO_MTA_USAGE_COOKIE, CoCreateInstance, CoDecrementMTAUsage,
+            CoIncrementMTAUsage,
+        },
         System::{
             Threading::CREATE_NO_WINDOW,
             WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
@@ -23,6 +26,20 @@ use windows_future::{AsyncStatus, IAsyncOperation};
 
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
 const MEDIA_OPERATION_TIMEOUT: Duration = Duration::from_secs(1);
+
+pub(super) struct MtaLifetime(CO_MTA_USAGE_COOKIE);
+
+impl MtaLifetime {
+    pub(super) fn new() -> windows::core::Result<Self> {
+        unsafe { CoIncrementMTAUsage() }.map(Self)
+    }
+}
+
+impl Drop for MtaLifetime {
+    fn drop(&mut self) {
+        let _ = unsafe { CoDecrementMTAUsage(self.0) };
+    }
+}
 
 pub struct WindowsExecutor {
     running_scripts: Arc<Semaphore>,
@@ -281,6 +298,23 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(status.success());
+    }
+
+    #[test]
+    fn cached_media_factory_survives_worker_apartment_teardown() {
+        let _mta = MtaLifetime::new().unwrap();
+        for _ in 0..8 {
+            std::thread::spawn(|| {
+                unsafe { RoInitialize(RO_INIT_MULTITHREADED) }.unwrap();
+                let _apartment = ComApartment;
+                let request = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+                    .expect("media-session factory activation must succeed");
+                // Completion may fail on a headless host; only cached factory reuse is under test.
+                let _ = wait_media_operation(request);
+            })
+            .join()
+            .unwrap();
+        }
     }
 
     #[test]
