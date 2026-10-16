@@ -11,6 +11,7 @@
 #include "src/services/log_service.h"
 #include "src/services/indicator_service.h"
 #include "src/services/voice_service.h"
+#include "src/services/media_control_service.h"
 
 const char* reset_reason_label(esp_reset_reason_t reason) {
   switch (reason) {
@@ -51,6 +52,8 @@ void setup() {
   indicator_service_start();
   voice_service_start();
   wifi_connect();
+  media_control_time_setup();
+  media_control_service_start();
   log_init();
   telegram_setup();
   mqtt_setup();

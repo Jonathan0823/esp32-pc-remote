@@ -6,6 +6,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <freertos/task.h>
+#include <sys/time.h>
 
 #include "config.h"
 #include "src/services/voice_policy.h"
@@ -13,6 +14,7 @@
 #include "src/services/voice_service.h"
 #include "src/services/wake_service.h"
 #include "src/services/log_service.h"
+#include "src/services/media_control_service.h"
 
 namespace {
 constexpr int MIC_BCLK_GPIO = 5;
@@ -20,17 +22,25 @@ constexpr int MIC_WS_GPIO = 6;
 constexpr int MIC_DATA_GPIO = 4;
 constexpr int VOICE_EVENT_QUEUE_LENGTH = 8;
 constexpr uint32_t VOICE_WORKER_STACK_BYTES = 4096;
-constexpr int WAKE_COMPUTER_COMMAND = 1;
-static_assert(WAKE_COMPUTER_COMMAND > 0, "MultiNet command IDs must start at 1");
+static_assert(VOICE_WAKE_COMMAND_ID > 0, "MultiNet command IDs must start at 1");
+static_assert(MEDIA_COMMAND_FIRST_ID > VOICE_WAKE_COMMAND_ID,
+              "Media command IDs must not collide with WoL");
 
 static const sr_cmd_t SPEECH_COMMANDS[] = {
-    {WAKE_COMPUTER_COMMAND, "wake computer"},
+    {VOICE_WAKE_COMMAND_ID, "wake computer"},
+    {MEDIA_COMMAND_FIRST_ID + 0, "play music"},
+    {MEDIA_COMMAND_FIRST_ID + 1, "pause music"},
+    {MEDIA_COMMAND_FIRST_ID + 2, "next track"},
+    {MEDIA_COMMAND_FIRST_ID + 3, "previous track"},
+    {MEDIA_COMMAND_FIRST_ID + 4, "mute computer"},
+    {MEDIA_COMMAND_FIRST_ID + 5, "unmute computer"},
 };
 
 struct SpeechEvent {
   sr_event_t event;
   int commandId;
   uint32_t detectedAt;
+  uint64_t detectedAtUnixMs;
   char wakeId[9];
 };
 
@@ -44,6 +54,13 @@ void on_speech_event(sr_event_t event, int commandId, int) {
   notification.event = event;
   notification.commandId = commandId;
   notification.detectedAt = millis();
+  if (event == SR_EVENT_COMMAND) {
+    timeval now = {};
+    if (gettimeofday(&now, nullptr) == 0 && now.tv_sec > 0) {
+      notification.detectedAtUnixMs = static_cast<uint64_t>(now.tv_sec) * 1000ULL +
+                                      now.tv_usec / 1000ULL;
+    }
+  }
   if (event == SR_EVENT_WAKEWORD) {
     const String wakeId = wake_new_id();
     snprintf(notification.wakeId, sizeof(notification.wakeId), "%s", wakeId.c_str());
@@ -113,12 +130,16 @@ void voice_worker(void*) {
       continue;
     }
 
-    const bool accepted = event.commandId == WAKE_COMPUTER_COMMAND &&
+    const VoiceCommand command = voice_command_from_id(event.commandId);
+    const bool isWakeCommand = command.kind == VoiceCommandKind::Wake;
+    const bool isMediaCommand = command.kind == VoiceCommandKind::Media;
+    const MediaCommand mediaCommand = command.media;
+    const bool accepted = (isWakeCommand || isMediaCommand) &&
                           voice_session_accept(session, event.detectedAt);
     if (!accepted) {
       session.listening = false;
       log_wake_event("voice", "request_rejected", sessionWakeId,
-                     event.commandId == WAKE_COMPUTER_COMMAND
+                     isWakeCommand || isMediaCommand
                          ? "command_after_timeout"
                          : "unrecognized_command");
       indicator_set_voice_listening(false);
@@ -135,6 +156,16 @@ void voice_worker(void*) {
                      "wakeword_mode_failed");
       sessionWakeId[0] = '\0';
       puts("[voice] failed to restore wake-word mode after command");
+      continue;
+    }
+
+    if (isMediaCommand) {
+      const MediaSubmitStatus status = media_control_submit(
+          mediaCommand, event.detectedAt, event.detectedAtUnixMs);
+      printf("[voice] id=%s media command %s %s; wake-word mode restored\n",
+             sessionWakeId, media_command_name(mediaCommand),
+             status == MediaSubmitStatus::Queued ? "queued" : "rejected");
+      sessionWakeId[0] = '\0';
       continue;
     }
 

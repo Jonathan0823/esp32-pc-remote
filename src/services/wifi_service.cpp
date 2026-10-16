@@ -22,7 +22,11 @@ static void wifi_force_ipv4_dns() {
 
 void wifi_connect() {
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
+  if (!WiFi.setSleep(true)) {
+    log_print("[wifi] failed to enable minimum modem power saving\n");
+  } else {
+    log_print("[wifi] minimum modem power saving enabled\n");
+  }
   log_print("[wifi] connect ssid=%s\n", WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   uint32_t start = millis();
