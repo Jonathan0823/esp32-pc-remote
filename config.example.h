@@ -22,11 +22,11 @@
 #define MQTT_PASS       ""                                     // MQTT password
 #define MQTT_BASE_TOPIC ""                                     // e.g. "ejo-pc-remote-8f3k29/desktop-01"
 
-// Optional LAN media control (ESP client; Windows HTTPS server is a future task)
-#define PC_MEDIA_HOST ""                                       // stable PC DNS name or IPv4; blank disables media control
+// Optional LAN media control; pair with the Windows daemon (docs/windows-media-daemon.md)
+#define PC_MEDIA_HOST ""                                       // daemon's reserved LAN IPv4 (not 127.0.0.1); blank disables media control
 #define PC_MEDIA_PORT 8443
-#define PC_MEDIA_CA_CERT ""                                    // trusted PEM CA certificate; match PC_MEDIA_HOST in server SAN
-#define PC_MEDIA_API_TOKEN ""                                  // 64 lowercase hex characters (32 random bytes)
+#define PC_MEDIA_CA_CERT ""                                    // daemon's exported trusted-ca.pem as a C string; never a private key
+#define PC_MEDIA_API_TOKEN ""                                  // same 64 lowercase hex pairing token shown by daemon Settings
 #define PC_OTA_PASSWORD ""                                    // optional; 64 lowercase hex characters; leave blank to disable OTA
 
 // Grafana Cloud Loki (optional — leave blank to skip cloud logging)

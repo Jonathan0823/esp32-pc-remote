@@ -45,6 +45,32 @@ The installer appears at `daemon/target/release/esp32-media-daemon-setup.exe`. U
 
 Do not disable TLS verification. The server certificate includes `localhost`, `127.0.0.1`, and the selected bind IP. A localhost request validates the daemon/API on that machine only; it does **not** prove ESP32 TLS compatibility, LAN reachability, firewall behavior, or hardware media behavior.
 
+## Pair an ESP32 over the LAN
+
+`127.0.0.1` is reachable only from the PC itself, not from the ESP32. You do not need `0.0.0.0`: the daemon deliberately rejects wildcard binds and supports a specific private LAN IPv4 instead. The ESP32 does not need its own client certificate; it needs the public CA that verifies the daemon, plus the shared pairing token that authorizes requests.
+
+1. Reserve the PC's LAN IPv4 in your router's DHCP settings (for example, `192.168.1.50`). Find the address on the adapter connected to the ESP32's LAN, not a loopback, VPN, or virtual-adapter address.
+2. In **Overview**, pause the listener. In **Connection & security**, set **Bind IP** to that LAN IPv4 and keep port `8443` (or choose another port), then **Apply address**. Changing the IP generates a new server certificate with that IP in its SAN and a new CA. Do this **before** exporting the CA; the token is unchanged by an address change.
+3. Use **Export trusted CA PEM**, then **Show pairing token**. The CA is written to `%LOCALAPPDATA%\Esp32MediaDaemon\trusted-ca.pem`; the token is the daemon's existing 64-character lowercase hexadecimal API key. Do not generate a different token for the ESP. Keep the server/CA private keys on the PC; never copy them to firmware.
+4. In the ESP project's ignored `config.h`, replace the placeholders below. Copy the **entire exported public PEM**, including its BEGIN/END lines, into the raw C++ string, and copy the pairing token exactly:
+
+   ```cpp
+   #define PC_MEDIA_HOST "192.168.1.50"
+   #define PC_MEDIA_PORT 8443
+   #define PC_MEDIA_CA_CERT R"PEM(-----BEGIN CERTIFICATE-----
+   <contents of the exported CA certificate>
+   -----END CERTIFICATE-----
+   )PEM"
+   #define PC_MEDIA_API_TOKEN "<daemon pairing token: 64 lowercase hex characters>"
+   ```
+
+   `PC_MEDIA_HOST` must match the selected LAN IP, not `localhost`, `127.0.0.1`, or `0.0.0.0`. Keep tokens out of Git, screenshots, logs, and shared build artifacts; the token is embedded in the firmware image. The firmware sends it as `Authorization: Bearer ...` over verified HTTPS. Do not use `setInsecure()` or disable hostname checking.
+5. Rebuild and flash the ESP firmware with those settings using the existing USB workflow, or the [OTA workflow](ota.md) if already provisioned. Editing `config.h` alone does not change an installed image. Keep Windows time correct and let the ESP synchronize time over Wi-Fi; it rejects HTTPS commands until time is ready for certificate/expiry validation.
+6. For a trusted home LAN, allow inbound TCP on the chosen daemon port through **Windows Defender Firewall**, scoped to the **Private** profile and preferably the reserved ESP32 IP. Resume the listener in **Overview**. Do not disable the firewall, enable a Public-profile rule, or forward this port from the Internet. Client/AP isolation on the router must not block PC-to-ESP traffic.
+7. Say “Hi ESP”, then a media phrase. A correlated `200 executed`/white pulse means Windows reported issuing the action, not necessarily audible playback. Check daemon activity and ESP serial categories without logging the token.
+
+If pairing fails: connection refused/timeout points to listener address, firewall, or LAN routing; TLS failures point to an outdated/wrong CA, IP SAN mismatch, or clock; `401` means the token does not match. Fix the corresponding layer rather than bypassing TLS. Changing the bind IP requires exporting the new CA and reflashing the ESP with the new host/CA. **Rotate token and TLS trust** invalidates both values; re-export the CA, copy the new token, and reflash every paired client. Until pairing is complete, leave `PC_MEDIA_HOST` blank to keep ESP media control disabled.
+
 ## Tray and Settings lifecycle
 
 The tray and HTTPS runtime run in the background process; Settings runs in a separate on-demand process using the same installed executable's internal `--settings` mode. The background process never creates the egui/winit event loop or graphics renderer. Left-click opens Settings; right-click retains the Settings, pause/resume, and Quit menu. Closing Settings exits its process; opening it again starts a fresh UI using current daemon state. Repeated tray clicks or launching the executable again activate the existing Settings process instead of creating another UI or listener. Quitting the daemon closes Settings too. The daemon requests a normal Settings close, then terminates only its owned Settings child after a short timeout (for example, if a native file picker is modal). A Windows job object also ends the Settings child if the daemon process exits unexpectedly.

@@ -637,6 +637,8 @@ impl SettingsApp {
                 ui.set_min_width(ui.available_width());
                 ui.strong("Listener address");
                 ui.weak("Pause the listener in Overview before changing its address.");
+                ui.label("For ESP32 access, enter this PC's private LAN IPv4 (for example, 192.168.1.50).");
+                ui.weak("127.0.0.1 is PC-only. Use a specific LAN IP, not 0.0.0.0; restrict the firewall to your ESP32 on the Private network profile.");
                 ui.add_enabled_ui(!self.listener_enabled && !self.listener_pending, |ui| {
                     egui::Grid::new("listener_address")
                         .num_columns(2)
@@ -673,6 +675,8 @@ impl SettingsApp {
             ui.set_min_width(ui.available_width());
             ui.strong("Client pairing");
             ui.label("The pairing token authorizes every enabled action. Keep it private.");
+            ui.weak("ESP32 config.h: use the LAN IP as PC_MEDIA_HOST, the exported CA PEM as PC_MEDIA_CA_CERT, and this token as PC_MEDIA_API_TOKEN. Rebuild and flash after provisioning.");
+            ui.weak("The ESP32 needs the public CA, not a client certificate or a TLS private key.");
             ui.horizontal(|ui| {
                 if ui.button("Show pairing token").clicked() {
                     let service = Arc::clone(&self.service);
