@@ -52,11 +52,11 @@ For a manual ESP-on-LAN test, use a disposable token and a certificate with a SA
 mkdir -p /tmp/media-test
 openssl rand -hex 32 > /tmp/media-test/token
 openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
-  -keyout /tmp/media-test/server-key.pem -out /tmp/media-test/ca.pem \\
-  -subj '/CN=ESP media test' \\
-  -addext 'subjectAltName=IP:192.168.1.50' \\
-  -addext 'basicConstraints=critical,CA:TRUE' \\
-  -addext 'keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign' \\
+  -keyout /tmp/media-test/server-key.pem -out /tmp/media-test/ca.pem \
+  -subj '/CN=ESP media test' \
+  -addext 'subjectAltName=IP:192.168.1.50' \
+  -addext 'basicConstraints=critical,CA:TRUE' \
+  -addext 'keyUsage=critical,digitalSignature,keyEncipherment,keyCertSign' \
   -addext 'extendedKeyUsage=serverAuth'
 ```
 

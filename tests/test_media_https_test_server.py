@@ -6,13 +6,16 @@ import ssl
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from scripts.media_https_test_server import validate_request
+from scripts.media_https_test_server import (
+    Handler, MediaHTTPServer, client_timeout_for_address, validate_request,
+)
 
 TOKEN = "a" * 64
 REQUEST_ID = "0123456789abcdef0123456789abcdef"
@@ -31,6 +34,12 @@ def body(**overrides):
 
 
 class MediaHttpsContractTest(unittest.TestCase):
+    def test_client_timeout_only_for_non_loopback_bind_addresses(self):
+        self.assertIsNone(client_timeout_for_address("127.0.0.1"))
+        self.assertIsNone(client_timeout_for_address("::1"))
+        self.assertEqual(client_timeout_for_address("192.0.2.10"), 5)
+        self.assertEqual(client_timeout_for_address("0.0.0.0"), 5)
+
     def validate(self, payload=None, headers=None, now=NOW, seen=None):
         return validate_request(
             "/v1/media",
@@ -191,6 +200,51 @@ class MediaHttpsServerIntegrationTest(unittest.TestCase):
         request = urllib.request.Request(f"https://localhost:{self.port}/v1/media")
         with self.assertRaises(urllib.error.HTTPError) as error:
             urllib.request.urlopen(request, context=self.context, timeout=3)
+        self.assertEqual(error.exception.code, 405)
+        error.exception.close()
+
+    def test_stalled_tls_handshake_and_request_reads_have_deadlines(self):
+        server = MediaHTTPServer(("127.0.0.1", 0), Handler)
+        server.expected_token = self.token
+        server.seen = {}
+        server.client_timeout = 0.3
+        tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        tls.minimum_version = ssl.TLSVersion.TLSv1_2
+        tls.load_cert_chain(self.cert, self.key)
+        server.socket = tls.wrap_socket(
+            server.socket, server_side=True, do_handshake_on_connect=False
+        )
+        thread = threading.Thread(
+            target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        )
+        thread.start()
+        base_url = f"https://localhost:{server.server_address[1]}"
+        try:
+            stalled_handshake = socket.create_connection(
+                ("127.0.0.1", server.server_address[1]), timeout=2
+            )
+            start = time.monotonic()
+            self.assert_method_not_allowed(base_url)
+            self.assertLess(time.monotonic() - start, 2)
+            stalled_handshake.close()
+
+            stalled_request = self.context.wrap_socket(
+                socket.create_connection(("127.0.0.1", server.server_address[1]), timeout=2),
+                server_hostname="localhost",
+            )
+            stalled_request.sendall(b"GET / HTTP/1.1\r\nHost:")
+            start = time.monotonic()
+            self.assert_method_not_allowed(base_url)
+            self.assertLess(time.monotonic() - start, 2)
+            stalled_request.close()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
+    def assert_method_not_allowed(self, base_url):
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(base_url + "/", context=self.context, timeout=3)
         self.assertEqual(error.exception.code, 405)
         error.exception.close()
 

@@ -3,6 +3,7 @@
 
 import argparse
 import hmac
+import ipaddress
 import json
 import os
 import re
@@ -18,6 +19,7 @@ MAX_FUTURE_SKEW_MS = 1000
 COMMANDS = {"play", "pause", "next", "previous", "mute", "unmute"}
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
 TOKEN_RE = re.compile(r"^[0-9a-f]{64}$")
+HTTP_CLIENT_TIMEOUT_SECONDS = 5
 FIELDS = {"id", "cmd", "issued_at_ms", "expires_at_ms"}
 MAX_TIMESTAMP = (1 << 63) - 1
 
@@ -98,6 +100,28 @@ def validate_request(path, headers, body, expected_token, now_ms, seen):
     return Result(202, {"id": request_id, "status": "accepted"}, command)
 
 
+def client_timeout_for_address(address):
+    return None if ipaddress.ip_address(address).is_loopback else HTTP_CLIENT_TIMEOUT_SECONDS
+
+
+class MediaHTTPServer(HTTPServer):
+    def __init__(self, server_address, handler_class):
+        super().__init__(server_address, handler_class)
+        self.client_timeout = client_timeout_for_address(self.server_address[0])
+
+    def get_request(self):
+        request, client_address = super().get_request()
+        if self.client_timeout is None:
+            return request, client_address
+        request.settimeout(self.client_timeout)
+        try:
+            request.do_handshake()
+        except OSError:
+            request.close()
+            raise
+        return request, client_address
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
     server_version = "MediaContractFixture/1"
@@ -158,13 +182,16 @@ def main():
     if not TOKEN_RE.fullmatch(token):
         parser.error(f"set {args.token_env} to a disposable 64-character lowercase hex token")
 
-    server = HTTPServer((args.host, args.port), Handler)
+    server = MediaHTTPServer((args.host, args.port), Handler)
     server.expected_token = token
     server.seen = {}
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(args.cert, args.key)
-    server.socket = context.wrap_socket(server.socket, server_side=True)
+    server.socket = context.wrap_socket(
+        server.socket, server_side=True,
+        do_handshake_on_connect=server.client_timeout is None,
+    )
     print(f"[fixture] non-actioning HTTPS server listening on {args.host}:{args.port}", flush=True)
     try:
         server.serve_forever()
