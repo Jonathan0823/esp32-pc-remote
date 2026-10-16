@@ -101,7 +101,7 @@ void voice_worker(void*) {
       }
       log_wake_event("voice", "listening_started", sessionWakeId);
       indicator_set_voice_listening(true);
-      printf("[voice] id=%s Hi ESP detected; listening for wake\n",
+      printf("[voice] id=%s Jarvis detected; listening for wake\n",
                     sessionWakeId);
       continue;
     }
@@ -233,6 +233,6 @@ bool voice_service_start() {
     return false;
   }
 
-  puts("[voice] listening for Hi ESP");
+  puts("[voice] listening for Jarvis");
   return true;
 }
