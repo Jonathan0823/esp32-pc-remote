@@ -144,16 +144,17 @@ fn script_command(action: &ConfiguredAction) -> Result<tokio::process::Command, 
                 .collect::<String>();
             let command_line = format!("call \"{script}\"{arguments}");
             let mut command = tokio::process::Command::new("cmd.exe");
+            command.args(["/D", "/V:OFF", "/S", "/C"]);
+            use std::os::windows::process::CommandExt;
+            // Preserve cmd.exe's /C quoting rules instead of applying CRT argument escaping.
+            command.as_std_mut().raw_arg(format!(" \"{command_line}\""));
             command
-                .args(["/D", "/V:OFF", "/S", "/C"])
-                .arg(format!("\"{command_line}\""))
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null());
             if let Some(working_dir) = working_dir {
                 command.current_dir(working_dir);
             }
-            use std::os::windows::process::CommandExt;
             command.as_std_mut().creation_flags(CREATE_NO_WINDOW.0);
             Ok(command)
         }
