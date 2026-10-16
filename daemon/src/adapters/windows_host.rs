@@ -7,9 +7,10 @@ use windows::{
         System::{LibraryLoader::GetModuleHandleW, Threading::GetCurrentThreadId},
         UI::WindowsAndMessaging::{
             CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, FindWindowW,
-            GetMessageW, MB_ICONERROR, MB_OK, MSG, MessageBoxW, PostMessageW, PostThreadMessageW,
-            RegisterClassW, SW_RESTORE, SetForegroundWindow, ShowWindow, TranslateMessage,
-            WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WNDCLASSW,
+            GetMessageW, GetWindowThreadProcessId, MB_ICONERROR, MB_OK, MSG, MessageBoxW,
+            PostMessageW, PostThreadMessageW, RegisterClassW, SW_RESTORE, SetForegroundWindow,
+            ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
+            WNDCLASSW,
         },
     },
     core::{PCWSTR, w},
@@ -80,8 +81,12 @@ pub fn take_open_request() -> bool {
 }
 
 pub fn activate_existing_instance() {
-    if let Ok(window) = unsafe { FindWindowW(HOST_CLASS, PCWSTR::null()) } {
-        let _ = unsafe { PostMessageW(Some(window), OPEN_SETTINGS, WPARAM(0), LPARAM(0)) };
+    for _ in 0..40 {
+        if let Ok(window) = unsafe { FindWindowW(HOST_CLASS, PCWSTR::null()) } {
+            let _ = unsafe { PostMessageW(Some(window), OPEN_SETTINGS, WPARAM(0), LPARAM(0)) };
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
     }
 }
 
@@ -93,12 +98,25 @@ pub fn wake_thread(thread_id: u32) {
     let _ = unsafe { PostThreadMessageW(thread_id, WAKE, WPARAM(0), LPARAM(0)) };
 }
 
-pub fn reveal_settings() {
-    if let Ok(window) = unsafe { FindWindowW(PCWSTR::null(), w!("ESP32 Media Daemon")) } {
+fn settings_window(process_id: u32) -> Option<HWND> {
+    let window = unsafe { FindWindowW(PCWSTR::null(), w!("ESP32 Media Daemon")) }.ok()?;
+    let mut owner = 0;
+    unsafe { GetWindowThreadProcessId(window, Some(&mut owner)) };
+    (owner == process_id).then_some(window)
+}
+
+pub fn reveal_settings(process_id: u32) {
+    if let Some(window) = settings_window(process_id) {
         unsafe {
             let _ = ShowWindow(window, SW_RESTORE);
             let _ = SetForegroundWindow(window);
         }
+    }
+}
+
+pub fn close_settings(process_id: u32) {
+    if let Some(window) = settings_window(process_id) {
+        let _ = unsafe { PostMessageW(Some(window), WM_CLOSE, WPARAM(0), LPARAM(0)) };
     }
 }
 

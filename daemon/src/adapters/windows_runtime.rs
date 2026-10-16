@@ -162,6 +162,7 @@ impl WindowsRuntime {
         &self,
         actions: Vec<crate::domain::CustomAction>,
     ) -> Result<(), RuntimeError> {
+        let _lifecycle = self.lifecycle.lock().await;
         let mut candidate = self.config();
         candidate.actions = actions;
         candidate.validate().map_err(|_| RuntimeError)?;
@@ -175,6 +176,7 @@ impl WindowsRuntime {
     }
 
     pub async fn set_start_after_login(&self, enabled: bool) -> Result<(), RuntimeError> {
+        let _lifecycle = self.lifecycle.lock().await;
         let mut candidate = self.config();
         let previous = candidate.start_after_login;
         candidate.start_after_login = enabled;
@@ -327,6 +329,7 @@ impl WindowsRuntime {
         bind_address: std::net::IpAddr,
         port: u16,
     ) -> Result<(), RuntimeError> {
+        let _lifecycle = self.lifecycle.lock().await;
         if self
             .listener
             .try_lock()

@@ -2,7 +2,11 @@
 
 #[cfg(windows)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    media_daemon::adapters::windows_app::run()
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--settings")) {
+        media_daemon::adapters::windows_app::run_settings_mode()
+    } else {
+        media_daemon::adapters::windows_app::run()
+    }
 }
 
 #[cfg(not(windows))]

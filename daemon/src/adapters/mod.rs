@@ -11,4 +11,6 @@ mod windows_host;
 #[cfg(windows)]
 mod windows_icon;
 #[cfg(windows)]
+mod windows_management;
+#[cfg(windows)]
 pub mod windows_runtime;
