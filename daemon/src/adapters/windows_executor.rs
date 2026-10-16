@@ -294,10 +294,14 @@ mod tests {
 
     #[tokio::test]
     async fn batch_preserves_quoted_arguments_in_a_path_with_spaces() {
-        let temp = tempfile::tempdir().unwrap();
+        let temp = tempfile::tempdir_in(std::env::current_dir().unwrap()).unwrap();
         let directory = temp.path().join("with spaces");
         fs::create_dir(&directory).unwrap();
         let script = directory.join("fixture.cmd");
+        assert!(
+            domain::is_safe_batch_literal(script.to_str().unwrap()),
+            "fixture path is not safe for cmd.exe: {script:?}"
+        );
         let output = directory.join("args.txt");
         let script_text = format!(
             "@echo off\r\n> \"{}\" echo %~1\r\n>> \"{}\" echo %~2\r\n",
