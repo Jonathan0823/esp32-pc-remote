@@ -36,7 +36,7 @@ The `/v1` path selects the API version; the body carries no separate version fie
 
 ## ESP behavior and feedback
 
-- “Hi ESP” only opens the existing approximately 5.76-second listening window. One valid phrase consumes it. “Wake computer” continues to send local WoL and never calls this endpoint.
+- “Jarvis” only opens the existing approximately 5.76-second listening window. One valid phrase consumes it. “Wake computer” continues to send local WoL and never calls this endpoint.
 - The voice callback/worker never performs TLS or waits for the PC. A bounded handoff feeds one dedicated HTTPS worker; there is at most one active and one waiting media request. A full queue, disconnected Wi-Fi, missing configuration, untrusted certificate, unsynchronized clock, or stale request is rejected immediately; no offline queue or automatic retry.
 - Configure time asynchronously after Wi-Fi starts, independently of optional Grafana. Fail closed until system time is at least 2025-01-01 UTC and TLS certificate-time validation is possible.
 - Use bounded HTTP operations and parse at most 512 response bytes. Disable redirects. Keep diagnostics redacted and local; no token in Serial, MQTT, Grafana, or exceptions.

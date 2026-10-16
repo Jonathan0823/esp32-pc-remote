@@ -4,13 +4,18 @@ import csv
 from pathlib import Path
 
 project_dir = Path(env.subst("$PROJECT_DIR"))
-build_dir = Path(env.subst("$BUILD_DIR"))
-libs_dir = Path(env.PioPlatform().get_package_dir("framework-arduinoespressif32-libs"))
-model_image = libs_dir / "esp32s3" / "esp_sr" / "srmodels.bin"
+model_image = project_dir / "models" / "srmodels.bin"
 partition_csv = project_dir / "partitions.csv"
 
 if not model_image.is_file():
     raise RuntimeError("ESP_SR model image is missing: {}".format(model_image))
+
+model_data = model_image.read_bytes()
+for required_model in (b"wn9_jarvis_tts", b"mn7_en", b"vadnet1_medium"):
+    if required_model not in model_data:
+        raise RuntimeError("ESP_SR model image is missing {}".format(required_model.decode()))
+if b"wn9_hiesp" in model_data:
+    raise RuntimeError("ESP_SR model image still contains the Hi ESP wake word")
 
 with partition_csv.open(newline="") as partitions_file:
     model_partition = next(
