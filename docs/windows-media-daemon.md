@@ -25,14 +25,23 @@ The installer appears at `daemon/target/release/esp32-media-daemon-setup.exe`. U
 1. Install and launch the daemon. Its listener defaults to **paused** and `127.0.0.1:8443`; no inbound firewall rule is needed for loopback.
 2. Open **Settings** from the tray, enable the listener, then use **Export trusted CA PEM**. The PEM is written to `%LOCALAPPDATA%\Esp32MediaDaemon\trusted-ca.pem` only after that explicit action.
 3. Use **Show pairing token** and copy it to a local API client. Treat the token as a password; it can trigger every enabled configured action.
-4. Import `daemon/postman-collection.json` and `daemon/postman-environment.json` into Postman. Set the environment `token`; leave Postman's SSL certificate verification enabled and trust the exported CA. Or run:
+4. To use RESTerm, copy `daemon/resterm/resterm.env.example.json` to `resterm.env.json` in that directory, replace `REPLACE_WITH_PAIRING_TOKEN` with the token from Settings, and copy the exported CA there as `trusted-ca.pem`. The local `resterm.env.json` is git-ignored, but stores the token as plaintext—treat it like a password and do not share or commit it. From that directory, run:
+
+   ```powershell
+   resterm run --env local --request media .\daemon.http
+   ```
+
+   Keep TLS verification enabled. Edit `cmd` directly in the `media` request body (`play`, `pause`, `next`, `previous`, `mute`, or `unmute`). For `/v1/actions`, edit `action_id` directly in the `custom-action` request body to match a locally configured action ID. The scripts fill only the fresh 128-bit request ID and five-second timestamp window. Run `media` for a safe first check, then `custom-action` only if you have configured a suitable action.
+
+   Run `resterm run --env local --request invalid-token .\daemon.http` to expect `401`, or use `--request expired` to expect `410`. For `duplicate-id`, send it twice and expect `200` then `409`; change the sample ID in `scripts/duplicate-request.js` before testing again if that ID has already been used. A `200 executed` / `200 dispatched` response confirms Windows reported that the operation was issued; it does not prove audible playback. Pause the listener in Settings to check that the port stops accepting connections. Rotate credentials only as an explicit user action; this invalidates the old token and CA. Re-export the CA and replace the copy in the RESTerm directory.
+
+   The standalone helper is also available when you want a single smoke test without an API client:
 
    ```powershell
    python daemon/test_https_daemon.py --ca "$env:LOCALAPPDATA\Esp32MediaDaemon\trusted-ca.pem" --token '<pairing-token>' --host localhost --command pause
    ```
 
-   The helper creates a fresh 128-bit request ID and five-second timestamp window for every request. `200 executed` means Windows reported that the operation was issued; it does not prove audible playback. For a locally configured custom action, set `actionId` in Postman or pass `--action-id <id>` to the helper.
-5. Check invalid-token (`401`), expired (`410`), duplicate (`409`), unknown/disabled action (`404`/`403`), and paused-listener behavior. Send the duplicate collection request twice; the second request reuses the same ID. Rotate credentials only as an explicit user action; this invalidates the old token and CA. Re-export the new CA and pair again.
+   For a configured action, pass `--action-id <id>` instead of `--command pause`.
 
 Do not disable TLS verification. The server certificate includes `localhost`, `127.0.0.1`, and the selected bind IP. A localhost request validates the daemon/API on that machine only; it does **not** prove ESP32 TLS compatibility, LAN reachability, firewall behavior, or hardware media behavior.
 

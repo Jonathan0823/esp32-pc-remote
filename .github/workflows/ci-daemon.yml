@@ -39,8 +39,7 @@ jobs:
       - name: Validate localhost test assets
         run: |
           python -m py_compile test_https_daemon.py
-          python -m json.tool postman-collection.json > $null
-          python -m json.tool postman-environment.json > $null
+          python -m json.tool resterm/resterm.env.example.json > $null
           python test_https_daemon.py --help > $null
       - name: Build release
         run: cargo build --release --locked --target x86_64-pc-windows-msvc

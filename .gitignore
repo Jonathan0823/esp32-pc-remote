@@ -13,6 +13,8 @@ compile_commands.json
 dashboard/dist
 dashboard/node_modules
 dashboard/.env
+/daemon/resterm/resterm.env.json
+/daemon/resterm/trusted-ca.pem
 .pi/
 .scannerwork/
 **/__pycache__/

@@ -1,0 +1,94 @@
+# Copy the exported CA to this workspace as trusted-ca.pem before running requests.
+# Keep TLS verification enabled; this custom root is used for localhost testing.
+# @setting http-root-cas trusted-ca.pem
+
+### Media command
+# @name media
+# @request requestId {{$uuid}}
+# @script pre-request
+> < ./scripts/fresh-request.js
+# @script test
+> < ./scripts/assert-success.js
+POST https://localhost:8443/v1/media
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{requestId}}",
+  "cmd": "pause",
+  "issued_at_ms": {{issuedAtMs}},
+  "expires_at_ms": {{expiresAtMs}}
+}
+
+### Configured action
+# @name custom-action
+# @request requestId {{$uuid}}
+# @script pre-request
+> < ./scripts/fresh-request.js
+# @script test
+> < ./scripts/assert-success.js
+POST https://localhost:8443/v1/actions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{requestId}}",
+  "action_id": "replace_with_action_id",
+  "issued_at_ms": {{issuedAtMs}},
+  "expires_at_ms": {{expiresAtMs}}
+}
+
+### Invalid token (expect 401)
+# @name invalid-token
+# @request requestId {{$uuid}}
+# @script pre-request
+> < ./scripts/fresh-request.js
+# @script test
+> client.test("returns 401", function () {
+>   tests.assert(response.statusCode === 401, "expected HTTP 401");
+> });
+POST https://localhost:8443/v1/media
+Authorization: Bearer invalid
+Content-Type: application/json
+
+{
+  "id": "{{requestId}}",
+  "cmd": "pause",
+  "issued_at_ms": {{issuedAtMs}},
+  "expires_at_ms": {{expiresAtMs}}
+}
+
+### Expired media request (expect 410)
+# @name expired
+# @request requestId {{$uuid}}
+# @script pre-request
+> < ./scripts/expired-request.js
+# @script test
+> client.test("returns 410", function () {
+>   tests.assert(response.statusCode === 410, "expected HTTP 410");
+> });
+POST https://localhost:8443/v1/media
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": "{{requestId}}",
+  "cmd": "pause",
+  "issued_at_ms": {{issuedAtMs}},
+  "expires_at_ms": {{expiresAtMs}}
+}
+
+### Duplicate media ID (send twice; second expects 409)
+# @name duplicate-id
+# @script pre-request
+> < ./scripts/duplicate-request.js
+POST https://localhost:8443/v1/media
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "id": "00000000000000000000000000000001",
+  "cmd": "pause",
+  "issued_at_ms": {{issuedAtMs}},
+  "expires_at_ms": {{expiresAtMs}}
+}
