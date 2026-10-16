@@ -27,13 +27,13 @@ static_assert(MEDIA_COMMAND_FIRST_ID > VOICE_WAKE_COMMAND_ID,
               "Media command IDs must not collide with WoL");
 
 static const sr_cmd_t SPEECH_COMMANDS[] = {
-    {VOICE_WAKE_COMMAND_ID, "wake computer"},
-    {MEDIA_COMMAND_FIRST_ID + 0, "play music"},
-    {MEDIA_COMMAND_FIRST_ID + 1, "pause music"},
-    {MEDIA_COMMAND_FIRST_ID + 2, "next track"},
-    {MEDIA_COMMAND_FIRST_ID + 3, "previous track"},
-    {MEDIA_COMMAND_FIRST_ID + 4, "mute computer"},
-    {MEDIA_COMMAND_FIRST_ID + 5, "unmute computer"},
+    {VOICE_WAKE_COMMAND_ID, "wake"},
+    {MEDIA_COMMAND_FIRST_ID + 0, "play"},
+    {MEDIA_COMMAND_FIRST_ID + 1, "pause"},
+    {MEDIA_COMMAND_FIRST_ID + 2, "next"},
+    {MEDIA_COMMAND_FIRST_ID + 3, "back"},
+    {MEDIA_COMMAND_FIRST_ID + 4, "mute"},
+    {MEDIA_COMMAND_FIRST_ID + 5, "unmute"},
 };
 
 struct SpeechEvent {
@@ -101,7 +101,7 @@ void voice_worker(void*) {
       }
       log_wake_event("voice", "listening_started", sessionWakeId);
       indicator_set_voice_listening(true);
-      printf("[voice] id=%s Hi ESP detected; listening for wake computer\n",
+      printf("[voice] id=%s Hi ESP detected; listening for wake\n",
                     sessionWakeId);
       continue;
     }
@@ -170,7 +170,7 @@ void voice_worker(void*) {
     }
 
     log_wake_event("voice", "request_received", sessionWakeId);
-    printf("[voice] id=%s wake computer recognized; wake-word mode restored\n",
+    printf("[voice] id=%s wake recognized; wake-word mode restored\n",
                   sessionWakeId);
     if (WiFi.status() != WL_CONNECTED) {
       log_wake_event("voice", "request_rejected", sessionWakeId,

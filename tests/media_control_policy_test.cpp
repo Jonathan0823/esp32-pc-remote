@@ -8,8 +8,8 @@
 int main() {
   assert(media_control_config_status() == MediaConfigStatus::Disabled);
   const char* expected[] = {"play", "pause", "next", "previous", "mute", "unmute"};
-  const char* phrases[] = {"play music", "pause music", "next track",
-                           "previous track", "mute computer", "unmute computer"};
+  const char* phrases[] = {"play", "pause", "next",
+                           "back", "mute", "unmute"};
   for (int i = 0; i < 6; ++i) {
     MediaCommand command;
     assert(media_command_from_id(i + MEDIA_COMMAND_FIRST_ID, command));

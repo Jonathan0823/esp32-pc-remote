@@ -7,7 +7,7 @@
 
 **Turn on your gaming or home PC from Telegram, MQTT, or a private web dashboard — without port forwarding or a cloud subscription.**
 
-An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Wake it by saying “Hi ESP” followed by “wake computer,” or control it remotely through Telegram, MQTT automation, or the included browser dashboard.
+An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Wake it by saying “Hi ESP” followed by “wake,” or control it remotely through Telegram, MQTT automation, or the included browser dashboard.
 
 ![Demo](docs/demo.gif)
 
@@ -32,7 +32,7 @@ The ESP32 must remain connected to your local network. Telegram and MQTT provide
 
 ## What it does
 
-- **Wake your PC by voice** by saying “Hi ESP,” then “wake computer”; Telegram and MQTT keep their confirmation and force options
+- **Wake your PC by voice** by saying “Hi ESP,” then “wake”; Telegram and MQTT keep their confirmation and force options
 - **Wake your PC remotely** with a confirmation step or immediate force mode
 - **Check PC status** with a TCP probe
 - **Diagnose the ESP32** with reset reason, heap, WiFi RSSI, uptime, and poll health
@@ -43,7 +43,7 @@ The ESP32 must remain connected to your local network. Telegram and MQTT provide
 
 ## Voice wake
 
-Say **“Hi ESP”** to open a blue command-listening window. Within ESP_SR's built-in approximately 5.76-second MultiNet timeout, say **“wake computer”** for local WoL or one of the configured media phrases: “play music”, “pause music”, “next track”, “previous track”, “mute computer”, or “unmute computer”. “Hi ESP” alone never sends a command. Each window accepts at most one command; timeout returns to wake-word listening. The RGB LED is blue while listening and identifies submitted WoL packets: voice green, MQTT cyan, Telegram purple; red indicates WoL submission failure. Media feedback uses dim 500-ms pulses: yellow queued/accepted, white only for a correlated execution acknowledgement, red for rejection/failure/unknown. These signals do not prove playback state. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4.
+Say **“Hi ESP”** to open a blue command-listening window. Within ESP_SR's built-in approximately 5.76-second MultiNet timeout, say **“wake”** for local WoL or one of the configured media phrases: “play”, “pause”, “next”, “back”, “mute”, or “unmute”. “Hi ESP” alone never sends a command. Each window accepts at most one command; timeout returns to wake-word listening. The RGB LED is blue while listening and identifies submitted WoL packets: voice green, MQTT cyan, Telegram purple; red indicates WoL submission failure. Media feedback uses dim 500-ms pulses: yellow queued/accepted, white only for a correlated execution acknowledgement, red for rejection/failure/unknown. These signals do not prove playback state. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4.
 
 **Media-control limitation:** This firmware implements the ESP HTTPS client, but the Windows daemon is not included yet. Until it exists, commands can be checked with the non-actioning HTTPS fixture: it returns “accepted” (yellow), never executes media or returns “executed” (white). See [LAN media-control HTTPS setup](docs/media-control-https.md).
 
@@ -76,7 +76,7 @@ pio device monitor --port /dev/ttyACM0 --baud 115200
 
 Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pinned platform and declared libraries. Voice wake works without Telegram or MQTT configuration; those remote-control services remain optional.
 
-After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet. For voice testing, say “Hi ESP,” then “wake computer” within the listening window; confirm the Serial Monitor reports packet submission. The LED color identifies the source of a submitted packet, not that the PC is online.
+After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet. For voice testing, say “Hi ESP,” then “wake” within the listening window; confirm the Serial Monitor reports packet submission. The LED color identifies the source of a submitted packet, not that the PC is online.
 
 See [Telegram bot setup](docs/telegram.md) for the complete guide. See [LAN app-firmware OTA](docs/ota.md) for credential setup, upload, and recovery instructions.
 
@@ -84,10 +84,10 @@ See [Telegram bot setup](docs/telegram.md) for the complete guide. See [LAN app-
 
 - Confirm Serial prints `[voice] listening for Hi ESP` after successful microphone/ESP_SR initialization.
 - Say “Hi ESP”; verify a blue listening indication and no WoL packet yet.
-- Say “wake computer” within about 5.76 seconds; verify one WoL submission and a green RGB flash lasting about 500 ms.
+- Say “wake” within about 5.76 seconds; verify one WoL submission and a green RGB flash lasting about 500 ms.
 - Let a listening window time out; verify the LED turns off, wake-word mode resumes, and no packet is sent.
 - Start a new session immediately after command completion; verify another command is accepted without a five-second cooldown.
-- Disconnect Wi-Fi, say “Hi ESP” and “wake computer”; verify a red flash and no delayed WoL after reconnecting.
+- Disconnect Wi-Fi, say “Hi ESP” and “wake”; verify a red flash and no delayed WoL after reconnecting.
 - Submit a confirmed Telegram wake and an MQTT wake; verify a purple Telegram flash and cyan MQTT flash, each lasting about 500 ms.
 - Verify a request waiting for confirmation does not flash a submission color.
 - Check voice logs distinguish listening start/timeout, media queued/accepted/rejected/unknown, and WoL packet submission; verify Telegram and MQTT/dashboard controls still work.
