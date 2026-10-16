@@ -15,5 +15,7 @@ dashboard/node_modules
 dashboard/.env
 .pi/
 .scannerwork/
+**/__pycache__/
+**/target/
 
 
