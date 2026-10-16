@@ -6,6 +6,13 @@ The separate Rust tray app lives in [`daemon/`](../daemon/). It targets Windows 
 
 The Windows CI job uses Rust 1.92.0/MSVC x64, runs formatting, strict Clippy, tests and a release build, then packages a per-user NSIS installer. The installer does not enable the listener, create firewall rules, elevate the app, or delete `%LOCALAPPDATA%\Esp32MediaDaemon` data on uninstall. Startup is an opt-in per-user setting. Close the tray app before upgrading or uninstalling; the installer does not forcibly terminate it.
 
+For crash diagnosis without building locally, download both artifacts from the **same Windows daemon CI run**:
+
+- `esp32-media-daemon-windows-x64`: the installer.
+- `esp32-media-daemon-windows-x64-symbols`: the matching release EXE and PDB debug symbols.
+
+CI keeps release optimizations but enables full debug information and disables symbol stripping. Extract the symbols artifact with the EXE and PDB together. Quit the installed daemon and Settings first (otherwise the single-instance guard exits the new process), then launch the extracted EXE in WinDbg and reproduce the command. When it breaks on an access violation, run `.ecxr` followed by `kb` and share the stack text. Keep the EXE/PDB pair for that run; symbols from another build cannot reliably explain an old fault offset. Do not share raw memory dumps publicly: they may contain API tokens and TLS private keys. This adds diagnostic artifacts, not a crash fix.
+
 For a local Windows build:
 
 ```powershell
