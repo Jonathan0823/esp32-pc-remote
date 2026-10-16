@@ -12,6 +12,8 @@ struct IndicatorColor {
   uint8_t blue;
 };
 
+enum class IndicatorOtaState { Closed, WindowOpen, Transferring };
+
 inline bool indicator_pulse_active(uint32_t now, uint32_t pulseStarted) {
   return now - pulseStarted < INDICATOR_PULSE_MS;
 }
@@ -26,6 +28,19 @@ inline IndicatorColor indicator_wake_color(const char* source, bool sent,
   if (source && strcmp(source, "mqtt") == 0) return {0, brightness, brightness};
   if (source && strcmp(source, "telegram") == 0) return {brightness, 0, brightness};
   return {0, brightness, 0};
+}
+
+inline IndicatorColor indicator_ota_color(IndicatorOtaState state, uint8_t brightness) {
+  const uint8_t half = brightness / 2;
+  const uint8_t quarter = brightness / 4;
+  if (state == IndicatorOtaState::WindowOpen) return {half, quarter, 0};
+  if (state == IndicatorOtaState::Transferring) return {0, quarter, half};
+  return {0, 0, 0};
+}
+
+inline IndicatorColor indicator_ota_result_color(bool success, uint8_t brightness) {
+  const uint8_t channel = brightness / 2;
+  return success ? IndicatorColor{0, channel, 0} : IndicatorColor{channel, 0, 0};
 }
 
 inline IndicatorColor indicator_media_color(MediaResult result, uint8_t brightness) {

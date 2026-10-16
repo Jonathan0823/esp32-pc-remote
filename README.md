@@ -78,7 +78,7 @@ Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pi
 
 After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet. For voice testing, say “Hi ESP,” then “wake computer” within the listening window; confirm the Serial Monitor reports packet submission. The LED color identifies the source of a submitted packet, not that the PC is online.
 
-See [Telegram bot setup](docs/telegram.md) for the complete guide.
+See [Telegram bot setup](docs/telegram.md) for the complete guide. See [LAN app-firmware OTA](docs/ota.md) for credential setup, upload, and recovery instructions.
 
 ## Hardware validation
 

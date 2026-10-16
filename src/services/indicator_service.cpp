@@ -14,13 +14,14 @@ namespace {
 constexpr int INDICATOR_QUEUE_LENGTH = 4;
 constexpr uint32_t INDICATOR_WORKER_STACK_BYTES = 2048;
 
-enum class IndicatorEventType { Listening, WakeResult, MediaFeedback };
+enum class IndicatorEventType { Listening, WakeResult, MediaFeedback, OtaState, OtaResult };
 
 struct IndicatorEvent {
   IndicatorEventType type;
   bool active;
   bool sent;
   MediaResult mediaResult;
+  IndicatorOtaState otaState;
   char source[12];
 };
 
@@ -32,6 +33,7 @@ void show(IndicatorColor color) {
 
 void indicator_worker(void*) {
   bool voiceListening = false;
+  IndicatorOtaState otaState = IndicatorOtaState::Closed;
   bool pulseActive = false;
   uint32_t pulseStartedAt = 0;
   IndicatorColor pulseColor = {0, 0, 0};
@@ -44,8 +46,10 @@ void indicator_worker(void*) {
       const uint32_t elapsed = now - pulseStartedAt;
       if (!indicator_pulse_active(now, pulseStartedAt)) {
         pulseActive = false;
-        show(voiceListening ? indicator_listening_color(RGB_BRIGHTNESS)
-                            : IndicatorColor{0, 0, 0});
+        show(otaState == IndicatorOtaState::Closed
+                 ? (voiceListening ? indicator_listening_color(RGB_BRIGHTNESS)
+                                   : IndicatorColor{0, 0, 0})
+                 : indicator_ota_color(otaState, RGB_BRIGHTNESS));
       } else {
         wait = pdMS_TO_TICKS(INDICATOR_PULSE_MS - elapsed);
         if (wait == 0) wait = 1;
@@ -57,11 +61,24 @@ void indicator_worker(void*) {
 
     if (event.type == IndicatorEventType::Listening) {
       voiceListening = event.active;
-      if (!pulseActive) {
+      if (!pulseActive && otaState == IndicatorOtaState::Closed) {
         show(voiceListening ? indicator_listening_color(RGB_BRIGHTNESS)
                             : IndicatorColor{0, 0, 0});
       }
-    } else {
+    } else if (event.type == IndicatorEventType::OtaState) {
+      otaState = event.otaState;
+      pulseActive = false;
+      show(otaState == IndicatorOtaState::Closed
+               ? (voiceListening ? indicator_listening_color(RGB_BRIGHTNESS)
+                                 : IndicatorColor{0, 0, 0})
+               : indicator_ota_color(otaState, RGB_BRIGHTNESS));
+    } else if (event.type == IndicatorEventType::OtaResult) {
+      otaState = IndicatorOtaState::Closed;
+      pulseColor = indicator_ota_result_color(event.sent, RGB_BRIGHTNESS);
+      pulseStartedAt = millis();
+      pulseActive = true;
+      show(pulseColor);
+    } else if (otaState == IndicatorOtaState::Closed) {
       pulseColor = event.type == IndicatorEventType::WakeResult
                        ? indicator_wake_color(event.source, event.sent, RGB_BRIGHTNESS)
                        : indicator_media_color(event.mediaResult, RGB_BRIGHTNESS);
@@ -115,5 +132,19 @@ void indicator_media_result(MediaResult result) {
   IndicatorEvent event = {};
   event.type = IndicatorEventType::MediaFeedback;
   event.mediaResult = result;
+  send_indicator_event(event);
+}
+
+void indicator_ota_state(IndicatorOtaState state) {
+  IndicatorEvent event = {};
+  event.type = IndicatorEventType::OtaState;
+  event.otaState = state;
+  send_indicator_event(event);
+}
+
+void indicator_ota_result(bool success) {
+  IndicatorEvent event = {};
+  event.type = IndicatorEventType::OtaResult;
+  event.sent = success;
   send_indicator_event(event);
 }
