@@ -3,6 +3,8 @@
 #include <WiFi.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
+#include <esp_heap_caps.h>
+#include <mbedtls/platform.h>
 #include "config.h"
 #include "src/services/wifi_service.h"
 #include "src/services/telegram_service.h"
@@ -13,6 +15,14 @@
 #include "src/services/voice_service.h"
 #include "src/services/media_control_service.h"
 #include "src/services/ota_service.h"
+
+namespace {
+void* tls_calloc(size_t count, size_t size) {
+  return heap_caps_calloc_prefer(count, size, 2,
+                                 MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT,
+                                 MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+}
+}  // namespace
 
 const char* reset_reason_label(esp_reset_reason_t reason) {
   switch (reason) {
@@ -39,6 +49,11 @@ void setup() {
   delay(50);
   log_print("\n=== ESP32 PC Remote ===\n");
   log_print("[boot] reset=%s heap=%u\n", current_reset_reason(), ESP.getFreeHeap());
+  // Configure the global TLS allocator before any service can start a handshake.
+  const int tlsAllocatorStatus = mbedtls_platform_set_calloc_free(tls_calloc, heap_caps_free);
+  log_print("[tls] psram-preferred allocator status=%d psram_free=%u\n",
+            tlsAllocatorStatus,
+            static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)));
   // ponytail: Telegram long-poll blocks loopTask for ~60s.
   //           MUST reconfigure WDT before any blocking call (wifi_connect)
   //           or the default 5s timeout will fire a boot-loop.

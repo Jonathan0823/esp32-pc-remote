@@ -77,10 +77,13 @@ For a failed HTTPS `POST`, firmware prints a bounded, local diagnostic before th
 
 ```text
 [media] transport failure cmd=play id=<request-id> http=-1 (connection refused) tls=<code> (<mbedTLS detail>)
+[media] heap before POST id=<request-id> internal_free=<bytes> internal_largest=<bytes> psram_free=<bytes> psram_largest=<bytes>
 [media] outcome unknown cmd=play id=<request-id> status=-1; not retrying
 ```
 
 `http=-1` is HTTPClient's generic secure-connect failure: its “connection refused” label can also mean TLS failed, not just a refused TCP socket. Use the accompanying TLS code/detail to distinguish certificate parsing/verification, handshake, and network errors. `tls=0 (no TLS error recorded)` is inconclusive, not proof that TLS succeeded. HTTP `401` is different: TLS completed and the daemon rejected authentication. No token, headers, payload, or certificate contents are logged; keep global HTTP debug logging disabled.
+
+`tls=-32512` (`SSL - Memory allocation failed`) means TLS could not allocate memory; it does not establish whether the certificate is valid. The pinned ESP32-S3 SDK defaults to internal-only mbedTLS allocation. Firmware installs a PSRAM-preferred allocator with an internal-RAM fallback before any services start, shared by media, MQTT, Telegram, and Grafana. Check the boot line `[tls] psram-preferred allocator status=0 psram_free=...` for successful hook installation and available PSRAM. If PSRAM is unavailable, the fallback cannot create extra internal RAM. A failure also prints free bytes and the largest contiguous block in each pool, sampled just before the `POST`; these are snapshots, not measurements of peak handshake use. After flashing this change, verify media commands alongside voice and the enabled network services.
 
 Windows curl's `CERT_TRUST_IS_UNTRUSTED_ROOT` is a separate PC-side trust-chain failure. Confirm the exported CA belongs to the current listener (especially after changing the bind IP or rotating credentials); it does not establish the ESP's failure cause. Rebuild/flash these diagnostics, reproduce once, and inspect the TLS detail without disabling verification or retrying an uncertain action.
 
