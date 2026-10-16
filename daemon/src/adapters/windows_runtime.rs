@@ -74,8 +74,8 @@ pub fn acquire_single_instance() -> Result<Option<SingleInstance>, RuntimeError>
         if let Ok(window) = unsafe { FindWindowW(PCWSTR::null(), PCWSTR::from_raw(title.as_ptr())) }
         {
             unsafe {
-                ShowWindow(window, SW_SHOW);
-                SetForegroundWindow(window);
+                let _ = ShowWindow(window, SW_SHOW);
+                let _ = SetForegroundWindow(window);
             }
         }
         return Ok(None);
@@ -463,7 +463,9 @@ fn configure_startup(enabled: bool) -> Result<(), RuntimeError> {
     } else {
         unsafe { RegDeleteValueW(key, PCWSTR::from_raw(value_name.as_ptr())) }
     };
-    unsafe { RegCloseKey(key) };
+    if unsafe { RegCloseKey(key) } != ERROR_SUCCESS {
+        return Err(RuntimeError);
+    }
     if result == ERROR_SUCCESS || (!enabled && result == ERROR_FILE_NOT_FOUND) {
         Ok(())
     } else {
@@ -482,10 +484,10 @@ fn atomic_write(path: &Path, contents: &[u8]) -> Result<(), RuntimeError> {
 
 impl Drop for WindowsRuntime {
     fn drop(&mut self) {
-        if let Ok(listener) = self.listener.try_lock() {
-            if let Some(listener) = listener.as_ref() {
-                listener.request_shutdown();
-            }
+        if let Ok(listener) = self.listener.try_lock()
+            && let Some(listener) = listener.as_ref()
+        {
+            listener.request_shutdown();
         }
     }
 }

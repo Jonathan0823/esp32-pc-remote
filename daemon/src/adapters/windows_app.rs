@@ -37,15 +37,15 @@ struct UiSignals {
 
 impl UiSignals {
     fn wake(&self, event: UiEvent) {
-        if let Ok(sender) = self.sender.lock() {
-            if let Some(sender) = sender.as_ref() {
-                let _ = sender.send(event);
-            }
+        if let Ok(sender) = self.sender.lock()
+            && let Some(sender) = sender.as_ref()
+        {
+            let _ = sender.send(event);
         }
-        if let Ok(context) = self.context.lock() {
-            if let Some(context) = context.as_ref() {
-                context.request_repaint();
-            }
+        if let Ok(context) = self.context.lock()
+            && let Some(context) = context.as_ref()
+        {
+            context.request_repaint();
         }
     }
 }
@@ -110,7 +110,7 @@ fn create_tray(signals: Arc<UiSignals>) -> Result<tray_icon::TrayIcon, String> {
         _ => {}
     }));
 
-    let icon = Icon::from_rgba(vec![0x35, 0x9f, 0xe8, 0xff].repeat(16 * 16), 16, 16)
+    let icon = Icon::from_rgba([0x35, 0x9f, 0xe8, 0xff].repeat(16 * 16), 16, 16)
         .map_err(|error| error.to_string())?;
     TrayIconBuilder::new()
         .with_tooltip("ESP32 Media Daemon")
