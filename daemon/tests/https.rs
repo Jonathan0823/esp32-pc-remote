@@ -3,8 +3,8 @@ use media_daemon::{
     config::AppConfig,
     domain::ConfiguredAction,
     http::{HttpState, serve_tls},
+    security::provision_tls,
 };
-use rcgen::generate_simple_self_signed;
 use std::{
     future::Future,
     net::SocketAddr,
@@ -32,12 +32,12 @@ fn now_ms() -> u64 {
 }
 
 #[tokio::test]
-async fn verified_localhost_https_executes_and_rejects_hostname_mismatch() {
-    let certified = generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
-    let cert_pem = certified.cert.pem();
-    let key_pem = certified.key_pair.serialize_pem();
-    let root = reqwest::Certificate::from_pem(cert_pem.as_bytes()).unwrap();
+async fn provisioned_https_requires_matching_host_ca_and_token() {
+    let tls = provision_tls("192.168.1.50".parse().unwrap()).unwrap();
+    let root = reqwest::Certificate::from_pem(&tls.trusted_ca_certificate_pem).unwrap();
     let client = reqwest::Client::builder()
+        .no_proxy()
+        .resolve("wrong-host.invalid", "127.0.0.1:0".parse().unwrap())
         .add_root_certificate(root)
         .build()
         .unwrap();
@@ -55,8 +55,8 @@ async fn verified_localhost_https_executes_and_rejects_hostname_mismatch() {
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
     let server = tokio::spawn(serve_tls(
         address,
-        cert_pem.into_bytes(),
-        key_pem.into_bytes(),
+        tls.certificate_pem,
+        tls.server_private_key_pem,
         state,
         shutdown_rx,
     ));
@@ -72,13 +72,33 @@ async fn verified_localhost_https_executes_and_rejects_hostname_mismatch() {
     .await
     .unwrap();
     let wrong_host = client
-        .get(format!("https://127.0.0.1:{}/v1/media", address.port()))
+        .get(format!(
+            "https://wrong-host.invalid:{}/v1/media",
+            address.port()
+        ))
         .send()
         .await;
     assert!(
         wrong_host.is_err(),
-        "certificate without the IP SAN must not validate for the IP URL"
+        "the provisioned CA must not bypass hostname verification"
     );
+    let url = format!("https://127.0.0.1:{}/v1/media", address.port());
+    let unpaired_client = reqwest::Client::builder().no_proxy().build().unwrap();
+    assert!(
+        unpaired_client.get(&url).send().await.is_err(),
+        "a client without the exported CA must reject the daemon certificate"
+    );
+    for authorization in [None, Some(format!("Bearer {}", "b".repeat(64)))] {
+        let mut request = client.post(&url);
+        if let Some(authorization) = authorization {
+            request = request.header("Authorization", authorization);
+        }
+        assert_eq!(
+            request.send().await.unwrap().status(),
+            reqwest::StatusCode::UNAUTHORIZED,
+            "CA trust alone must not authorize an unpaired client"
+        );
+    }
 
     let now = now_ms();
     let body = serde_json::json!({
@@ -88,7 +108,7 @@ async fn verified_localhost_https_executes_and_rejects_hostname_mismatch() {
         "expires_at_ms": now + 5000,
     });
     let response = client
-        .post(format!("https://localhost:{}/v1/media", address.port()))
+        .post(&url)
         .header("Authorization", format!("Bearer {}", "a".repeat(64)))
         .header("Content-Type", "application/json")
         .body(body.to_string())
