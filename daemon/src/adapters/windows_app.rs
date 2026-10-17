@@ -27,6 +27,7 @@ enum UiEvent {
     ConfigState(bool),
     ActionTestResult(bool),
     ActionsSaved(bool),
+    VoiceConfigApplied(bool),
     StartupState(bool),
     CredentialsRotated(bool),
     PairingToken(Result<String, String>),
@@ -282,6 +283,9 @@ struct SettingsApp {
     action_path: String,
     interpreter_path: String,
     action_args_json: String,
+    action_phrase: String,
+    phrase_drafts: std::collections::HashMap<String, String>,
+    voice_apply_pending: bool,
     action_kind: usize,
     confirm_action: Option<String>,
     confirm_rotation: bool,
@@ -335,6 +339,18 @@ impl SettingsApp {
             action_path: String::new(),
             interpreter_path: String::new(),
             action_args_json: "[]".into(),
+            action_phrase: String::new(),
+            phrase_drafts: config
+                .actions
+                .iter()
+                .map(|action| {
+                    (
+                        action.id.as_str().to_owned(),
+                        action.phrase.clone().unwrap_or_default(),
+                    )
+                })
+                .collect(),
+            voice_apply_pending: false,
             action_kind: 0,
             confirm_action: None,
             confirm_rotation: false,
@@ -374,6 +390,41 @@ impl SettingsApp {
                 service.save_actions(actions).await.is_ok(),
             ));
         });
+    }
+
+    fn apply_voice_config(&mut self) {
+        if self.actions_pending || self.voice_apply_pending {
+            return;
+        }
+        self.voice_apply_pending = true;
+        let service = Arc::clone(&self.service);
+        let signals = Arc::clone(&self.signals);
+        self.handle.spawn(async move {
+            signals.wake(UiEvent::VoiceConfigApplied(
+                service.apply_voice_config().await.is_ok(),
+            ));
+        });
+    }
+
+    fn save_phrases(&mut self) {
+        if self.actions_pending {
+            return;
+        }
+        let mut actions = self.service.config().actions;
+        for action in &mut actions {
+            action.phrase = self
+                .phrase_drafts
+                .get(action.id.as_str())
+                .map(|phrase| phrase.trim().to_owned())
+                .filter(|phrase| !phrase.is_empty());
+        }
+        let mut candidate = self.service.config();
+        candidate.actions = actions.clone();
+        if candidate.validate().is_err() {
+            self.status = Some("Invalid, duplicate, or reserved voice phrase".into());
+            return;
+        }
+        self.save_actions(actions);
     }
 
     fn set_startup(&mut self, enabled: bool) {
@@ -423,6 +474,10 @@ impl SettingsApp {
             id,
             name: self.action_name.trim().to_owned(),
             enabled: true,
+            phrase: match self.action_phrase.trim() {
+                "" => None,
+                phrase => Some(phrase.to_owned()),
+            },
             action,
         });
         let mut candidate = self.service.config();
@@ -433,6 +488,7 @@ impl SettingsApp {
         }
         self.action_id.clear();
         self.action_name.clear();
+        self.action_phrase.clear();
         self.action_path.clear();
         self.save_actions(actions);
     }
@@ -503,7 +559,15 @@ impl SettingsApp {
     fn actions(&mut self, ui: &mut egui::Ui) {
         ui.heading("Configured actions");
         ui.label("Choose a file locally, then trigger it remotely using only its action ID.");
-        let actions = self.service.config().actions;
+        let config = self.service.config();
+        let actions = config.actions.clone();
+        let phrases_dirty = actions.iter().any(|action| {
+            self.phrase_drafts
+                .get(action.id.as_str())
+                .map(String::as_str)
+                .unwrap_or("")
+                != action.phrase.as_deref().unwrap_or("")
+        });
         if actions.is_empty() {
             ui.weak("No custom actions yet. Add an application or script below.");
         }
@@ -530,6 +594,17 @@ impl SettingsApp {
                             }
                         };
                         ui.add(egui::Label::new(description).wrap());
+                        ui.horizontal(|ui| {
+                            ui.label("Voice phrase");
+                            let phrase = self
+                                .phrase_drafts
+                                .entry(action.id.as_str().to_owned())
+                                .or_default();
+                            ui.add_enabled(
+                                !self.actions_pending,
+                                egui::TextEdit::singleline(phrase).hint_text("open Spotify"),
+                            );
+                        });
                         ui.horizontal(|ui| {
                             let mut enabled = action.enabled;
                             if ui
@@ -568,6 +643,46 @@ impl SettingsApp {
                     });
             });
         }
+        let voice_needs_apply = config
+            .published_voice
+            .as_ref()
+            .is_none_or(|published| published.actions_revision != config.actions_revision);
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(
+                    phrases_dirty && !self.actions_pending,
+                    egui::Button::new("Save phrases"),
+                )
+                .clicked()
+            {
+                self.save_phrases();
+            }
+            if ui
+                .add_enabled(
+                    voice_needs_apply
+                        && !phrases_dirty
+                        && !self.actions_pending
+                        && !self.voice_apply_pending,
+                    egui::Button::new("Apply to ESP"),
+                )
+                .clicked()
+            {
+                self.apply_voice_config();
+            }
+        });
+        match config.published_voice.as_ref() {
+            Some(published) if published.actions_revision != config.actions_revision => ui.weak("Saved action/phrase changes are not applied. Save phrases if needed, then Apply to ESP."),
+            Some(published) if config.acknowledged_voice_revision == Some(published.revision) => ui.weak(format!("ESP last confirmed voice settings revision {}.", published.revision)),
+            Some(published) => ui.weak(format!("Voice settings revision {} is pending ESP sync/confirmation.", published.revision)),
+            None => ui.weak("Voice settings have not been applied to the ESP."),
+        };
+        ui.weak(
+            "After Apply, say Jarvis, then update. Existing built-in phrases cannot be edited.",
+        );
+        ui.separator();
+        ui.strong("Built-in voice commands (read-only)");
+        ui.label("Jarvis → update (fetch settings); wake (Wake-on-LAN); play; pause; next; back; mute; unmute.");
         ui.add_space(8.0);
         egui::CollapsingHeader::new("Add an action")
             .default_open(true)
@@ -592,6 +707,9 @@ impl SettingsApp {
                                     .hint_text("Open Spotify")
                                     .desired_width(360.0),
                             );
+                            ui.end_row();
+                            ui.label("Voice phrase (optional)");
+                            ui.add(egui::TextEdit::singleline(&mut self.action_phrase).hint_text("open Spotify").desired_width(360.0));
                             ui.end_row();
                         });
                     ui.horizontal(|ui| {
@@ -794,11 +912,36 @@ impl eframe::App for SettingsApp {
                 }
                 UiEvent::ActionsSaved(success) => {
                     self.actions_pending = false;
+                    if success {
+                        self.phrase_drafts = self
+                            .service
+                            .config()
+                            .actions
+                            .iter()
+                            .map(|action| {
+                                (
+                                    action.id.as_str().to_owned(),
+                                    action.phrase.clone().unwrap_or_default(),
+                                )
+                            })
+                            .collect();
+                    }
                     self.status = Some(
                         if success {
-                            "Action configuration saved"
+                            "Action configuration saved; Apply to publish voice changes"
                         } else {
                             "Invalid action or configuration save failed"
+                        }
+                        .into(),
+                    );
+                }
+                UiEvent::VoiceConfigApplied(success) => {
+                    self.voice_apply_pending = false;
+                    self.status = Some(
+                        if success {
+                            "Voice settings published; say Jarvis, then update on the ESP32"
+                        } else {
+                            "Could not publish voice settings"
                         }
                         .into(),
                     );

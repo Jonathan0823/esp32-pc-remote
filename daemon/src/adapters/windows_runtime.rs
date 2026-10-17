@@ -50,7 +50,7 @@ pub struct WindowsRuntime {
     config: Arc<RwLock<AppConfig>>,
     secrets: RwLock<Secrets>,
     listener: Mutex<Option<ListenerTask>>,
-    lifecycle: Mutex<()>,
+    lifecycle: Arc<Mutex<()>>,
 }
 
 pub struct SingleInstance(HANDLE);
@@ -121,7 +121,7 @@ impl WindowsRuntime {
             config: Arc::new(RwLock::new(app_config.clone())),
             secrets: RwLock::new(secrets),
             listener: Mutex::new(None),
-            lifecycle: Mutex::new(()),
+            lifecycle: Arc::new(Mutex::new(())),
         });
         if !config_exists {
             runtime.save_config(&app_config)?;
@@ -165,7 +165,24 @@ impl WindowsRuntime {
         let _lifecycle = self.lifecycle.lock().await;
         let mut candidate = self.config();
         candidate.actions = actions;
+        candidate.actions_revision = candidate
+            .actions_revision
+            .checked_add(1)
+            .ok_or(RuntimeError)?;
         candidate.validate().map_err(|_| RuntimeError)?;
+        self.save_config(&candidate)?;
+        self.dispatcher
+            .replace_config(candidate.clone())
+            .await
+            .map_err(|_| RuntimeError)?;
+        *self.config.write().map_err(|_| RuntimeError)? = candidate;
+        Ok(())
+    }
+
+    pub async fn apply_voice_config(&self) -> Result<(), RuntimeError> {
+        let _lifecycle = self.lifecycle.lock().await;
+        let mut candidate = self.config();
+        candidate.publish_voice_config().map_err(|_| RuntimeError)?;
         self.save_config(&candidate)?;
         self.dispatcher
             .replace_config(candidate.clone())
@@ -268,6 +285,9 @@ impl WindowsRuntime {
             HttpState {
                 dispatcher: Arc::clone(&self.dispatcher),
                 token,
+                config: Arc::clone(&self.config),
+                config_path: Some(self.directory.join("config.json")),
+                lifecycle: Arc::clone(&self.lifecycle),
             },
         )
         .await

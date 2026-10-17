@@ -34,13 +34,21 @@ The `/v1` path selects the API version; the body carries no separate version fie
 - Other receiver statuses: `400` malformed/time, `401` unauthorized, `404`/`405` wrong path/method, `410` expired, `413` oversized, `5xx` server failure. Response bodies are capped at 512 bytes. Unknown outcome after the request may have been written is not retried.
 - The receiver authenticates and validates the full request before dispatch. `/v1/media` allows only the six built-in media actions; the daemon's separate `/v1/actions` endpoint accepts only IDs for locally configured actions, never executable paths or arguments.
 
+## Voice configuration and custom actions
+
+The paired ESP32 fetches configuration only after the built-in **Jarvis → update** command. Authenticated `GET /v1/voice-config` returns the latest published snapshot (`schema`, `revision`, `actions_revision`, and `commands` containing `phrase`/`action_id`). The device rejects stale action revisions, invalid schemas, malformed or oversized bodies (3,072 bytes maximum), unsupported phrases, duplicate phrases/action IDs, and built-in words. It supports at most 12 custom phrases, each 2–63 ASCII letters and single spaces. The phrase table is persisted in alternating NVS slots; activation changes the active slot only after the recognizer accepts the complete table.
+
+After successful activation, the ESP sends `POST /v1/voice-config/ack` with `{"revision":<revision>}`. Only a matching current revision is acknowledged as active in Settings. A failed fetch, validation, recognizer rebuild, or persistence step leaves the previous published/active status unconfirmed; the old vocabulary is restored when possible. Sync occurs outside the speech callback and is never retried automatically. A successful vocabulary replacement briefly restarts recognition; do not sync during a command window (the firmware defers it until that session ends).
+
+Custom speech actions use the existing authenticated `/v1/actions` endpoint with an action ID and published voice revision. The daemon rejects deleted/disabled actions or stale revisions before dispatch; the ESP never receives executable paths or script arguments. Action requests retain the existing five-second lifetime and are never retried.
+
 ## ESP behavior and feedback
 
 - “Jarvis” only opens the existing approximately 5.76-second listening window. One valid phrase consumes it. “Wake computer” continues to send local WoL and never calls this endpoint.
 - The voice callback/worker never performs TLS or waits for the PC. A bounded handoff feeds one dedicated HTTPS worker; there is at most one active and one waiting media request. A full queue, disconnected Wi-Fi, missing configuration, untrusted certificate, unsynchronized clock, or stale request is rejected immediately; no offline queue or automatic retry.
 - Configure time asynchronously after Wi-Fi starts, independently of optional Grafana. Fail closed until system time is at least 2025-01-01 UTC and TLS certificate-time validation is possible.
 - Use bounded HTTP operations and parse at most 512 response bytes. Disable redirects. Keep diagnostics redacted and local; no token in Serial, MQTT, Grafana, or exceptions.
-- LED uses the existing single owner: blue while listening; yellow on queued/accepted; white only for a correlated `200 executed`; red for rejection, failure, or unknown outcome. Pulses are 500 ms, dim (no brighter than the existing indicator setting), and restore blue if still listening. Red means execution was not confirmed, not that the action definitely did not occur. Serial gives the precise result.
+- LED uses the existing single owner: blue while listening; yellow on queued/accepted; white only for a correlated `200 executed` media reply or `200 dispatched` custom-action reply; red for rejection, failure, or unknown outcome. Pulses are 500 ms, dim (no brighter than the existing indicator setting), and restore blue if still listening. Red means execution was not confirmed, not that the action definitely did not occur. Serial gives the precise result.
 
 ## Test server
 

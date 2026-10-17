@@ -5,6 +5,10 @@ pub const BODY_LIMIT: usize = 512;
 pub const REQUEST_LIFETIME_MS: u64 = 5_000;
 pub const MAX_FUTURE_SKEW_MS: u64 = 1_000;
 pub const MAX_REMEMBERED_IDS: usize = 128;
+pub const VOICE_CONFIG_SCHEMA: u16 = 1;
+pub const VOICE_CONFIG_LIMIT: usize = 3072;
+pub const MAX_VOICE_ACTIONS: usize = 12;
+pub const MAX_VOICE_PHRASE_BYTES: usize = 63;
 
 pub fn is_safe_batch_literal(value: &str) -> bool {
     !value.is_empty()
@@ -135,8 +139,31 @@ pub struct MediaRequest {
 pub struct CustomActionRequest {
     pub id: RequestId,
     pub action_id: ActionId,
+    pub voice_revision: u64,
     pub issued_at_ms: u64,
     pub expires_at_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VoiceCommand {
+    pub phrase: String,
+    pub action_id: ActionId,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublishedVoiceConfig {
+    pub schema: u16,
+    pub revision: u64,
+    pub actions_revision: u64,
+    pub commands: Vec<VoiceCommand>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VoiceConfigAckRequest {
+    pub revision: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -169,6 +196,8 @@ pub struct CustomAction {
     pub id: ActionId,
     pub name: String,
     pub enabled: bool,
+    #[serde(default)]
+    pub phrase: Option<String>,
     pub action: ConfiguredAction,
 }
 
@@ -177,6 +206,7 @@ pub enum ValidationError {
     InvalidId,
     InvalidActionId,
     InvalidTime,
+    InvalidVoiceConfig,
     TooLarge,
     InvalidJson,
 }
@@ -187,12 +217,49 @@ impl fmt::Display for ValidationError {
             Self::InvalidId => "invalid request id",
             Self::InvalidActionId => "invalid action id",
             Self::InvalidTime => "invalid request time",
+            Self::InvalidVoiceConfig => "invalid voice configuration",
             Self::TooLarge => "request body too large",
             Self::InvalidJson => "invalid request body",
         })
     }
 }
 impl std::error::Error for ValidationError {}
+
+pub fn validate_voice_commands(commands: &[VoiceCommand]) -> Result<(), ValidationError> {
+    if commands.len() > MAX_VOICE_ACTIONS {
+        return Err(ValidationError::InvalidVoiceConfig);
+    }
+    validate_voice_command_drafts(commands)
+}
+
+pub fn validate_voice_command_drafts(commands: &[VoiceCommand]) -> Result<(), ValidationError> {
+    let reserved = [
+        "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "update",
+    ];
+    let mut phrases = std::collections::HashSet::with_capacity(commands.len());
+    let mut action_ids = std::collections::HashSet::with_capacity(commands.len());
+    for command in commands {
+        let phrase = command.phrase.as_str();
+        if !(2..=MAX_VOICE_PHRASE_BYTES).contains(&phrase.len())
+            || phrase.trim() != phrase
+            || !phrase.is_ascii()
+            || !phrase
+                .bytes()
+                .all(|byte| byte.is_ascii_alphabetic() || byte == b' ')
+            || phrase.as_bytes().windows(2).any(|pair| pair == b"  ")
+        {
+            return Err(ValidationError::InvalidVoiceConfig);
+        }
+        let normalized = phrase.to_ascii_lowercase();
+        if reserved.contains(&normalized.as_str())
+            || !phrases.insert(normalized)
+            || !action_ids.insert(command.action_id.as_str())
+        {
+            return Err(ValidationError::InvalidVoiceConfig);
+        }
+    }
+    Ok(())
+}
 
 pub fn parse_request<T: for<'de> Deserialize<'de>>(body: &[u8]) -> Result<T, ValidationError> {
     if body.len() > BODY_LIMIT {
@@ -298,5 +365,69 @@ mod tests {
         assert!(ActionId::parse("1launch").is_err());
         assert!(ActionId::parse("Launch").is_err());
         assert!(ActionId::parse("run-script").is_err());
+    }
+
+    #[test]
+    fn voice_phrases_are_bounded_unique_and_non_reserved() {
+        let command = |phrase: &str, id: &str| VoiceCommand {
+            phrase: phrase.into(),
+            action_id: ActionId::parse(id).unwrap(),
+        };
+        assert!(validate_voice_commands(&[command("open spotify", "spotify")]).is_ok());
+        assert!(validate_voice_commands(&[command("sync", "sync_action")]).is_ok());
+        for invalid in [
+            "update",
+            "Jarvis",
+            "play",
+            "open  spotify",
+            " open app",
+            "open!",
+            "x",
+            &"a".repeat(64),
+        ] {
+            assert!(
+                validate_voice_commands(&[command(invalid, "action")]).is_err(),
+                "accepted {invalid:?}"
+            );
+        }
+        assert!(
+            validate_voice_commands(&[
+                command("open spotify", "one"),
+                command("OPEN SPOTIFY", "two"),
+            ])
+            .is_err()
+        );
+        assert!(
+            validate_voice_commands(&[
+                command("open spotify", "same"),
+                command("close spotify", "same"),
+            ])
+            .is_err()
+        );
+        let too_many: Vec<_> = (0..=MAX_VOICE_ACTIONS)
+            .map(|index| {
+                let letters = (b'a' + index as u8) as char;
+                command(&format!("open app {letters}"), &format!("app{index}"))
+            })
+            .collect();
+        assert!(validate_voice_commands(&too_many).is_err());
+
+        let maximum: Vec<_> = (0..MAX_VOICE_ACTIONS)
+            .map(|index| {
+                let suffix = (b'a' + index as u8) as char;
+                command(
+                    &format!("open {}{suffix}", "a".repeat(57)),
+                    &format!("app{index}"),
+                )
+            })
+            .collect();
+        assert!(validate_voice_commands(&maximum).is_ok());
+        let published = PublishedVoiceConfig {
+            schema: VOICE_CONFIG_SCHEMA,
+            revision: 1,
+            actions_revision: 1,
+            commands: maximum,
+        };
+        assert!(serde_json::to_vec(&published).unwrap().len() <= VOICE_CONFIG_LIMIT);
     }
 }

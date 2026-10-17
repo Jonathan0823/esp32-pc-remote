@@ -14,7 +14,7 @@ namespace {
 constexpr int INDICATOR_QUEUE_LENGTH = 4;
 constexpr uint32_t INDICATOR_WORKER_STACK_BYTES = 2048;
 
-enum class IndicatorEventType { Listening, WakeResult, MediaFeedback, OtaState, OtaResult };
+enum class IndicatorEventType { Listening, WakeResult, MediaFeedback, VoiceSyncResult, OtaState, OtaResult };
 
 struct IndicatorEvent {
   IndicatorEventType type;
@@ -81,7 +81,9 @@ void indicator_worker(void*) {
     } else if (otaState == IndicatorOtaState::Closed) {
       pulseColor = event.type == IndicatorEventType::WakeResult
                        ? indicator_wake_color(event.source, event.sent, RGB_BRIGHTNESS)
-                       : indicator_media_color(event.mediaResult, RGB_BRIGHTNESS);
+                       : event.type == IndicatorEventType::VoiceSyncResult
+                             ? indicator_sync_color(event.sent, RGB_BRIGHTNESS)
+                             : indicator_media_color(event.mediaResult, RGB_BRIGHTNESS);
       pulseStartedAt = millis();
       pulseActive = true;
       show(pulseColor);
@@ -132,6 +134,13 @@ void indicator_media_result(MediaResult result) {
   IndicatorEvent event = {};
   event.type = IndicatorEventType::MediaFeedback;
   event.mediaResult = result;
+  send_indicator_event(event);
+}
+
+void indicator_voice_sync_result(bool success) {
+  IndicatorEvent event = {};
+  event.type = IndicatorEventType::VoiceSyncResult;
+  event.sent = success;
   send_indicator_event(event);
 }
 

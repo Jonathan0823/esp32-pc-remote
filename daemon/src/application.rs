@@ -56,6 +56,8 @@ pub enum DispatchError {
     UnknownAction,
     #[error("custom action is disabled")]
     DisabledAction,
+    #[error("voice configuration is stale; sync the latest settings")]
+    StaleVoiceConfig,
     #[error("action dispatch failed")]
     Execution,
     #[error("action executor is busy")]
@@ -200,6 +202,19 @@ impl Dispatcher {
                 .config
                 .read()
                 .map_err(|_| DispatchError::Configuration)?;
+            let published = config
+                .published_voice
+                .as_ref()
+                .ok_or(DispatchError::StaleVoiceConfig)?;
+            if published.revision != request.voice_revision
+                || published.actions_revision != config.actions_revision
+                || !published
+                    .commands
+                    .iter()
+                    .any(|command| command.action_id == request.action_id)
+            {
+                return Err(DispatchError::StaleVoiceConfig);
+            }
             let action = config
                 .actions
                 .iter()
@@ -475,22 +490,72 @@ mod tests {
                 id: action_id.clone(),
                 name: "Music".into(),
                 enabled: true,
+                phrase: None,
                 action: ConfiguredAction::Media {
                     command: MediaCommand::Play,
                 },
             }],
+            published_voice: Some(domain::PublishedVoiceConfig {
+                schema: domain::VOICE_CONFIG_SCHEMA,
+                revision: 1,
+                actions_revision: 0,
+                commands: vec![domain::VoiceCommand {
+                    phrase: "play music".into(),
+                    action_id: action_id.clone(),
+                }],
+            }),
             ..AppConfig::default()
         };
         let dispatcher = Dispatcher::new(Arc::new(FakeExecutor::default()), config).unwrap();
         let req = CustomActionRequest {
             id: RequestId::parse("00000000000000000000000000000002").unwrap(),
             action_id,
+            voice_revision: 1,
             issued_at_ms: 1000,
             expires_at_ms: 6000,
         };
         assert_eq!(
             dispatcher.dispatch_custom(req, 1000).await,
             Ok(DispatchStatus::Dispatched)
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_action_fails_closed_for_unpublished_action_changes() {
+        let action_id = ActionId::parse("music").unwrap();
+        let config = AppConfig {
+            actions: vec![CustomAction {
+                id: action_id.clone(),
+                name: "Music".into(),
+                enabled: true,
+                phrase: Some("play music".into()),
+                action: ConfiguredAction::Media {
+                    command: MediaCommand::Play,
+                },
+            }],
+            actions_revision: 2,
+            published_voice: Some(domain::PublishedVoiceConfig {
+                schema: domain::VOICE_CONFIG_SCHEMA,
+                revision: 1,
+                actions_revision: 1,
+                commands: vec![domain::VoiceCommand {
+                    phrase: "play music".into(),
+                    action_id: action_id.clone(),
+                }],
+            }),
+            ..AppConfig::default()
+        };
+        let dispatcher = Dispatcher::new(Arc::new(FakeExecutor::default()), config).unwrap();
+        let request = CustomActionRequest {
+            id: RequestId::parse("00000000000000000000000000000003").unwrap(),
+            action_id,
+            voice_revision: 1,
+            issued_at_ms: 1000,
+            expires_at_ms: 6000,
+        };
+        assert_eq!(
+            dispatcher.dispatch_custom(request, 1000).await,
+            Err(DispatchError::StaleVoiceConfig)
         );
     }
 

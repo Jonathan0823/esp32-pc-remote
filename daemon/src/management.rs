@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
 };
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 // Covers the serialized worst case from the existing 128-action and per-argument limits.
 pub const MAX_FRAME_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_PENDING_REQUESTS: usize = 1;
@@ -45,6 +45,7 @@ pub enum Request {
     Snapshot,
     SetListener { enabled: bool },
     SaveActions { actions: Vec<CustomAction> },
+    ApplyVoiceConfig,
     TestAction { action_id: ActionId },
     SetStartup { enabled: bool },
     Reconfigure { bind_address: IpAddr, port: u16 },
@@ -175,6 +176,16 @@ mod tests {
             decoded.payload,
             Request::SetListener { enabled: true }
         ));
+    }
+
+    #[test]
+    fn apply_voice_config_is_a_versioned_management_request() {
+        let request = Envelope::new(7, Request::ApplyVoiceConfig);
+        let mut bytes = Vec::new();
+        write_message(&mut bytes, &request).unwrap();
+        let decoded: Envelope<Request> = read_message(&mut Cursor::new(bytes)).unwrap().unwrap();
+        assert_eq!(decoded.version, PROTOCOL_VERSION);
+        assert!(matches!(decoded.payload, Request::ApplyVoiceConfig));
     }
 
     #[test]

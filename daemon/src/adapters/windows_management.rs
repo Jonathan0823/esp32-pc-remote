@@ -95,6 +95,10 @@ impl SettingsClient {
         self.applied(Request::SaveActions { actions }).await
     }
 
+    pub async fn apply_voice_config(&self) -> Result<(), String> {
+        self.applied(Request::ApplyVoiceConfig).await
+    }
+
     pub async fn test_action(&self, action_id: &ActionId) -> Result<(), String> {
         self.applied(Request::TestAction {
             action_id: action_id.clone(),
@@ -440,6 +444,7 @@ fn dispatch_request(
         }
         Request::SetListener { enabled } => handle.block_on(service.set_listener(enabled)),
         Request::SaveActions { actions } => handle.block_on(service.save_actions(actions)),
+        Request::ApplyVoiceConfig => handle.block_on(service.apply_voice_config()),
         Request::TestAction { action_id } => handle.block_on(service.test_action(&action_id)),
         Request::SetStartup { enabled } => handle.block_on(service.set_start_after_login(enabled)),
         Request::Reconfigure { bind_address, port } => {
