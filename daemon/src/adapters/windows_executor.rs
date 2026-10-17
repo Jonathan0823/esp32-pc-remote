@@ -2,7 +2,9 @@ use crate::{
     application::{ActionExecutor, ExecutorError},
     domain::{self, ConfiguredAction, MediaCommand},
 };
-use process_wrap::tokio::{CommandWrap, JobObject, KillOnDrop};
+#[cfg(test)]
+use process_wrap::tokio::KillOnDrop;
+use process_wrap::tokio::{CommandWrap, JobObject};
 use std::{future::Future, path::Path, pin::Pin, process::Stdio, sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
 #[cfg(test)]
@@ -94,9 +96,9 @@ impl ActionExecutor for WindowsExecutor {
                         .try_acquire_owned()
                         .map_err(|_| ExecutorError::Busy)?;
                     let command = script_command(&action)?;
-                    let mut wrapped = CommandWrap::from(command);
-                    wrapped.wrap(JobObject).wrap(KillOnDrop);
-                    let mut child = wrapped.spawn().map_err(|_| ExecutorError::Failed)?;
+                    let mut child = script_process(command)
+                        .spawn()
+                        .map_err(|_| ExecutorError::Failed)?;
                     tokio::spawn(async move {
                         match tokio::time::timeout(SCRIPT_TIMEOUT, child.wait()).await {
                             Ok(Ok(status)) if status.success() => {
@@ -106,7 +108,12 @@ impl ActionExecutor for WindowsExecutor {
                                 tracing::warn!("configured script returned a failure status")
                             }
                             Ok(Err(_)) => {
-                                tracing::warn!("configured script could not be monitored")
+                                tracing::warn!("configured script could not be monitored");
+                                if Pin::from(child.kill()).await.is_err() {
+                                    tracing::error!(
+                                        "configured script process-tree cleanup failed"
+                                    );
+                                }
                             }
                             Err(_) => {
                                 tracing::warn!(
@@ -145,6 +152,12 @@ fn base_command(
     use std::os::windows::process::CommandExt;
     command.as_std_mut().creation_flags(CREATE_NO_WINDOW.0);
     command
+}
+
+fn script_process(command: tokio::process::Command) -> CommandWrap {
+    let mut wrapped = CommandWrap::from(command);
+    wrapped.wrap(JobObject);
+    wrapped
 }
 
 fn script_command(action: &ConfiguredAction) -> Result<tokio::process::Command, ExecutorError> {
@@ -196,7 +209,13 @@ fn script_command(action: &ConfiguredAction) -> Result<tokio::process::Command, 
             }
             let mut command = base_command(interpreter, &[], working_dir.as_deref());
             command
-                .args(["-NoProfile", "-NonInteractive", "-File"])
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                ])
                 .arg(script)
                 .args(args);
             Ok(command)
@@ -305,8 +324,8 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     async fn finish(command: tokio::process::Command) {
-        let mut wrapped = CommandWrap::from(command);
-        wrapped.wrap(JobObject).wrap(KillOnDrop);
+        let mut wrapped = script_process(command);
+        wrapped.wrap(KillOnDrop);
         let mut child = wrapped.spawn().unwrap();
         let status = tokio::time::timeout(Duration::from_secs(10), child.wait())
             .await
@@ -412,5 +431,55 @@ mod tests {
         };
         finish(script_command(&action).unwrap()).await;
         assert_eq!(fs::read_to_string(output).unwrap(), "left & right|%PATH%");
+    }
+
+    #[tokio::test]
+    async fn normal_script_completion_does_not_kill_surviving_descendants() {
+        let temp = tempfile::tempdir().unwrap();
+        let parent_script = temp.path().join("parent.ps1");
+        let child_script = temp.path().join("child.ps1");
+        let marker = temp.path().join("child-finished.txt");
+        fs::write(
+            &child_script,
+            "Start-Sleep -Milliseconds 750; [IO.File]::WriteAllText($args[0], 'done')",
+        )
+        .unwrap();
+        let quote = |path: &Path| path.to_string_lossy().replace('\'', "''");
+        fs::write(
+            &parent_script,
+            format!(
+                "Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{}\" \"{}\"' -WindowStyle Hidden",
+                quote(&child_script),
+                quote(&marker),
+            ),
+        )
+        .unwrap();
+        let interpreter = std::env::var_os("SystemRoot")
+            .map(PathBuf::from)
+            .unwrap()
+            .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        let action = ConfiguredAction::PowerShell {
+            interpreter,
+            script: parent_script,
+            args: vec![],
+            working_dir: Some(temp.path().to_path_buf()),
+        };
+        let mut child = script_process(script_command(&action).unwrap())
+            .spawn()
+            .unwrap();
+        let status = tokio::time::timeout(Duration::from_secs(10), child.wait())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(status.success());
+        drop(child);
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !marker.exists() {
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(fs::read_to_string(marker).unwrap(), "done");
     }
 }
