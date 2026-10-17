@@ -78,6 +78,16 @@ Do not disable TLS verification. The server certificate includes `localhost`, `1
 
 If pairing fails: connection refused/timeout points to listener address, firewall, or LAN routing; TLS failures point to an outdated/wrong CA, IP SAN mismatch, or clock; `401` means the token does not match. Fix the corresponding layer rather than bypassing TLS. Changing the bind IP requires exporting the new CA and reflashing the ESP with the new host/CA. **Rotate token and TLS trust** invalidates both values; re-export the CA, copy the new token, and reflash every paired client. Until pairing is complete, leave `PC_MEDIA_HOST` blank to keep ESP media control disabled.
 
+## Voice phrases and explicit sync
+
+In Settings → **Actions**, add or edit actions, then assign at most one optional spoken phrase to each action. Phrases must be 2–63 ASCII letters with single spaces. Matching is case-insensitive; exact built-in phrases (`jarvis`, `wake`, `play`, `pause`, `next`, `back`, `mute`, `unmute`, `sync`), duplicate phrases, and duplicate action IDs are rejected. Firmware supports up to 12 custom mappings. Built-in commands are listed read-only.
+
+Use **Save phrases** to store phrase drafts; this does not publish them to the ESP. **Apply to ESP** publishes the current phrase/action snapshot and increments its revision. Settings shows the revision as pending until a paired ESP activates it and acknowledges that exact revision. Changing/removing/disablement of an action invalidates the prior snapshot; save phrase edits and apply again. The daemon serves only the latest current snapshot and never pushes or polls the ESP.
+
+After applying, say **“Jarvis”**, then **“sync”**. The ESP fetches the snapshot over the already paired, verified HTTPS connection, validates it, stages it in one of two NVS slots, rebuilds the recognizer, switches the active slot only on success, and acknowledges the revision. It defers this work until the current listening window ends. Failed or interrupted sync does not replay a spoken action and retains the previous active set when rollback succeeds; try again only by explicitly saying “Jarvis, sync”. The active phrase snapshot survives an ESP reboot. `sync` is always built in and does not invoke an action. A recognition restart briefly interrupts listening; no new firmware image is needed for later phrase edits.
+
+Windows/ESP sync, actual recognition, persistence across power loss, rollback under recognizer rejection, and runtime heap/CPU use still require hardware validation. The local PlatformIO build reports 72,036 bytes static RAM (22.0% of 327,680) and 3,238,807 bytes flash (88.3% of 3,670,016); this does not measure peak sync/TLS use. No board was flashed as part of this change.
+
 ## ESP transport diagnostics
 
 For a failed HTTPS `POST`, firmware prints a bounded, local diagnostic before the usual outcome line:
