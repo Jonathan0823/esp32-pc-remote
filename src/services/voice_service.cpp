@@ -25,7 +25,7 @@ constexpr int MIC_BCLK_GPIO = 5;
 constexpr int MIC_WS_GPIO = 6;
 constexpr int MIC_DATA_GPIO = 4;
 constexpr int VOICE_EVENT_QUEUE_LENGTH = 8;
-constexpr uint32_t VOICE_WORKER_STACK_BYTES = 4096;
+constexpr uint32_t VOICE_WORKER_STACK_BYTES = 8192;  // Config activation rebuilds ESP_SR on this task.
 constexpr char VOICE_PREFS_NAMESPACE[] = "voice_cfg";
 static_assert(VOICE_WAKE_COMMAND_ID > 0, "MultiNet command IDs must start at 1");
 static_assert(MEDIA_COMMAND_FIRST_ID > VOICE_WAKE_COMMAND_ID,
