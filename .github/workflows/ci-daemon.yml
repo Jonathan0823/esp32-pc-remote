@@ -23,6 +23,8 @@ jobs:
         working-directory: daemon
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.92.0
         with:
           targets: x86_64-pc-windows-msvc
