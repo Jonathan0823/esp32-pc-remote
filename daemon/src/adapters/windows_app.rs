@@ -940,7 +940,7 @@ impl eframe::App for SettingsApp {
             egui::Window::new("Confirm credential rotation")
                     .collapsible(false)
                     .show(context, |ui| {
-                        ui.label("This pauses the listener and invalidates the current token and trusted CA. Existing clients must be paired again.");
+                        ui.label("If running, the listener briefly restarts. Rotation invalidates the current token and trusted CA; existing clients must be paired again.");
                         ui.horizontal(|ui| {
                             if ui.button("Rotate credentials").clicked() {
                                 self.confirm_rotation = false;
