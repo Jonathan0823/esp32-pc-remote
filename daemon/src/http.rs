@@ -1,6 +1,7 @@
 use crate::{
     application::{ApiToken, DispatchError, DispatchStatus, Dispatcher},
-    domain::{self, CustomActionRequest, MediaRequest},
+    config::{self, AppConfig},
+    domain::{self, CustomActionRequest, MediaRequest, VoiceConfigAckRequest},
 };
 use axum::{
     Router,
@@ -8,7 +9,7 @@ use axum::{
     extract::{DefaultBodyLimit, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use axum_server::{accept::Accept, tls_rustls::RustlsAcceptor};
 use hyper_util::rt::TokioTimer;
@@ -17,6 +18,7 @@ use std::{
     future::{Ready, ready},
     io,
     net::SocketAddr,
+    path::PathBuf,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
@@ -26,7 +28,7 @@ use thiserror::Error;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
-    sync::{OwnedSemaphorePermit, Semaphore},
+    sync::{Mutex as AsyncMutex, OwnedSemaphorePermit, Semaphore},
 };
 use tower_http::timeout::TimeoutLayer;
 
@@ -34,6 +36,9 @@ use tower_http::timeout::TimeoutLayer;
 pub struct HttpState {
     pub dispatcher: Arc<Dispatcher>,
     pub token: ApiToken,
+    pub config: Arc<std::sync::RwLock<AppConfig>>,
+    pub config_path: Option<PathBuf>,
+    pub lifecycle: Arc<AsyncMutex<()>>,
 }
 
 #[derive(Serialize)]
@@ -51,6 +56,8 @@ pub fn router(state: HttpState) -> Router {
     Router::new()
         .route("/v1/media", post(media))
         .route("/v1/actions", post(custom_action))
+        .route("/v1/voice-config", get(voice_config))
+        .route("/v1/voice-config/ack", post(voice_config_ack))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(2),
@@ -125,6 +132,92 @@ async fn custom_action(
     }
 }
 
+async fn voice_config(State(state): State<HttpState>, headers: HeaderMap) -> Response {
+    if !authorized(&state, &headers) {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    let config = match state.config.read() {
+        Ok(config) => config.clone(),
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
+    };
+    let Some(published) = config.published_voice else {
+        return error(StatusCode::NOT_FOUND, "not_applied");
+    };
+    if published.actions_revision != config.actions_revision {
+        return error(StatusCode::CONFLICT, "apply_required");
+    }
+    json_limited(StatusCode::OK, &published, domain::VOICE_CONFIG_LIMIT)
+}
+
+#[derive(Serialize)]
+struct VoiceAckReply {
+    revision: u64,
+    status: &'static str,
+}
+
+async fn voice_config_ack(
+    State(state): State<HttpState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !authorized(&state, &headers) {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    if !json_content_type(&headers) || !valid_framing(&headers, &body) {
+        return error(StatusCode::BAD_REQUEST, "invalid_framing");
+    }
+    let request: VoiceConfigAckRequest = match domain::parse_request(&body) {
+        Ok(request) => request,
+        Err(_) => return error(StatusCode::BAD_REQUEST, "invalid_request"),
+    };
+    let _lifecycle = state.lifecycle.lock().await;
+    let mut config = match state.config.read() {
+        Ok(config) => config.clone(),
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
+    };
+    let Some(published) = config.published_voice.as_ref() else {
+        return error(StatusCode::CONFLICT, "not_applied");
+    };
+    if published.revision != request.revision
+        || published.actions_revision != config.actions_revision
+    {
+        return error(StatusCode::CONFLICT, "stale_revision");
+    }
+    if config.acknowledged_voice_revision == Some(request.revision) {
+        return json(
+            StatusCode::OK,
+            &VoiceAckReply {
+                revision: request.revision,
+                status: "active",
+            },
+        );
+    }
+    config.acknowledged_voice_revision = Some(request.revision);
+    let Some(path) = state.config_path.as_ref() else {
+        return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error");
+    };
+    if config::save(path, &config).is_err()
+        || state
+            .dispatcher
+            .replace_config(config.clone())
+            .await
+            .is_err()
+    {
+        return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error");
+    }
+    match state.config.write() {
+        Ok(mut current) => *current = config,
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
+    }
+    json(
+        StatusCode::OK,
+        &VoiceAckReply {
+            revision: request.revision,
+            status: "active",
+        },
+    )
+}
+
 fn authorized(state: &HttpState, headers: &HeaderMap) -> bool {
     state.token.verify_header(
         headers
@@ -158,6 +251,7 @@ fn dispatch_error(error_value: DispatchError) -> Response {
             (StatusCode::TOO_MANY_REQUESTS, "busy")
         }
         DispatchError::UnknownAction => (StatusCode::NOT_FOUND, "unknown_action"),
+        DispatchError::StaleVoiceConfig => (StatusCode::CONFLICT, "sync_required"),
         DispatchError::DisabledAction => (StatusCode::FORBIDDEN, "disabled_action"),
         DispatchError::Execution | DispatchError::Configuration => {
             (StatusCode::INTERNAL_SERVER_ERROR, "server_error")
@@ -167,8 +261,12 @@ fn dispatch_error(error_value: DispatchError) -> Response {
 }
 
 fn json<T: Serialize>(status: StatusCode, value: &T) -> Response {
+    json_limited(status, value, domain::BODY_LIMIT)
+}
+
+fn json_limited<T: Serialize>(status: StatusCode, value: &T, limit: usize) -> Response {
     let body = match serde_json::to_vec(value) {
-        Ok(body) if body.len() <= domain::BODY_LIMIT => body,
+        Ok(body) if body.len() <= limit => body,
         _ => return error(StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
     };
     let body_length = body.len();
@@ -389,6 +487,58 @@ mod tests {
         }
     }
 
+    fn published_config() -> AppConfig {
+        let action_id = domain::ActionId::parse("music").unwrap();
+        AppConfig {
+            actions: vec![domain::CustomAction {
+                id: action_id.clone(),
+                name: "Music".into(),
+                enabled: true,
+                phrase: Some("play my music".into()),
+                action: ConfiguredAction::Media {
+                    command: domain::MediaCommand::Play,
+                },
+            }],
+            published_voice: Some(domain::PublishedVoiceConfig {
+                schema: domain::VOICE_CONFIG_SCHEMA,
+                revision: 1,
+                actions_revision: 0,
+                commands: vec![domain::VoiceCommand {
+                    phrase: "play my music".into(),
+                    action_id,
+                }],
+            }),
+            ..AppConfig::default()
+        }
+    }
+
+    fn test_state(config: AppConfig, config_path: Option<PathBuf>) -> HttpState {
+        HttpState {
+            dispatcher: Arc::new(Dispatcher::new(Arc::new(Noop), config.clone()).unwrap()),
+            token: ApiToken::parse(&"a".repeat(64)).unwrap(),
+            config: Arc::new(std::sync::RwLock::new(config)),
+            config_path,
+            lifecycle: Arc::new(AsyncMutex::new(())),
+        }
+    }
+
+    fn paired_headers(body: &[u8]) -> HeaderMap {
+        HeaderMap::from_iter([
+            (
+                header::AUTHORIZATION,
+                HeaderValue::from_str(&format!("Bearer {}", "a".repeat(64))).unwrap(),
+            ),
+            (
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            ),
+            (
+                header::CONTENT_LENGTH,
+                HeaderValue::from_str(&body.len().to_string()).unwrap(),
+            ),
+        ])
+    }
+
     #[test]
     fn framing_requires_bounded_content_length_and_rejects_transfer_encoding() {
         let body = b"{}";
@@ -407,11 +557,7 @@ mod tests {
 
     #[tokio::test]
     async fn media_endpoint_authenticates_and_correlates_execution() {
-        let token = ApiToken::parse(&"a".repeat(64)).unwrap();
-        let state = HttpState {
-            dispatcher: Arc::new(Dispatcher::new(Arc::new(Noop), AppConfig::default()).unwrap()),
-            token,
-        };
+        let state = test_state(AppConfig::default(), None);
         let now = now_ms();
         let body = format!(
             r#"{{"id":"0123456789abcdef0123456789abcdef","cmd":"pause","issued_at_ms":{now},"expires_at_ms":{}}}"#,
@@ -449,5 +595,59 @@ mod tests {
         );
         let unauthorized = media(State(state), HeaderMap::new(), Bytes::new()).await;
         assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn voice_config_requires_auth_and_returns_only_published_phrase_ids() {
+        let state = test_state(published_config(), None);
+        let response = voice_config(State(state.clone()), paired_headers(b"")).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), domain::VOICE_CONFIG_LIMIT)
+            .await
+            .unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(value["commands"][0]["phrase"], "play my music");
+        assert_eq!(value["commands"][0]["action_id"], "music");
+        assert!(value.get("action").is_none());
+        assert_eq!(
+            voice_config(State(state), HeaderMap::new()).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[tokio::test]
+    async fn voice_ack_is_authenticated_revision_bound_and_persisted() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.json");
+        let state = test_state(published_config(), Some(path.clone()));
+        let body = br#"{"revision":1}"#;
+        let response = voice_config_ack(
+            State(state.clone()),
+            paired_headers(body),
+            Bytes::from_static(body),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            config::load(&path).unwrap().acknowledged_voice_revision,
+            Some(1)
+        );
+        let stale = br#"{"revision":2}"#;
+        assert_eq!(
+            voice_config_ack(
+                State(state.clone()),
+                paired_headers(stale),
+                Bytes::from_static(stale)
+            )
+            .await
+            .status(),
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            voice_config_ack(State(state), HeaderMap::new(), Bytes::from_static(body))
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

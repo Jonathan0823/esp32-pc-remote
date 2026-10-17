@@ -1,7 +1,10 @@
 use media_daemon::{
     application::{ActionExecutor, ApiToken, Dispatcher, ExecutorError},
-    config::AppConfig,
-    domain::ConfiguredAction,
+    config::{self, AppConfig},
+    domain::{
+        ActionId, ConfiguredAction, CustomAction, MediaCommand, PublishedVoiceConfig,
+        VOICE_CONFIG_SCHEMA, VoiceCommand,
+    },
     http::{HttpState, serve_tls},
     security::provision_tls,
 };
@@ -42,11 +45,36 @@ async fn provisioned_https_requires_matching_host_ca_and_token() {
         .build()
         .unwrap();
     let token = ApiToken::parse(&"a".repeat(64)).unwrap();
+    let action_id = ActionId::parse("music").unwrap();
+    let app_config = AppConfig {
+        actions: vec![CustomAction {
+            id: action_id.clone(),
+            name: "Music".into(),
+            enabled: true,
+            phrase: Some("play music".into()),
+            action: ConfiguredAction::Media {
+                command: MediaCommand::Play,
+            },
+        }],
+        published_voice: Some(PublishedVoiceConfig {
+            schema: VOICE_CONFIG_SCHEMA,
+            revision: 1,
+            actions_revision: 0,
+            commands: vec![VoiceCommand {
+                phrase: "play music".into(),
+                action_id,
+            }],
+        }),
+        ..AppConfig::default()
+    };
+    let config_directory = tempfile::tempdir().unwrap();
+    let config_path = config_directory.path().join("config.json");
     let state = HttpState {
-        dispatcher: Arc::new(
-            Dispatcher::new(Arc::new(NoopExecutor), AppConfig::default()).unwrap(),
-        ),
+        dispatcher: Arc::new(Dispatcher::new(Arc::new(NoopExecutor), app_config.clone()).unwrap()),
         token,
+        config: Arc::new(std::sync::RwLock::new(app_config)),
+        config_path: Some(config_path.clone()),
+        lifecycle: Arc::new(tokio::sync::Mutex::new(())),
     };
     let address: SocketAddr = "127.0.0.1:0".parse().unwrap();
     let listener = std::net::TcpListener::bind(address).unwrap();
@@ -121,6 +149,57 @@ async fn provisioned_https_requires_matching_host_ca_and_token() {
         serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
     assert_eq!(reply["id"], "0123456789abcdef0123456789abcdef");
     assert_eq!(reply["status"], "executed");
+
+    let voice_url = format!("https://127.0.0.1:{}/v1/voice-config", address.port());
+    let response = client
+        .get(&voice_url)
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let voice_config: serde_json::Value =
+        serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+    assert_eq!(voice_config["revision"], 1);
+    assert_eq!(voice_config["commands"][0]["action_id"], "music");
+    assert!(voice_config["commands"][0].get("action").is_none());
+
+    let response = client
+        .post(format!("{voice_url}/ack"))
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .header("Content-Type", "application/json")
+        .body(r#"{"revision":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(
+        config::load(&config_path)
+            .unwrap()
+            .acknowledged_voice_revision,
+        Some(1)
+    );
+
+    let now = now_ms();
+    let action_request = serde_json::json!({
+        "id": "1123456789abcdef0123456789abcdef",
+        "action_id": "music",
+        "voice_revision": 1,
+        "issued_at_ms": now,
+        "expires_at_ms": now + 5000,
+    });
+    let response = client
+        .post(format!("https://127.0.0.1:{}/v1/actions", address.port()))
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .header("Content-Type", "application/json")
+        .body(action_request.to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::OK);
+    let reply: serde_json::Value =
+        serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
+    assert_eq!(reply["status"], "dispatched");
 
     let _ = shutdown_tx.send(true);
     assert!(server.await.unwrap().is_ok());

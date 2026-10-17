@@ -21,6 +21,12 @@ pub struct AppConfig {
     pub port: u16,
     pub start_after_login: bool,
     pub actions: Vec<CustomAction>,
+    #[serde(default)]
+    pub actions_revision: u64,
+    #[serde(default)]
+    pub published_voice: Option<crate::domain::PublishedVoiceConfig>,
+    #[serde(default)]
+    pub acknowledged_voice_revision: Option<u64>,
 }
 
 impl Default for AppConfig {
@@ -32,11 +38,45 @@ impl Default for AppConfig {
             port: 8443,
             start_after_login: false,
             actions: Vec::new(),
+            actions_revision: 0,
+            published_voice: None,
+            acknowledged_voice_revision: None,
         }
     }
 }
 
 impl AppConfig {
+    pub fn publish_voice_config(&mut self) -> Result<(), ConfigError> {
+        let revision = self
+            .published_voice
+            .as_ref()
+            .map_or(Some(1), |published| published.revision.checked_add(1))
+            .ok_or(ConfigError::Invalid("voice revision exhausted"))?;
+        let commands: Vec<_> = self
+            .actions
+            .iter()
+            .filter(|action| action.enabled)
+            .filter_map(|action| {
+                action
+                    .phrase
+                    .as_ref()
+                    .map(|phrase| crate::domain::VoiceCommand {
+                        phrase: phrase.clone(),
+                        action_id: action.id.clone(),
+                    })
+            })
+            .collect();
+        crate::domain::validate_voice_commands(&commands)
+            .map_err(|_| ConfigError::Invalid("invalid voice command"))?;
+        self.published_voice = Some(crate::domain::PublishedVoiceConfig {
+            schema: crate::domain::VOICE_CONFIG_SCHEMA,
+            revision,
+            actions_revision: self.actions_revision,
+            commands,
+        });
+        self.validate()
+    }
+
     pub fn validate(&self) -> Result<(), ConfigError> {
         if self.version != CONFIG_VERSION
             || self.port == 0
@@ -46,6 +86,42 @@ impl AppConfig {
             return Err(ConfigError::Invalid("unsupported config version or limits"));
         }
         let mut ids = HashSet::with_capacity(self.actions.len());
+        let voice_commands: Vec<_> = self
+            .actions
+            .iter()
+            .filter_map(|action| {
+                action
+                    .phrase
+                    .as_ref()
+                    .map(|phrase| crate::domain::VoiceCommand {
+                        phrase: phrase.clone(),
+                        action_id: action.id.clone(),
+                    })
+            })
+            .collect();
+        crate::domain::validate_voice_commands(&voice_commands)
+            .map_err(|_| ConfigError::Invalid("invalid voice command"))?;
+        if let Some(published) = &self.published_voice {
+            if published.schema != crate::domain::VOICE_CONFIG_SCHEMA
+                || published.revision == 0
+                || published.actions_revision > self.actions_revision
+            {
+                return Err(ConfigError::Invalid(
+                    "invalid published voice configuration",
+                ));
+            }
+            crate::domain::validate_voice_commands(&published.commands)
+                .map_err(|_| ConfigError::Invalid("invalid published voice configuration"))?;
+        }
+        if self.acknowledged_voice_revision.is_some_and(|revision| {
+            revision == 0
+                || self
+                    .published_voice
+                    .as_ref()
+                    .is_none_or(|published| revision > published.revision)
+        }) {
+            return Err(ConfigError::Invalid("invalid voice acknowledgment"));
+        }
         for action in &self.actions {
             if action.name.trim().is_empty()
                 || action.name.len() > 80
@@ -160,6 +236,70 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_action_config_loads_without_voice_fields() {
+        let legacy = br#"{"version":1,"listener_enabled":false,"bind_address":"127.0.0.1","port":8443,"start_after_login":false,"actions":[{"id":"music","name":"Music","enabled":true,"action":{"type":"media","command":"play"}}]}"#;
+        let config: AppConfig = serde_json::from_slice(legacy).unwrap();
+        assert!(config.validate().is_ok());
+        assert_eq!(config.actions[0].phrase, None);
+        assert_eq!(config.actions_revision, 0);
+    }
+
+    #[test]
+    fn publish_captures_only_enabled_phrases_and_preserves_previous_snapshot_until_apply() {
+        let id = |value| crate::domain::ActionId::parse(value).unwrap();
+        let mut config = AppConfig {
+            actions: vec![
+                CustomAction {
+                    id: id("first"),
+                    name: "First".into(),
+                    enabled: true,
+                    phrase: Some("open first".into()),
+                    action: crate::domain::ConfiguredAction::Media {
+                        command: crate::domain::MediaCommand::Play,
+                    },
+                },
+                CustomAction {
+                    id: id("second"),
+                    name: "Second".into(),
+                    enabled: false,
+                    phrase: Some("open second".into()),
+                    action: crate::domain::ConfiguredAction::Media {
+                        command: crate::domain::MediaCommand::Pause,
+                    },
+                },
+            ],
+            ..AppConfig::default()
+        };
+        config.validate().unwrap();
+        assert!(
+            config.published_voice.is_none(),
+            "saving drafts must not publish"
+        );
+        config.publish_voice_config().unwrap();
+        let published = config.published_voice.as_ref().unwrap();
+        assert_eq!(published.revision, 1);
+        assert_eq!(published.commands.len(), 1);
+        assert_eq!(published.commands[0].action_id.as_str(), "first");
+        config.actions[0].phrase = Some("launch first".into());
+        config.actions_revision += 1;
+        assert_eq!(config.published_voice.as_ref().unwrap().revision, 1);
+        assert_eq!(
+            config.published_voice.as_ref().unwrap().commands[0].phrase,
+            "open first"
+        );
+        assert_ne!(
+            config.published_voice.as_ref().unwrap().actions_revision,
+            config.actions_revision
+        );
+        config.publish_voice_config().unwrap();
+        assert_eq!(config.published_voice.as_ref().unwrap().revision, 2);
+        assert_eq!(
+            config.published_voice.as_ref().unwrap().commands[0].phrase,
+            "launch first"
+        );
+    }
 
     #[test]
     fn default_is_disabled_and_loopback_only() {
