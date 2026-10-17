@@ -40,7 +40,7 @@ static const BuiltinSpeechCommand BUILTIN_COMMANDS[] = {
     {MEDIA_COMMAND_FIRST_ID + 3, "back"},
     {MEDIA_COMMAND_FIRST_ID + 4, "mute"},
     {MEDIA_COMMAND_FIRST_ID + 5, "unmute"},
-    {VOICE_SYNC_COMMAND_ID, "sync"},
+    {VOICE_SYNC_COMMAND_ID, "update"},
 };
 
 struct SpeechEvent {

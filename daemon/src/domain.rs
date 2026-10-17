@@ -230,7 +230,7 @@ pub fn validate_voice_commands(commands: &[VoiceCommand]) -> Result<(), Validati
         return Err(ValidationError::InvalidVoiceConfig);
     }
     let reserved = [
-        "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "sync",
+        "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "update",
     ];
     let mut phrases = std::collections::HashSet::with_capacity(commands.len());
     let mut action_ids = std::collections::HashSet::with_capacity(commands.len());
@@ -370,8 +370,9 @@ mod tests {
             action_id: ActionId::parse(id).unwrap(),
         };
         assert!(validate_voice_commands(&[command("open spotify", "spotify")]).is_ok());
+        assert!(validate_voice_commands(&[command("sync", "sync_action")]).is_ok());
         for invalid in [
-            "sync",
+            "update",
             "Jarvis",
             "play",
             "open  spotify",

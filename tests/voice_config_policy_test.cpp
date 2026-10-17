@@ -20,8 +20,10 @@ int main() {
 
   strcpy(config.commands[1].phrase, "OPEN SPOTIFY");
   assert(!voice_config_is_valid(config));
-  strcpy(config.commands[1].phrase, "sync");
+  strcpy(config.commands[1].phrase, "update");
   assert(!voice_config_is_valid(config));
+  strcpy(config.commands[1].phrase, "sync");
+  assert(voice_config_is_valid(config));
   strcpy(config.commands[1].phrase, "close spotify");
   strcpy(config.commands[1].actionId, "spotify");
   assert(!voice_config_is_valid(config));

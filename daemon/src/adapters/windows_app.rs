@@ -677,10 +677,12 @@ impl SettingsApp {
             Some(published) => ui.weak(format!("Voice settings revision {} is pending ESP sync/confirmation.", published.revision)),
             None => ui.weak("Voice settings have not been applied to the ESP."),
         };
-        ui.weak("After Apply, say Jarvis, then sync. Existing built-in phrases cannot be edited.");
+        ui.weak(
+            "After Apply, say Jarvis, then update. Existing built-in phrases cannot be edited.",
+        );
         ui.separator();
         ui.strong("Built-in voice commands (read-only)");
-        ui.label("Jarvis → sync (fetch settings); wake (Wake-on-LAN); play; pause; next; back; mute; unmute.");
+        ui.label("Jarvis → update (fetch settings); wake (Wake-on-LAN); play; pause; next; back; mute; unmute.");
         ui.add_space(8.0);
         egui::CollapsingHeader::new("Add an action")
             .default_open(true)
@@ -937,7 +939,7 @@ impl eframe::App for SettingsApp {
                     self.voice_apply_pending = false;
                     self.status = Some(
                         if success {
-                            "Voice settings published; say Jarvis, then sync on the ESP32"
+                            "Voice settings published; say Jarvis, then update on the ESP32"
                         } else {
                             "Could not publish voice settings"
                         }

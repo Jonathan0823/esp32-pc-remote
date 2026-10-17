@@ -54,7 +54,7 @@ inline bool voice_action_id_is_valid(const char* id) {
 
 inline bool voice_phrase_reserved(const char* phrase) {
   static const char* const reserved[] = {
-      "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "sync"};
+      "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "update"};
   for (const char* value : reserved) {
     size_t i = 0;
     while (phrase[i] && value[i] && voice_ascii_lower(phrase[i]) == value[i]) ++i;
