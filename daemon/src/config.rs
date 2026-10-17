@@ -1,4 +1,4 @@
-use crate::domain::CustomAction;
+use crate::domain::{CustomAction, MAX_VOICE_ACTIONS};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -85,6 +85,15 @@ impl AppConfig {
         {
             return Err(ConfigError::Invalid("unsupported config version or limits"));
         }
+        if self
+            .actions
+            .iter()
+            .filter(|action| action.enabled && action.phrase.is_some())
+            .count()
+            > MAX_VOICE_ACTIONS
+        {
+            return Err(ConfigError::Invalid("too many enabled voice commands"));
+        }
         let mut ids = HashSet::with_capacity(self.actions.len());
         let voice_commands: Vec<_> = self
             .actions
@@ -99,7 +108,7 @@ impl AppConfig {
                     })
             })
             .collect();
-        crate::domain::validate_voice_commands(&voice_commands)
+        crate::domain::validate_voice_command_drafts(&voice_commands)
             .map_err(|_| ConfigError::Invalid("invalid voice command"))?;
         if let Some(published) = &self.published_voice {
             if published.schema != crate::domain::VOICE_CONFIG_SCHEMA
@@ -244,6 +253,34 @@ mod tests {
         assert!(config.validate().is_ok());
         assert_eq!(config.actions[0].phrase, None);
         assert_eq!(config.actions_revision, 0);
+    }
+
+    #[test]
+    fn disabled_phrase_drafts_do_not_count_toward_voice_limit_but_are_validated() {
+        let actions = (0..=MAX_VOICE_ACTIONS)
+            .map(|index| CustomAction {
+                id: crate::domain::ActionId::parse(format!("action_{index}")).unwrap(),
+                name: format!("Action {index}"),
+                enabled: index < MAX_VOICE_ACTIONS,
+                phrase: Some(format!("open app {}", (b'a' + index as u8) as char)),
+                action: crate::domain::ConfiguredAction::Media {
+                    command: crate::domain::MediaCommand::Play,
+                },
+            })
+            .collect();
+        let mut config = AppConfig {
+            actions,
+            ..AppConfig::default()
+        };
+        assert!(config.validate().is_ok());
+
+        config.actions[MAX_VOICE_ACTIONS].enabled = true;
+        assert!(config.validate().is_err());
+        config.actions[MAX_VOICE_ACTIONS].enabled = false;
+        config.actions[MAX_VOICE_ACTIONS].phrase = Some("bad  phrase".into());
+        assert!(config.validate().is_err());
+        config.actions[MAX_VOICE_ACTIONS].phrase = Some(config.actions[0].phrase.clone().unwrap());
+        assert!(config.validate().is_err());
     }
 
     #[test]

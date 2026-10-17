@@ -229,6 +229,10 @@ pub fn validate_voice_commands(commands: &[VoiceCommand]) -> Result<(), Validati
     if commands.len() > MAX_VOICE_ACTIONS {
         return Err(ValidationError::InvalidVoiceConfig);
     }
+    validate_voice_command_drafts(commands)
+}
+
+pub fn validate_voice_command_drafts(commands: &[VoiceCommand]) -> Result<(), ValidationError> {
     let reserved = [
         "jarvis", "wake", "play", "pause", "next", "back", "mute", "unmute", "update",
     ];
