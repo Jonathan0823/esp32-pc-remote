@@ -1,0 +1,78 @@
+name: Windows daemon CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "daemon/**"
+      - ".github/workflows/ci-daemon.yml"
+  pull_request:
+    paths:
+      - "daemon/**"
+      - ".github/workflows/ci-daemon.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    defaults:
+      run:
+        working-directory: daemon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@1.92.0
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: daemon -> target
+          cache-on-failure: true
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --locked --all-targets
+      - name: Validate localhost test assets
+        run: |
+          python -m py_compile test_https_daemon.py
+          python -m json.tool resterm/resterm.env.example.json > $null
+          python test_https_daemon.py --help > $null
+      - name: Build release with symbols
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "2"
+          CARGO_PROFILE_RELEASE_STRIP: "none"
+        run: |
+          cargo build --release --locked --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Get-ChildItem -Path target/x86_64-pc-windows-msvc/release -Filter 'esp32*daemon.pdb' -File)) {
+            throw "Daemon PDB symbols were not generated"
+          }
+      - name: Upload matching executable and symbols
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-media-daemon-windows-x64-symbols
+          path: |
+            daemon/target/x86_64-pc-windows-msvc/release/esp32-media-daemon.exe
+            daemon/target/x86_64-pc-windows-msvc/release/esp32*daemon.pdb
+          if-no-files-found: error
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+      - name: Package per-user installer
+        run: |
+          New-Item -ItemType Directory -Force target/release | Out-Null
+          $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
+          $makensis = Join-Path $programFilesX86 'NSIS\makensis.exe'
+          if (-not (Test-Path $makensis)) { throw "NSIS compiler not found: $makensis" }
+          & $makensis /DAPP_VERSION=0.1.0 installer.nsi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: esp32-media-daemon-windows-x64
+          path: daemon/target/release/esp32-media-daemon-setup.exe
+          if-no-files-found: error

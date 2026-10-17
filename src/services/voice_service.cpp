@@ -163,7 +163,7 @@ void voice_worker(void*) {
       const MediaSubmitStatus status = media_control_submit(
           mediaCommand, event.detectedAt, event.detectedAtUnixMs);
       printf("[voice] id=%s media command %s %s; wake-word mode restored\n",
-             sessionWakeId, media_command_name(mediaCommand),
+             sessionWakeId, media_command_phrase(mediaCommand),
              status == MediaSubmitStatus::Queued ? "queued" : "rejected");
       sessionWakeId[0] = '\0';
       continue;

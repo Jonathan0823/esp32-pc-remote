@@ -7,6 +7,7 @@
 #include <freertos/queue.h>
 #include <freertos/task.h>
 #include <esp_random.h>
+#include <esp_heap_caps.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
@@ -132,7 +133,24 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
     return MediaResult::Rejected;
   }
 
+  multi_heap_info_t internalBefore = {}, psramBefore = {};
+  heap_caps_get_info(&internalBefore, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  heap_caps_get_info(&psramBefore, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   httpStatus = http.POST(reinterpret_cast<uint8_t*>(payload), payloadLength);
+  if (httpStatus < 0) {
+    char tlsDetail[160] = {};
+    const int tlsError = client.lastError(tlsDetail, sizeof(tlsDetail));
+    printf("[media] transport failure cmd=%s id=%s http=%d (%s) tls=%d (%s)\n",
+           media_command_name(intent.command), intent.id, httpStatus,
+           HTTPClient::errorToString(httpStatus).c_str(), tlsError,
+           tlsError == 0 ? "no TLS error recorded" : tlsDetail);
+    printf("[media] heap before POST id=%s internal_free=%u internal_largest=%u "
+           "psram_free=%u psram_largest=%u\n", intent.id,
+           static_cast<unsigned>(internalBefore.total_free_bytes),
+           static_cast<unsigned>(internalBefore.largest_free_block),
+           static_cast<unsigned>(psramBefore.total_free_bytes),
+           static_cast<unsigned>(psramBefore.largest_free_block));
+  }
   if (httpStatus >= 400 && httpStatus < 500) {
     http.end();
     return MediaResult::Rejected;
@@ -171,7 +189,8 @@ void media_worker(void*) {
   for (;;) {
     if (xQueueReceive(mediaQueue, &intent, portMAX_DELAY) != pdPASS) continue;
     int status = 0;
-    report_result(send_intent(intent, status), intent, status);
+    const MediaResult result = send_intent(intent, status);
+    report_result(result, intent, status);
   }
 }
 }  // namespace
