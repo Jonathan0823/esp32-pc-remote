@@ -245,7 +245,9 @@ fn json_content_type(headers: &HeaderMap) -> bool {
 
 fn dispatch_error(error_value: DispatchError) -> Response {
     let (status, label) = match error_value {
-        DispatchError::InvalidTime => (StatusCode::GONE, "expired"),
+        DispatchError::InvalidTime => (StatusCode::BAD_REQUEST, "invalid_time"),
+        DispatchError::Expired => (StatusCode::GONE, "expired"),
+        DispatchError::ClockSkew => (StatusCode::BAD_REQUEST, "clock_skew"),
         DispatchError::Duplicate => (StatusCode::CONFLICT, "duplicate"),
         DispatchError::Busy | DispatchError::ExecutionBusy => {
             (StatusCode::TOO_MANY_REQUESTS, "busy")
@@ -553,6 +555,26 @@ mod tests {
         headers.remove(header::TRANSFER_ENCODING);
         headers.insert(header::CONTENT_LENGTH, HeaderValue::from_static("513"));
         assert!(!valid_framing(&headers, body));
+    }
+
+    #[tokio::test]
+    async fn clock_skew_and_expiry_have_distinct_responses() {
+        for (error_value, expected_status, expected_label) in [
+            (
+                DispatchError::ClockSkew,
+                StatusCode::BAD_REQUEST,
+                "clock_skew",
+            ),
+            (DispatchError::Expired, StatusCode::GONE, "expired"),
+        ] {
+            let response = dispatch_error(error_value);
+            assert_eq!(response.status(), expected_status);
+            let body = axum::body::to_bytes(response.into_body(), domain::BODY_LIMIT)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(body["status"], expected_label);
+        }
     }
 
     #[tokio::test]

@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 MAX_BODY = 512
 MAX_IDS = 128
 LIFETIME_MS = 5000
-MAX_FUTURE_SKEW_MS = 1000
+MAX_FUTURE_SKEW_MS = 5000
 COMMANDS = {"play", "pause", "next", "previous", "mute", "unmute"}
 ID_RE = re.compile(r"^[0-9a-f]{32}$")
 TOKEN_RE = re.compile(r"^[0-9a-f]{64}$")
