@@ -3,7 +3,7 @@ use std::{fmt, path::PathBuf};
 
 pub const BODY_LIMIT: usize = 512;
 pub const REQUEST_LIFETIME_MS: u64 = 5_000;
-pub const MAX_FUTURE_SKEW_MS: u64 = 1_000;
+pub const MAX_FUTURE_SKEW_MS: u64 = 5_000;
 pub const MAX_REMEMBERED_IDS: usize = 128;
 pub const VOICE_CONFIG_SCHEMA: u16 = 1;
 pub const VOICE_CONFIG_LIMIT: usize = 3072;
@@ -207,6 +207,8 @@ pub enum ValidationError {
     InvalidActionId,
     InvalidTime,
     InvalidVoiceConfig,
+    Expired,
+    ClockSkew,
     TooLarge,
     InvalidJson,
 }
@@ -218,6 +220,8 @@ impl fmt::Display for ValidationError {
             Self::InvalidActionId => "invalid action id",
             Self::InvalidTime => "invalid request time",
             Self::InvalidVoiceConfig => "invalid voice configuration",
+            Self::Expired => "request expired",
+            Self::ClockSkew => "request clock is too far ahead",
             Self::TooLarge => "request body too large",
             Self::InvalidJson => "invalid request body",
         })
@@ -272,11 +276,14 @@ pub fn validate_time(issued_ms: u64, expires_ms: u64, now_ms: u64) -> Result<(),
     let expected_expiry = issued_ms
         .checked_add(REQUEST_LIFETIME_MS)
         .ok_or(ValidationError::InvalidTime)?;
-    if expires_ms != expected_expiry
-        || now_ms >= expires_ms
-        || (issued_ms > now_ms && issued_ms - now_ms > MAX_FUTURE_SKEW_MS)
-    {
+    if expires_ms != expected_expiry {
         return Err(ValidationError::InvalidTime);
+    }
+    if now_ms >= expires_ms {
+        return Err(ValidationError::Expired);
+    }
+    if issued_ms > now_ms && issued_ms - now_ms > MAX_FUTURE_SKEW_MS {
+        return Err(ValidationError::ClockSkew);
     }
     Ok(())
 }
@@ -329,15 +336,16 @@ mod tests {
         assert!(validate_time(1_000, 6_000, 1_000).is_ok());
         assert_eq!(
             validate_time(1_000, 6_000, 6_000),
-            Err(ValidationError::InvalidTime)
+            Err(ValidationError::Expired)
         );
         assert_eq!(
             validate_time(1_000, 6_001, 1_000),
             Err(ValidationError::InvalidTime)
         );
+        assert!(validate_time(6_000, 11_000, 1_000).is_ok());
         assert_eq!(
-            validate_time(2_001, 7_001, 1_000),
-            Err(ValidationError::InvalidTime)
+            validate_time(6_001, 11_001, 1_000),
+            Err(ValidationError::ClockSkew)
         );
         assert_eq!(
             validate_time(u64::MAX, 4, 1),

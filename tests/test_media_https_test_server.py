@@ -92,9 +92,18 @@ class MediaHttpsContractTest(unittest.TestCase):
         self.assertEqual(self.validate(body(expires_at_ms=NOW + 5001)).status, 400)
 
     def test_expiry_and_future_skew(self):
-        self.assertEqual(self.validate(now=NOW + 5000).status, 410)
-        self.assertEqual(self.validate(body(issued_at_ms=NOW + 1001,
-                                           expires_at_ms=NOW + 6001)).status, 400)
+        expired = self.validate(now=NOW + 5000)
+        self.assertEqual(expired.status, 410)
+        self.assertEqual(expired.body["status"], "expired")
+        self.assertEqual(
+            self.validate(body(issued_at_ms=NOW + 5000,
+                               expires_at_ms=NOW + 10000)).status,
+            202,
+        )
+        skewed = self.validate(body(issued_at_ms=NOW + 5001,
+                                    expires_at_ms=NOW + 10001))
+        self.assertEqual(skewed.status, 400)
+        self.assertEqual(skewed.body["status"], "clock_skew")
 
     def test_rejects_duplicate_ids_and_full_live_cache(self):
         seen = {}

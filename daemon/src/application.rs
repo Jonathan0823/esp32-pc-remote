@@ -46,8 +46,12 @@ pub enum DispatchStatus {
 
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum DispatchError {
-    #[error("request time is invalid or expired")]
+    #[error("request time is invalid")]
     InvalidTime,
+    #[error("request expired")]
+    Expired,
+    #[error("request clock is too far ahead")]
+    ClockSkew,
     #[error("request id was already used")]
     Duplicate,
     #[error("request cache is full")]
@@ -280,7 +284,11 @@ impl Dispatcher {
 }
 
 fn validate_request_time(issued: u64, expires: u64, now: u64) -> Result<(), DispatchError> {
-    domain::validate_time(issued, expires, now).map_err(|_| DispatchError::InvalidTime)
+    domain::validate_time(issued, expires, now).map_err(|error| match error {
+        domain::ValidationError::Expired => DispatchError::Expired,
+        domain::ValidationError::ClockSkew => DispatchError::ClockSkew,
+        _ => DispatchError::InvalidTime,
+    })
 }
 
 #[derive(Zeroize, ZeroizeOnDrop)]
