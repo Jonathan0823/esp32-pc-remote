@@ -34,6 +34,8 @@ int main() {
                {brightness / 2, brightness / 4, 0}));
   assert(same(indicator_ota_color(IndicatorOtaState::Transferring, brightness),
                {0, brightness / 4, brightness / 2}));
+  assert(same(indicator_sync_color(true, brightness), {0, brightness / 2, brightness / 2}));
+  assert(same(indicator_sync_color(false, brightness), {brightness / 2, 0, 0}));
   assert(same(indicator_ota_result_color(true, brightness), {0, brightness / 2, 0}));
   assert(same(indicator_ota_result_color(false, brightness), {brightness / 2, 0, 0}));
 

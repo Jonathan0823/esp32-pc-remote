@@ -5,12 +5,20 @@
 
 int main() {
   assert(voice_command_from_id(1).kind == VoiceCommandKind::Wake);
+  assert(voice_command_from_id(VOICE_SYNC_COMMAND_ID).kind == VoiceCommandKind::Sync);
+  for (int index = 0; index < VOICE_CONFIG_MAX_COMMANDS; ++index) {
+    const VoiceCommand command = voice_command_from_id(VOICE_CUSTOM_COMMAND_FIRST_ID + index);
+    assert(command.kind == VoiceCommandKind::Custom);
+    assert(command.customIndex == index);
+  }
+  assert(voice_command_from_id(VOICE_CUSTOM_COMMAND_FIRST_ID + VOICE_CONFIG_MAX_COMMANDS).kind == VoiceCommandKind::Invalid);
   for (int id = MEDIA_COMMAND_FIRST_ID; id < MEDIA_COMMAND_FIRST_ID + 6; ++id) {
     assert(voice_command_from_id(id).kind == VoiceCommandKind::Media);
     assert(static_cast<int>(voice_command_from_id(id).media) == id - MEDIA_COMMAND_FIRST_ID);
   }
   assert(voice_command_from_id(0).kind == VoiceCommandKind::Invalid);
-  assert(voice_command_from_id(MEDIA_COMMAND_FIRST_ID + 6).kind == VoiceCommandKind::Invalid);
+  assert(voice_command_from_id(VOICE_SYNC_COMMAND_ID).kind == VoiceCommandKind::Sync);
+  assert(voice_command_from_id(VOICE_CUSTOM_COMMAND_FIRST_ID + VOICE_CONFIG_MAX_COMMANDS).kind == VoiceCommandKind::Invalid);
 
   VoiceSession session = {};
   assert(!voice_session_accept(session, 0));

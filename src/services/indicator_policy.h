@@ -38,6 +38,11 @@ inline IndicatorColor indicator_ota_color(IndicatorOtaState state, uint8_t brigh
   return {0, 0, 0};
 }
 
+inline IndicatorColor indicator_sync_color(bool success, uint8_t brightness) {
+  const uint8_t channel = brightness / 2;
+  return success ? IndicatorColor{0, channel, channel} : IndicatorColor{channel, 0, 0};
+}
+
 inline IndicatorColor indicator_ota_result_color(bool success, uint8_t brightness) {
   const uint8_t channel = brightness / 2;
   return success ? IndicatorColor{0, channel, 0} : IndicatorColor{channel, 0, 0};
