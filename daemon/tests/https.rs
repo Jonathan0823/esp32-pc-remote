@@ -116,6 +116,7 @@ async fn provisioned_https_requires_matching_host_ca_and_token() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::OK);
+    assert_eq!(response.headers()["connection"].to_str().unwrap(), "close");
     let reply: serde_json::Value =
         serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
     assert_eq!(reply["id"], "0123456789abcdef0123456789abcdef");

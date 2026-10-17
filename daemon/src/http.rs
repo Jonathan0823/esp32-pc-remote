@@ -11,6 +11,7 @@ use axum::{
     routing::post,
 };
 use axum_server::{accept::Accept, tls_rustls::RustlsAcceptor};
+use hyper_util::rt::TokioTimer;
 use serde::Serialize;
 use std::{
     future::{Ready, ready},
@@ -350,10 +351,17 @@ async fn serve_listener(
             shutdown_handle.graceful_shutdown(Some(std::time::Duration::from_secs(2)));
         }
     });
+    let mut server = axum_server::Server::from_tcp(listener);
+    server
+        .http_builder()
+        .http1()
+        .timer(TokioTimer::new())
+        .header_read_timeout(Duration::from_secs(5))
+        .keep_alive(false);
     let acceptor = RustlsAcceptor::new(tls)
         .handshake_timeout(Duration::from_secs(2))
         .acceptor(LimitedAcceptor::new(8));
-    axum_server::Server::from_tcp(listener)
+    server
         .acceptor(acceptor)
         .handle(handle)
         .serve(router(state).into_make_service())

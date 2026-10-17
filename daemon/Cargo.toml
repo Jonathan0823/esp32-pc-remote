@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 axum = { version = "0.8", features = ["http1", "json", "tokio"] }
 axum-server = { version = "0.7", default-features = false, features = ["tls-rustls-no-provider"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 rand = "0.9"
 rcgen = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

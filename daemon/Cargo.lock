@@ -769,6 +769,7 @@ dependencies = [
  "axum",
  "axum-server",
  "eframe",
+ "hyper-util",
  "process-wrap",
  "rand 0.9.5",
  "rcgen",
