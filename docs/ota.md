@@ -11,7 +11,7 @@ OTA is disabled unless `PC_OTA_PASSWORD` is configured. It updates only the ESP3
    #define PC_OTA_PASSWORD "<64 lowercase hex characters>"
    ```
 
-3. **Before the first `make ota` upload**, build and flash this OTA-enabled firmware over USB using the [README's USB flashing instructions](../README.md#build-and-flash). Configure `PC_OTA_PASSWORD` first: the USB-flashed firmware must include that credential, matching the value the uploader reads from your local `config.h`. Editing `config.h` alone does not enable OTA on an already-flashed board.
+3. **Before the first `make ota` upload**, build and flash this OTA-enabled firmware over USB using the [README's USB flashing instructions](../README.md#3-build-and-flash-over-usb). Configure `PC_OTA_PASSWORD` first: the USB-flashed firmware must include that credential, matching the value the uploader reads from your local `config.h`. Editing `config.h` alone does not enable OTA on an already-flashed board.
 4. Let the board boot and connect to Wi-Fi, then find its current IP address in the router's DHCP client list. OTA does not advertise mDNS.
 
 ## Upload

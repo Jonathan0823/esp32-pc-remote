@@ -6,11 +6,15 @@ A private web dashboard to control your PC through the ESP32 remote over MQTT.
 
 ### 1. Configure
 
-Copy `.env.example` to `.env` and fill in your MQTT broker details:
+From the repository root, enter the dashboard directory, install dependencies with [Bun](https://bun.sh), and copy the configuration template:
 
 ```bash
+cd dashboard
+bun install
 cp .env.example .env
 ```
+
+Fill in your MQTT broker details in `.env`. Use the same base topic as the firmware's `MQTT_BASE_TOPIC`.
 
 ```
 VITE_MQTT_BROKER_URL=wss://your-broker.hivemq.cloud:8884/mqtt
@@ -39,10 +43,11 @@ bunx wrangler pages deploy dist --branch production
 **Option B — Dashboard (easier):**
 1. Go to **Cloudflare Dashboard > Workers & Pages > Create application > Pages**
 2. Connect your Git repository
-3. Framework preset: **Vite**
-4. Build command: `bun run build`
-5. Build output directory: `dist`
-6. Environment variables: add `VITE_*` variables above
+3. Root directory: `dashboard`
+4. Framework preset: **Vite**
+5. Build command: `bun run build`
+6. Build output directory: `dist`
+7. Environment variables: add `VITE_*` variables above
 
 ### 4. Lock it down with Cloudflare Access
 
