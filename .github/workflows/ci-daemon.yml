@@ -25,6 +25,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Install GNU Make
+        run: choco install make --yes --no-progress
       - uses: dtolnay/rust-toolchain@1.92.0
         with:
           targets: x86_64-pc-windows-msvc
@@ -33,23 +35,16 @@ jobs:
         with:
           workspaces: daemon -> target
           cache-on-failure: true
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Lint
-        run: cargo clippy --locked --all-targets -- -D warnings
-      - name: Test
-        run: cargo test --locked --all-targets
-      - name: Validate localhost test assets
-        run: |
-          python -m py_compile test_https_daemon.py
-          python -m json.tool resterm/resterm.env.example.json > $null
-          python test_https_daemon.py --help > $null
+      - name: Validate daemon
+        env:
+          PYTHON: python
+        run: make -C .. check-daemon
       - name: Build release with symbols
         env:
           CARGO_PROFILE_RELEASE_DEBUG: "2"
           CARGO_PROFILE_RELEASE_STRIP: "none"
         run: |
-          cargo build --release --locked --target x86_64-pc-windows-msvc
+          make -C .. build-daemon
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (-not (Get-ChildItem -Path target/x86_64-pc-windows-msvc/release -Filter 'esp32*daemon.pdb' -File)) {
             throw "Daemon PDB symbols were not generated"

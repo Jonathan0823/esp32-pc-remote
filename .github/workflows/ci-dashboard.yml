@@ -9,9 +9,8 @@ on:
 env:
   BUN_VERSION: "1.3.14"
 
-defaults:
-  run:
-    working-directory: dashboard
+permissions:
+  contents: read
 
 jobs:
   format:
@@ -28,10 +27,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: make install-dashboard
 
       - name: Check formatting
-        run: bun run format:check
+        run: make check-dashboard-format
 
   lint:
     name: Lint
@@ -47,10 +46,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: make install-dashboard
 
-      - name: Run oxlint
-        run: bun run lint
+      - name: Lint
+        run: make check-dashboard-lint
 
   test:
     name: Test
@@ -66,10 +65,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: make install-dashboard
 
       - name: Run tests
-        run: bun run test
+        run: make check-dashboard-test
 
   build:
     name: Build
@@ -85,7 +84,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: make install-dashboard
 
       - name: Build
-        run: bun run build
+        run: make build-dashboard

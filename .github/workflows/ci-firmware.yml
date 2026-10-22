@@ -23,8 +23,8 @@ jobs:
       - name: Create config.h from template
         run: cp config.example.h config.h
 
-      - name: Run host tests
-        run: ./scripts/test_host.sh
+      - name: Validate firmware
+        run: make check-firmware
 
       - name: Build firmware and speech model image
-        run: pio run
+        run: make build-firmware
