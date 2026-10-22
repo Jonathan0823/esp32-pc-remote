@@ -1,6 +1,6 @@
 # ESP32 PC Remote — Dashboard
 
-A private web dashboard to control your PC through the ESP32 remote over MQTT.
+A private web dashboard to wake your PC and monitor PC/ESP32 status over MQTT. It does not control Windows media or launch configured applications/scripts; those actions are voice-triggered through the paired Windows companion.
 
 ## Setup
 

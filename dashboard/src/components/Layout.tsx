@@ -160,13 +160,13 @@ export default function Layout() {
             </div>
           )}
           <a
-            href="https://github.com/Jonathan0823/esp32-wake-on-lan-remote"
+            href="https://github.com/Jonathan0823/esp32-pc-remote"
             target="_blank"
             rel="noopener noreferrer"
             className="text-sidebar-foreground/30 hover:text-sidebar-foreground flex items-center gap-1.5 text-[10px] transition-colors"
           >
             <GithubLogoIcon className="size-3" />
-            <span>esp32-wake-on-lan-remote</span>
+            <span>esp32-pc-remote</span>
           </a>
         </SidebarFooter>
       </Sidebar>
