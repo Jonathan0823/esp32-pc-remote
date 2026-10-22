@@ -8,7 +8,7 @@ This developer acceptance checklist is separate from the [user quickstart](../RE
 - Let a listening window time out; verify the LED turns off, wake-word mode resumes, and no packet is sent.
 - Start a new session immediately after command completion; verify another command is accepted without a five-second cooldown.
 - Disconnect Wi-Fi, say “Jarvis” and “wake”; verify a red flash and no delayed WoL after reconnecting.
-- Submit a confirmed Telegram wake and an MQTT wake; verify a purple Telegram flash and cyan MQTT flash, each lasting about 500 ms.
+- Submit a confirmed Telegram wake and either confirm an MQTT wake with `wake_confirm` or send an MQTT `wake_request` with `force: true`; verify a purple Telegram flash and cyan MQTT flash, each lasting about 500 ms.
 - Verify a request waiting for confirmation does not flash a submission color.
 - Check voice logs distinguish listening start/timeout, media/custom action queued/accepted/rejected/unknown, sync activation/acknowledgment, and WoL packet submission; verify Telegram and MQTT/dashboard controls still work.
 - With disposable settings and the LAN HTTPS test fixture, try all six media phrases; verify one matching accepted request/yellow pulse per session. Stop the fixture or use an untrusted certificate; verify red feedback and no retry after reconnect. The fixture does not execute media, so white execution feedback awaits the Windows daemon.

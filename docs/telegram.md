@@ -29,6 +29,8 @@ Search for the username you chose (e.g. `@MyPcRemoteBot`) and start a chat.
 | `/wake force` | Send the Wake-on-LAN packet immediately |
 | `/reboot` | Reboot the ESP32 |
 
+> **Security:** The current firmware has no chat or user allowlist. Any Telegram user who can message this bot can issue `/wake force` or `/reboot`; the bot token does not restrict senders. Do not treat this as a private control path until a sender allowlist is implemented and configured.
+
 The bot only responds to the commands above. Anything else gets a "Unknown command" hint.
 
 ## Troubleshooting

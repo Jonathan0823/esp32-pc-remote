@@ -47,6 +47,9 @@ bunx wrangler pages deploy dist --branch production
 4. Framework preset: **Vite**
 5. Build command: `bun run build`
 6. Build output directory: `dist`
+
+> **Before adding `VITE_*` credentials**, protect Git-connected Pages previews: configure Cloudflare Access for every preview hostname, disable preview builds, or use separate restricted preview credentials. Do not expose production MQTT credentials in an unprotected preview; `VITE_*` values are embedded in the browser bundle.
+
 7. Environment variables: add `VITE_*` variables above
 
 ### 4. Lock it down with Cloudflare Access
@@ -65,10 +68,10 @@ bunx wrangler pages deploy dist --branch production
 
 ### 5. MQTT Broker ACLs (important)
 
-Create a dedicated MQTT user for the dashboard with topic ACLs:
+Create a dedicated MQTT user for the dashboard with topic ACLs. Replace `<MQTT_BASE_TOPIC>` in every entry below with the exact value configured in both firmware `MQTT_BASE_TOPIC` and dashboard `VITE_MQTT_BASE_TOPIC` (for example, `esp-32-remote`):
 
-- Allow **subscribe**: `esp-32-remote/state`, `esp-32-remote/reply`, `esp-32-remote/event`, `esp-32-remote/log`
-- Allow **publish**: `esp-32-remote/cmd`
+- Allow **subscribe**: `<MQTT_BASE_TOPIC>/state`, `<MQTT_BASE_TOPIC>/reply`, `<MQTT_BASE_TOPIC>/event`, `<MQTT_BASE_TOPIC>/log`
+- Allow **publish**: `<MQTT_BASE_TOPIC>/cmd`
 
 This limits damage if the credentials are extracted from the browser.
 

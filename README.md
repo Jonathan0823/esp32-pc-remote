@@ -41,7 +41,7 @@ Media and custom voice actions, configured in the Windows app.
 
 | Feature | What you need |
 | --- | --- |
-| Say “Jarvis,” then “wake” to turn on your PC | ESP32-S3, I2S microphone, WiFi, and a WoL-capable PC |
+| Say “Jarvis,” then “wake” to send a Wake-on-LAN request to your PC | ESP32-S3, I2S microphone, WiFi, and a WoL-capable PC |
 | Wake and check your PC through Telegram | A Telegram bot token and internet access |
 | Wake your PC and view status through MQTT | An MQTT broker and credentials |
 | Wake your PC and view status in the private dashboard | MQTT with secure WebSocket support; access control for a hosted dashboard |
