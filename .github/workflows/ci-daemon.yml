@@ -3,6 +3,7 @@ name: Windows daemon CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "daemon/**"
       - ".github/workflows/ci-daemon.yml"
@@ -25,6 +26,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Validate release tag and determine package version
+        id: release_version
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          function Get-ReleaseVersion([string]$tag) {
+            if ($tag -match '^v(?<major>0|[1-9][0-9]*)\.(?<minor>0|[1-9][0-9]*)\.(?<patch>0|[1-9][0-9]*)$') {
+              return "$($Matches.major).$($Matches.minor).$($Matches.patch)"
+            }
+            return $null
+          }
+
+          if ((Get-ReleaseVersion 'v0.1.0') -ne '0.1.0' -or (Get-ReleaseVersion 'v2.10.3') -ne '2.10.3') {
+            throw "Release version parser self-check failed"
+          }
+          foreach ($invalidTag in @('1.2.3', 'v1.2', 'v01.2.3', 'v1.2.3-rc.1', 'v١.2.3')) {
+            if ($null -ne (Get-ReleaseVersion $invalidTag)) { throw "Accepted invalid release tag: $invalidTag" }
+          }
+
+          $cargoToml = Get-Content Cargo.toml -Raw
+          $packageVersion = [regex]::Match($cargoToml, '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"')
+          if (-not $packageVersion.Success) { throw "Could not read daemon package version from Cargo.toml" }
+          $appVersion = $packageVersion.Groups[1].Value
+
+          if ($env:REF_TYPE -eq 'tag') {
+            $tagVersion = Get-ReleaseVersion $env:REF_NAME
+            if (-not $tagVersion) { throw "Release tag must use stable vMAJOR.MINOR.PATCH form" }
+            if ($tagVersion -ne $appVersion) { throw "Tag version $tagVersion does not match daemon package version $appVersion" }
+            git merge-base --is-ancestor $env:TARGET_SHA origin/main
+            if ($LASTEXITCODE -ne 0) { throw "Release tag must point to a commit on main" }
+            $appVersion = $tagVersion
+          }
+
+          "app_version=$appVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Install GNU Make
         run: choco install make --yes --no-progress
       - uses: dtolnay/rust-toolchain@1.92.0
@@ -60,14 +99,45 @@ jobs:
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
       - name: Package per-user installer
+        env:
+          APP_VERSION: ${{ steps.release_version.outputs.app_version }}
         run: |
           New-Item -ItemType Directory -Force target/release | Out-Null
           $programFilesX86 = [Environment]::GetFolderPath([Environment+SpecialFolder]::ProgramFilesX86)
           $makensis = Join-Path $programFilesX86 'NSIS\makensis.exe'
           if (-not (Test-Path $makensis)) { throw "NSIS compiler not found: $makensis" }
-          & $makensis /DAPP_VERSION=0.1.0 installer.nsi
+          & $makensis "/DAPP_VERSION=$env:APP_VERSION" installer.nsi
       - uses: actions/upload-artifact@v4
         with:
           name: esp32-media-daemon-windows-x64
           path: daemon/target/release/esp32-media-daemon-setup.exe
           if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: esp32-media-daemon-windows-x64
+          path: release-assets
+      - name: Refuse to overwrite an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists; refusing to overwrite its assets."
+            exit 1
+          fi
+      - name: Publish raw installer asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" release-assets/esp32-media-daemon-setup.exe --repo "$GH_REPO" --verify-tag --title "$RELEASE_TAG" --generate-notes
