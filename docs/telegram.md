@@ -12,6 +12,8 @@
 #define BOT_TOKEN "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
 ```
 
+Rebuild and upload the firmware using the [USB flashing instructions](../README.md#3-build-and-flash-over-usb). Editing `config.h` alone does not update an already-flashed board.
+
 ## 3. Find your bot
 
 Search for the username you chose (e.g. `@MyPcRemoteBot`) and start a chat.
@@ -24,6 +26,7 @@ Search for the username you chose (e.g. `@MyPcRemoteBot`) and start a chat.
 | `/ping` | ESP32 diagnostics — reset reason, heap, WiFi RSSI, poll health |
 | `/status` | ESP32 health + target PC online state |
 | `/wake` | Request wake confirmation for the target PC (inline buttons) |
+| `/wake force` | Send the Wake-on-LAN packet immediately |
 | `/reboot` | Reboot the ESP32 |
 
 The bot only responds to the commands above. Anything else gets a "Unknown command" hint.

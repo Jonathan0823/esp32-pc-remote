@@ -11,9 +11,31 @@ An ESP32-S3 stays powered on your home network while your PC is off. It recogniz
 
 Useful for gaming PCs, Moonlight/Sunshine streaming, home labs, and desktops you do not want to leave running all day. No inbound internet port forwarding is needed.
 
-![Demo](docs/demo.gif)
+[Previews](#see-it-in-action) · [Quickstart](#quickstart-wake-your-pc-by-voice) · [Optional setup](#optional-setup) · [Commands](#everyday-commands) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation)
 
-[Quickstart](#quickstart-wake-your-pc-by-voice) · [Optional setup](#optional-setup) · [Commands](#everyday-commands) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation)
+## See it in action
+
+### Web dashboard
+
+Wake your PC and view status over MQTT.
+
+![Web dashboard showing PC wake controls and status](docs/assets/web-dashboard.gif)
+
+### Windows companion
+
+Media and custom voice actions, configured in the Windows app.
+
+> **Screenshot coming soon:** the Actions tab with an example application and its spoken phrase.
+
+<!-- Replace the screenshot placeholder with docs/assets/windows-companion.png. Hide tokens and personal paths. -->
+
+### Voice demo
+
+“Jarvis” → blue listening LED → spoken command → PC wakes or a configured Windows action runs.
+
+> **Video coming soon:** a short recording with audio and captions showing the ESP32 and the actual result on the PC.
+
+<!-- Replace the video placeholder with a link to docs/assets/voice-demo.mp4 or an uploaded GitHub video. Label any skipped PC boot time. -->
 
 ## What you can do
 
