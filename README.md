@@ -1,259 +1,225 @@
-# ESP32 Wake-on-LAN Remote
+# ESP32 PC Remote
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![ESP32](https://img.shields.io/badge/Board-ESP32-green)](https://www.espressif.com/)
-[![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-0088cc)](https://core.telegram.org/bots)
+[![ESP32-S3](https://img.shields.io/badge/Board-ESP32--S3-green)](https://www.espressif.com/)
+[![Telegram Bot](https://img.shields.io/badge/Telegram-Bot-0088cc)](docs/telegram.md)
 [![Dashboard](https://img.shields.io/badge/Dashboard-React%20%2B%20Vite-61dafb)](dashboard/README.md)
 
-**Turn on your gaming or home PC from Telegram, MQTT, or a private web dashboard — without port forwarding or a cloud subscription.**
+**Wake your PC with “Jarvis,” Telegram, or MQTT. Add a private dashboard for MQTT wake control, and an optional Windows companion for voice-triggered media and custom actions.**
 
-An ESP32 stays on your home network and sends a Wake-on-LAN magic packet to your PC. Wake it by saying “Jarvis” followed by “wake,” or control it remotely through Telegram, MQTT automation, or the included browser dashboard.
+An ESP32-S3 stays powered on your home network while your PC is off. It recognizes voice commands locally and sends Wake-on-LAN packets to your PC. Telegram, MQTT, and the web dashboard can wake the PC and show status; they do **not** control Windows media or launch scripts. Those actions are available by voice through the separately paired Windows companion.
+
+Useful for gaming PCs, Moonlight/Sunshine streaming, home labs, and desktops you do not want to leave running all day. No inbound internet port forwarding is needed.
 
 ![Demo](docs/demo.gif)
 
-## Why this exists
+[Quickstart](#quickstart-wake-your-pc-by-voice) · [Optional setup](#optional-setup) · [Commands](#everyday-commands) · [Troubleshooting](#troubleshooting) · [Documentation](#documentation)
 
-Useful for gaming PCs, Moonlight/Sunshine streaming, home labs, and desktops that normally stay powered off. Send `/wake` from Telegram, press **WAKE PC** in the dashboard, or publish an MQTT command. The ESP32 handles the local network part.
+## What you can do
+
+| Feature | What you need |
+| --- | --- |
+| Say “Jarvis,” then “wake” to turn on your PC | ESP32-S3, I2S microphone, WiFi, and a WoL-capable PC |
+| Wake and check your PC through Telegram | A Telegram bot token and internet access |
+| Wake your PC and view status through MQTT | An MQTT broker and credentials |
+| Wake your PC and view status in the private dashboard | MQTT with secure WebSocket support; access control for a hosted dashboard |
+| Control media or run configured apps/scripts by voice | The optional Windows 11 x64 companion, running and paired over your LAN; voice only |
+| Monitor ESP32 health | Serial Monitor, Telegram, or MQTT/dashboard; optional Grafana Cloud logging |
+
+**Start with voice wake.** Telegram, MQTT, the dashboard, the Windows companion, and Grafana are optional. Speech recognition runs on the ESP32; it does not need a cloud speech service. Telegram and any remotely hosted services still need network connectivity.
+
+### Lightweight Windows companion
+
+- About **2.7 MB RAM**, with lower usage observed at idle
+- **0% CPU at idle**, with no observed CPU spikes while handling media requests or launching configured scripts
+- No noticeable gaming-performance impact in manual testing
+- Windows app features, media commands, and configured actions tested over the ESP32-to-Windows LAN connection
+
+**TL;DR:** Tested on two Windows machines—a laptop and a desktop PC. These are observed results, not guarantees for every system.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    Telegram[Telegram] --> ESP32[ESP32 on your LAN]
-    Voice["Jarvis"] --> ESP32
-    MQTT[MQTT] --> Dashboard[Web dashboard]
-    Dashboard --> MQTT
-    MQTT --> ESP32
-    ESP32 --> WOL[Wake-on-LAN magic packet]
-    WOL --> PC[Gaming or home PC]
+    Voice["Local voice: Jarvis + command"] --> ESP32[ESP32-S3 on your LAN]
+    Telegram[Telegram] --> ESP32
+    Dashboard[Private web dashboard] <-->|MQTT over WebSocket| Broker[MQTT broker]
+    Broker <--> ESP32
+    ESP32 -->|Wake-on-LAN packet| PC[Your PC]
+    ESP32 -->|Local HTTPS: media and custom actions| Companion[Optional Windows companion]
+    Companion -->|On the running PC| PC
 ```
 
-The ESP32 must remain connected to your local network. Telegram and MQTT provide the remote control path; the PC does not need a public IP or port forwarding.
+The ESP32 must have power and WiFi while the PC is off. The Windows companion is **not required for Wake-on-LAN** and cannot run actions while the PC is off.
 
-## What it does
+## Quickstart: wake your PC by voice
 
-- **Wake your PC by voice** by saying “Jarvis,” then “wake”; Telegram and MQTT keep their confirmation and force options
-- **Wake your PC remotely** with a confirmation step or immediate force mode
-- **Check PC status** with a TCP probe
-- **Diagnose the ESP32** with reset reason, heap, WiFi RSSI, uptime, and poll health
-- **Recover automatically** with a watchdog and WiFi reconnect backoff
-- **Control through MQTT** with TLS, retained state, replies, and events
-- **Use the private web dashboard** over MQTT WebSocket
-- **Send important health events to Grafana Cloud Loki** optionally
+### 1. Prepare the hardware and PC
 
-## Voice wake
+You need:
 
-Say **“Jarvis”** to open a blue command-listening window. Within ESP_SR's built-in approximately 5.76-second MultiNet timeout, say **“wake”** for local WoL, one of the built-in media phrases (“play”, “pause”, “next”, “back”, “mute”, “unmute”), or a custom phrase configured in the Windows app. “Jarvis” alone never sends a command. Each window accepts at most one command; timeout returns to wake-word listening. The Windows app lets you assign one English phrase per configured action; **Save phrases** stores drafts, **Apply to ESP** publishes a revision, and saying **“Jarvis, update”** fetches and activates it. No polling or reflash is needed after the initial firmware update. Firmware accepts at most 12 custom phrases, each 2–63 ASCII letters with single spaces; exact built-in phrases and case-insensitive duplicates are reserved. A sync briefly restarts recognition outside an active listening session, and failed updates retain the last valid settings. The RGB LED is blue while listening and identifies submitted WoL packets: voice green, MQTT cyan, Telegram purple; red indicates WoL submission failure. Media/custom-action feedback uses dim 500-ms pulses; white means Windows reported issuing the action, not that playback occurred. The microphone uses BCLK GPIO5, WS GPIO6, and DATA GPIO4. The Jarvis model is included in the normal USB flash image; see the [Jarvis wake-word guide](docs/jarvis-wake-word.md) and [Windows daemon guide](docs/windows-media-daemon.md#voice-phrases-and-explicit-sync).
+- **ESP32-S3-DevKitC-1 N16R8** (16 MB flash, 8 MB PSRAM), a USB data cable, and reliable power
+- An I2S microphone compatible with the firmware's 16 kHz, 32-bit, left-channel input
+- WiFi access on the PC's LAN
+- A PC with Wake-on-LAN enabled in its BIOS, OS, and network adapter
+- [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html) on the computer used to flash the board
 
-**Media-control status:** The repository now includes a Windows 11 x64 HTTPS tray daemon under [`daemon/`](daemon/), plus the ESP contract and localhost-first setup guide. The firmware's yellow “accepted” response still means only request acceptance; white execution feedback is available only when a real Windows daemon reports the correlated command. Windows runtime, ESP/LAN interoperability, and gaming-performance validation remain pending; the non-actioning fixture never executes media. See the [Windows daemon guide](docs/windows-media-daemon.md) and [HTTPS contract](docs/media-control-https.md).
+Connect the microphone with power disconnected:
 
-## Quickstart: Telegram
+| Microphone connection | ESP32-S3 connection |
+| --- | --- |
+| BCLK / SCK | GPIO5 |
+| WS / LRCLK | GPIO6 |
+| DATA / SD (microphone output) | GPIO4 |
+| GND | GND |
 
-This is the simplest way to verify the project works.
+Use your microphone's datasheet for its supply voltage and left-channel selection wiring; the repository does not specify an exact microphone module. Do not connect a 5 V signal to an ESP32 GPIO.
 
-### You need
+**Test Wake-on-LAN with another tool first.** Follow the [PC Wake-on-LAN setup guide](docs/wake-on-lan.md); if the PC cannot wake from another device on the LAN, fix that before configuring the ESP32.
 
-- ESP32-S3-DevKitC-1 N16R8 with the I2S microphone connected to BCLK GPIO5, WS GPIO6, and DATA GPIO4
-- A PC with Wake-on-LAN enabled in BIOS, the OS, and the network adapter
-- WiFi access for the ESP32
-- [PlatformIO Core](https://docs.platformio.org/en/latest/core/installation/index.html)
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-
-First, enable and test Wake-on-LAN on the PC using the [Wake-on-LAN setup guide](docs/wake-on-lan.md). If the PC cannot wake from another WoL tool, the ESP32 cannot fix it.
-
-### Build and flash
+### 2. Download and configure
 
 ```bash
+git clone https://github.com/Jonathan0823/esp32-pc-remote.git
+cd esp32-pc-remote
 cp config.example.h config.h
-# Set WIFI_SSID, WIFI_PASS, PC_MAC, and WOL_BCAST in config.h.
-# Set PC_IP and PC_TCP_PORT if you want PC status polling.
-# BOT_TOKEN and MQTT settings are optional.
+```
 
+On Windows, use `Copy-Item config.example.h config.h` in PowerShell instead of `cp`.
+
+Edit `config.h`:
+
+| Setting | Value |
+| --- | --- |
+| `WIFI_SSID`, `WIFI_PASS` | Your home WiFi credentials |
+| `PC_MAC` | MAC address of the PC's WoL-enabled network adapter |
+| `WOL_BCAST` | Your LAN broadcast address, for example `192.168.1.255` for a `192.168.1.0/24` network |
+| `PC_NAME` | Optional display name for the PC |
+| `PC_IP`, `PC_TCP_PORT` | For status checks: a reserved PC IP and a TCP port that is actually open while the PC is running |
+
+Leave `BOT_TOKEN`, MQTT, `PC_MEDIA_HOST`, OTA, and Grafana settings blank for this first test. Keep `WOL_PORT` at its default of `9` unless your setup needs another port. `config.h` is ignored by Git; never share it or a firmware image containing your credentials.
+
+### 3. Build and flash over USB
+
+Run these commands from the repository root:
+
+```bash
 pio run
 pio run -t upload --upload-port /dev/ttyACM0
 pio device monitor --port /dev/ttyACM0 --baud 115200
 ```
 
-Replace `/dev/ttyACM0` with your board's serial port. `pio run` downloads the pinned platform and declared libraries. Voice wake works without Telegram or MQTT configuration; those remote-control services remain optional.
+Replace `/dev/ttyACM0` with your board's serial port, such as `COM3` on Windows. Use `pio device list` to find it. PlatformIO downloads the pinned platform and declared libraries during the build.
 
-After flashing, open your bot in Telegram and send `/help`, then `/wake`. The bot asks for confirmation before sending the packet. For voice testing, say “Jarvis,” then “wake” within the listening window; confirm the Serial Monitor reports packet submission. The LED color identifies the source of a submitted packet, not that the PC is online.
+The normal USB upload includes the Jarvis speech models. App-only [LAN OTA](docs/ota.md) is available after provisioning, but does not update those models.
 
-See [Telegram bot setup](docs/telegram.md) for the complete guide. See [LAN app-firmware OTA](docs/ota.md) for credential setup, upload, and recovery instructions.
+### 4. Try your first wake
 
-## Hardware validation
+1. Check Serial Monitor for `[voice] listening for Jarvis`.
+2. With the PC in a WoL-supported sleep/off state, say **“Jarvis.”** The LED turns blue; no command is sent yet.
+3. Say **“wake”** within about six seconds. A green flash means the ESP32 submitted the WoL packet.
+4. Verify that the PC actually wakes. Packet submission alone does not prove the PC is online.
 
-- Confirm Serial prints `[voice] listening for Jarvis` after successful microphone/ESP_SR initialization.
-- Say “Jarvis”; verify a blue listening indication and no WoL packet yet.
-- Say “wake” within about 5.76 seconds; verify one WoL submission and a green RGB flash lasting about 500 ms.
-- Let a listening window time out; verify the LED turns off, wake-word mode resumes, and no packet is sent.
-- Start a new session immediately after command completion; verify another command is accepted without a five-second cooldown.
-- Disconnect Wi-Fi, say “Jarvis” and “wake”; verify a red flash and no delayed WoL after reconnecting.
-- Submit a confirmed Telegram wake and an MQTT wake; verify a purple Telegram flash and cyan MQTT flash, each lasting about 500 ms.
-- Verify a request waiting for confirmation does not flash a submission color.
-- Check voice logs distinguish listening start/timeout, media/custom action queued/accepted/rejected/unknown, sync activation/acknowledgment, and WoL packet submission; verify Telegram and MQTT/dashboard controls still work.
-- With disposable settings and the LAN HTTPS test fixture, try all six media phrases; verify one matching accepted request/yellow pulse per session. Stop the fixture or use an untrusted certificate; verify red feedback and no retry after reconnect. The fixture does not execute media, so white execution feedback awaits the Windows daemon.
-- On a paired ESP and Windows daemon, configure a disposable custom phrase, save it without applying, then apply and verify Settings remains pending until “Jarvis, update”. Confirm the custom phrase dispatches exactly once; reboot and verify the active phrase remains; test unavailable daemon, rejected phrase-table update, and action edits during a stale published revision. Do not flash or run actions without explicit permission.
+Each listening window accepts one command. If it times out, say “Jarvis” again. See the [Jarvis guide](docs/jarvis-wake-word.md) for model and recognition details.
 
-## Telegram commands
+## Optional setup
 
-| Command             | What it does                            |
-| ------------------- | --------------------------------------- |
-| `/help` or `/start` | Show the command menu                   |
-| `/ping`             | Show ESP32 diagnostics                  |
-| `/status`           | Show ESP32 health and PC online status  |
-| `/wake`             | Request wake confirmation               |
-| `/wake force`       | Send the Wake-on-LAN packet immediately |
-| `/reboot`           | Reboot the ESP32                        |
+Changes to `config.h` require rebuilding and uploading the firmware.
 
-Leave `BOT_TOKEN` blank to disable Telegram; voice wake remains available, and MQTT can be configured independently.
+### Telegram: remote wake and status
 
-## MQTT control
+Create a bot with [@BotFather](https://t.me/BotFather), set `BOT_TOKEN` in `config.h`, then rebuild and upload. Open your bot and send `/help`, then `/wake`; confirm the request to send the packet.
 
-MQTT is optional. Configure these values in `config.h` to enable MQTT over TLS, normally on port `8883`:
+[Telegram setup guide →](docs/telegram.md)
 
-- `MQTT_BROKER`
-- `MQTT_PORT`
-- `MQTT_USER`
-- `MQTT_PASS`
-- `MQTT_BASE_TOPIC` (for example, `home/pc-remote/desktop-01`)
+### MQTT and private web dashboard
 
-The PlatformIO configuration installs the MQTT library automatically; leave the broker settings blank to disable MQTT.
+Configure `MQTT_BROKER`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASS`, and `MQTT_BASE_TOPIC` in `config.h`, then rebuild and upload. The dashboard connects to the same broker using MQTT over secure WebSocket; its base topic must match the firmware's.
 
-Topics under `MQTT_BASE_TOPIC`:
+The dashboard provides wake confirmation, PC status, ESP32 diagnostics, events, replies, and logs. It does not control Windows media or run configured apps/scripts. Those actions are voice-triggered through the paired Windows companion. You can run the dashboard locally or deploy it to Cloudflare Pages with Cloudflare Access. Telegram and MQTT can both remain enabled.
 
-| Topic           | Retain | Purpose                    |
-| --------------- | ------ | -------------------------- |
-| `/availability` | Yes    | ESP32 online/offline state |
-| `/state`        | Yes    | Latest ESP32 and PC status |
-| `/cmd`          | No     | Action commands            |
-| `/reply`        | No     | Command replies            |
-| `/event`        | No     | One-time events            |
-| `/log`          | No     | Live debug logs            |
+[MQTT setup and command reference →](docs/mqtt.md) · [Dashboard setup and deployment →](dashboard/README.md)
 
-Commands on `/cmd`:
+### Windows companion: voice-triggered media and custom actions
 
-```text
-ping
-wake_request
-wake_confirm
-reboot_request
-reboot_confirm
-```
+The optional Windows 11 x64 tray app in [`daemon/`](daemon/) handles media commands and locally configured application, Batch, and PowerShell actions **when invoked by voice through the ESP32**. Telegram, MQTT, and the dashboard cannot trigger these actions. Its listener starts paused and bound to localhost; LAN pairing is an explicit setup step.
 
-`wake_request` accepts `force: true` to skip confirmation. `/state` is refreshed when values change and every 60 seconds, and includes `pc_online` and `pc_status`.
+Follow the guide to install a CI build or build locally, choose a reserved private LAN IP, export the public CA certificate, and copy the pairing token into `config.h`. Rebuild/upload the ESP firmware and allow only the necessary private-LAN firewall access. Never forward the companion's port to the internet or disable TLS verification.
 
-Example wake request:
+For custom phrases: configure an action, assign its phrase, select **Save phrases**, then **Apply to ESP**, and say **“Jarvis,” then “update.”** Later phrase changes do not require reflashing. Up to 12 custom phrases are supported; see the guide for phrase rules.
 
-```json
-{
-  "id": "wake-001",
-  "cmd": "wake_request",
-  "target": "desktop-pc",
-  "force": true,
-  "expires_in_s": 30,
-  "ts": 1783586658
-}
-```
+[Windows installation and setup →](docs/windows-media-daemon.md) · [LAN pairing steps →](docs/windows-media-daemon.md#pair-an-esp32-over-the-lan)
 
-If Telegram and MQTT are both configured, both control paths remain available.
+### Grafana Cloud logging
 
-## Private web dashboard
+Optionally send boot, WiFi, and watchdog events to Grafana Cloud Loki. Set `GRAFANA_LOGS_URL`, `GRAFANA_LOGS_USER`, and `GRAFANA_LOGS_TOKEN` in `config.h`; leave them blank to disable logging.
 
-The `dashboard/` directory contains a React + Vite + TypeScript browser dashboard for MQTT control.
+[Grafana setup guide →](docs/grafana.md)
 
-- **Transport:** MQTT over WebSocket
-- **Deploy:** Cloudflare Pages
-- **Private access:** Cloudflare Access with GitHub login
-- **Features:** wake confirmation, PC status, ESP32 health, MQTT replies, events, and logs
+## Everyday commands
 
-Run locally:
+Say **“Jarvis” first**, then one command:
 
-```bash
-cd dashboard
-cp .env.example .env
-bun install
-bun run dev
-```
+| Voice command | Result |
+| --- | --- |
+| `wake` | Submit a local Wake-on-LAN packet; no Windows companion needed |
+| `play` or `pause` | Toggle playback through the Windows companion; both currently send the same play/pause key |
+| `next` / `back` | Send next-track / previous-track media keys |
+| `mute` / `unmute` | Mute / unmute the Windows default audio endpoint |
+| `update` | Fetch and activate published custom phrases from the paired Windows companion |
+| Your configured phrase | Request the associated enabled Windows action |
 
-Build for deployment:
+Telegram commands, when configured:
 
-```bash
-bun run build
-```
+| Command | Result |
+| --- | --- |
+| `/help` or `/start` | Show the menu |
+| `/ping` | Show ESP32 diagnostics |
+| `/status` | Show ESP32 health and PC status |
+| `/wake` | Request wake confirmation |
+| `/wake force` | Send a WoL packet immediately |
+| `/reboot` | Reboot the ESP32 |
 
-See the [dashboard setup guide](dashboard/README.md) for Cloudflare Pages, Access, environment variables, and MQTT ACLs.
+**LED feedback:** blue means listening. Green (voice), cyan (MQTT), or purple (Telegram) means a WoL packet was submitted. For media/custom actions, yellow means queued/accepted; white means Windows reported issuing the action, not that playback or the desired result occurred. Red means failure, rejection, or an unconfirmed outcome; it does not prove a Windows action did not occur.
 
-> **Security:** Dashboard `VITE_*` credentials are embedded in the browser bundle and can be inspected by anyone who can access the site. Use Cloudflare Access and a dedicated MQTT user with restricted topic ACLs.
+## Limitations and security
 
-## Configuration
-
-Copy `config.example.h` to `config.h` and fill in the values for your setup:
-
-```c
-#define WIFI_SSID     "your-wifi-ssid"
-#define WIFI_PASS     "your-wifi-password"
-#define BOT_TOKEN     ""                    // optional Telegram token
-#define PC_NAME       "gaming-pc"
-#define PC_MAC        "aa:bb:cc:dd:ee:ff"
-#define PC_IP         "192.168.1.50"
-#define WOL_BCAST     "192.168.1.255"
-#define WOL_PORT      9
-#define PC_TCP_PORT   47989                 // Moonlight, SSH, SMB, etc.
-```
-
-Use a static IP or DHCP reservation for the PC so the ESP32 can reliably check its status. Optional LAN media control uses `PC_MEDIA_HOST`, `PC_MEDIA_PORT`, `PC_MEDIA_CA_CERT`, and `PC_MEDIA_API_TOKEN`; see the [HTTPS contract and test setup](docs/media-control-https.md). Leave `PC_MEDIA_HOST` blank to disable it. Never commit `config.h` or use production tokens in tests.
-
-## Requirements and limitations
-
-- ESP32-S3-DevKitC-1 N16R8 and the supported I2S microphone wiring listed above
-- PlatformIO Core; the PlatformIO project pins the pioarduino platform and Arduino-ESP32 version
-- Wake-on-LAN must work from the same LAN before using this project
-- The ESP32 needs power and WiFi while the PC is off
-- The dashboard requires an MQTT broker with WebSocket support
+- **Hardware support:** the firmware targets the ESP32-S3-DevKitC-1 N16R8, not every ESP32 board. Recognition quality depends on the microphone, placement, and noise.
+- **PC status is a TCP probe:** use a DHCP reservation and an open service port. A failed probe does not necessarily mean the PC is powered off.
+- **Keep credentials private:** do not commit `config.h`, dashboard `.env`, pairing tokens, or TLS private keys. Firmware and dashboard bundles can contain credentials.
+- **Protect the dashboard:** `VITE_*` values are visible in the browser bundle. Use access control such as Cloudflare Access and a separate MQTT user with restricted topic ACLs.
+- **Know the current TLS limitation:** the firmware's Telegram and MQTT clients use TLS but disable server-certificate verification. Do not assume they authenticate the remote server. The Windows media connection uses a paired CA and verifies the server.
+- **Trust configured actions:** Windows applications/scripts run as the logged-in user, not in a sandbox. An uncertain media/action request is not automatically retried or queued for later execution.
 
 ## Troubleshooting
 
-**PC will not wake**
+| Problem | Check first |
+| --- | --- |
+| PC does not wake | Test another WoL tool; check BIOS/OS/NIC settings, ErP power-saving settings, `PC_MAC`, and `WOL_BCAST` |
+| “Jarvis” does not trigger listening | Check the Serial startup message, microphone wiring/channel selection, power, and background noise |
+| ESP32 keeps rebooting | Check Serial or Telegram `/ping` for reset reason; `brownout` suggests weak power, `task_wdt` indicates a watchdog reset |
+| PC appears offline but is running | Check its reserved IP, firewall, and whether `PC_TCP_PORT` accepts connections |
+| Telegram does not reply | Check `BOT_TOKEN`, WiFi/internet connectivity, and allow a few seconds for polling after boot |
+| MQTT/dashboard does not connect | Check broker credentials, TLS port (usually `8883` for firmware), dashboard secure WebSocket URL, matching base topic, and topic permissions |
+| Windows media/action request fails | Check listener address, private-LAN firewall, CA, token, and clock; use the [pairing troubleshooting guidance](docs/windows-media-daemon.md#pair-an-esp32-over-the-lan) rather than bypassing TLS |
 
-- Verify WoL in BIOS and the OS/network adapter settings
-- Disable ErP / ErP-ready if it removes power from the NIC
-- Test the PC with another WoL tool first
-- Confirm `PC_MAC` and `WOL_BCAST` are correct
+## Documentation
 
-**ESP32 keeps rebooting**
-
-- Check `/ping` for the reset reason
-- `task_wdt` means the main loop hung and the watchdog recovered it
-- `brownout` usually means the power supply is too weak
-
-**Telegram bot does not respond**
-
-- Confirm `BOT_TOKEN` matches the token from BotFather
-- Check that the ESP32 has WiFi
-- Wait a few seconds after boot for Telegram polling to start
-
-**MQTT does not connect**
-
-- Check broker, port, username, password, and base topic
-- Confirm the broker accepts TLS on port `8883`
-- For the dashboard, confirm the broker supports MQTT over WebSocket
-
-## Optional Grafana Cloud logging
-
-Send boot, WiFi, and watchdog events to Grafana Cloud Loki:
-
-1. Create a [Grafana Cloud](https://grafana.com) account
-2. Fill in `GRAFANA_LOGS_URL`, `GRAFANA_LOGS_USER`, and `GRAFANA_LOGS_TOKEN` in `config.h`
-3. Leave them blank to disable logging
-
-Logs use the stream `{app="esp32-pc-remote"}`. See the [Grafana setup guide](docs/grafana.md).
+| Guide | Use it for |
+| --- | --- |
+| [Wake-on-LAN setup](docs/wake-on-lan.md) | BIOS, Windows/Linux, network adapter, and TCP probe setup |
+| [Jarvis wake word](docs/jarvis-wake-word.md) | Speech model installation and recognition checks |
+| [Telegram](docs/telegram.md) | Bot creation and setup |
+| [MQTT](docs/mqtt.md) | Broker configuration, topics, and command payloads |
+| [Dashboard](dashboard/README.md) | Local setup, deployment, access control, and MQTT ACLs |
+| [Windows companion](docs/windows-media-daemon.md) | Installation, LAN pairing, actions, and phrase sync |
+| [LAN OTA](docs/ota.md) | App-firmware updates and USB recovery |
+| [Grafana](docs/grafana.md) | Optional cloud logging |
 
 ## Contributing
 
-Issues and pull requests are welcome. Keep `config.h` out of commits. See [CONTRIBUTING](CONTRIBUTING.md).
+Issues and pull requests are welcome. Build/test instructions are in [CONTRIBUTING.md](CONTRIBUTING.md). For development and acceptance testing, see the [hardware validation checklist](docs/hardware-validation.md), [HTTPS contract and non-actioning test fixture](docs/media-control-https.md), and [speech model provenance](models/README.md).
 
 ## License
 
-MIT
-
-If this project helps you, consider [starring the repository](https://github.com/Jonathan0823/esp32-pc-remote). ⭐
+[MIT](LICENSE). If this project helps you, consider [starring the repository](https://github.com/Jonathan0823/esp32-pc-remote). ⭐
