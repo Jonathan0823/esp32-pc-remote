@@ -44,7 +44,7 @@ Custom speech actions use the existing authenticated `/v1/actions` endpoint with
 
 ## ESP behavior and feedback
 
-- “Jarvis” only opens the existing approximately 5.76-second listening window. One valid phrase consumes it. “Wake computer” continues to send local WoL and never calls this endpoint.
+- “Jarvis” only opens the existing approximately 5.76-second listening window. One valid phrase consumes it. “wake” sends local WoL and never calls this endpoint.
 - The voice callback/worker never performs TLS or waits for the PC. A bounded handoff feeds one dedicated HTTPS worker; there is at most one active and one waiting media request. A full queue, disconnected Wi-Fi, missing configuration, untrusted certificate, unsynchronized clock, or stale request is rejected immediately; no offline queue or automatic retry.
 - Configure time asynchronously after Wi-Fi starts, independently of optional Grafana. Fail closed until system time is at least 2025-01-01 UTC and TLS certificate-time validation is possible.
 - Use bounded HTTP operations and parse at most 512 response bytes. Disable redirects. Keep diagnostics redacted and local; no token in Serial, MQTT, Grafana, or exceptions.
@@ -70,4 +70,4 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 2 \
 
 Set `PC_MEDIA_HOST` to that IP, `PC_MEDIA_CA_CERT` to the PEM certificate as a C string with `\n` line breaks, and `PC_MEDIA_API_TOKEN` to the generated token in ignored `config.h`; flash only with permission. Load the same disposable token into the fixture environment without printing it. Start the fixture with `--host 0.0.0.0 --port 8443 --cert /tmp/media-test/ca.pem --key /tmp/media-test/server-key.pem` only for the LAN test, and restrict the host firewall to the private LAN. The default `127.0.0.1` bind is safer for host-only tests. Clean up temporary keys/tokens after testing. Never use production credentials in tests.
 
-For real Windows actions, use the [Windows daemon and LAN pairing guide](windows-media-daemon.md#pair-an-esp32-over-the-lan), not this fixture. Windows/ESP interoperability and game performance still require validation on the target devices.
+For real Windows actions, use the [Windows daemon and LAN pairing guide](windows-media-daemon.md#pair-an-esp32-over-the-lan), not this fixture. The maintainer reports manually testing the paired ESP32-to-Windows path, media commands, and configured actions successfully on two Windows machines—a laptop and a desktop PC. Gaming-performance and resource-use observations are specific to those systems, not a cross-system benchmark.

@@ -1,10 +1,22 @@
 # Windows HTTPS media daemon
 
-The separate Rust tray app lives in [`daemon/`](../daemon/). It targets Windows 11 x64 (AMD64) and preserves the ESP32's [`/v1/media` contract](media-control-https.md); `/v1/actions` accepts only locally configured action IDs. Network requests never provide executable paths or arguments.
+The optional Rust tray app in [`daemon/`](../daemon/) targets Windows 11 x64 (AMD64) and handles voice-triggered media commands and configured local actions from a paired ESP32. Telegram, MQTT, and the dashboard do not trigger these actions. It preserves the ESP32's [`/v1/media` contract](media-control-https.md); `/v1/actions` accepts only locally configured action IDs, never executable paths or arguments.
 
-## Build and install
+[Install](#install) · [LAN pairing](#pair-an-esp32-over-the-lan) · [Voice phrases](#voice-phrases-and-explicit-sync) · [Preview](../README.md#see-it-in-action) · [Troubleshooting](#esp-transport-diagnostics)
 
-The Windows CI job uses Rust 1.92.0/MSVC x64, runs formatting, strict Clippy, tests and a release build, then packages a per-user NSIS installer. The installer does not enable the listener, create firewall rules, elevate the app, or delete `%LOCALAPPDATA%\Esp32MediaDaemon` data on uninstall. Startup is an opt-in per-user setting. Close the tray app before upgrading or uninstalling; the installer does not forcibly terminate it.
+## Install
+
+1. Download `esp32-media-daemon-setup-amd64.exe` from the [latest GitHub release](https://github.com/Jonathan0823/esp32-pc-remote/releases/latest) and run it.
+2. Launch the companion and open **Settings** from its tray icon. The listener starts paused on `127.0.0.1:8443`; the ESP32 cannot reach localhost.
+3. Follow [LAN pairing](#pair-an-esp32-over-the-lan) before trying voice commands.
+
+The per-user installer does not enable the listener, create firewall rules, elevate the app, or delete `%LOCALAPPDATA%\Esp32MediaDaemon` data on uninstall. Startup is opt-in. Close the tray app before upgrading or uninstalling; the installer does not forcibly terminate it.
+
+## Build from source
+
+Windows CI uses Rust 1.92.0/MSVC x64 and the shared `make check-daemon` and `make build-daemon` targets, then packages a per-user NSIS installer.
+
+## Crash diagnostics
 
 For crash diagnosis without building locally, download both artifacts from the **same Windows daemon CI run**:
 
@@ -13,15 +25,12 @@ For crash diagnosis without building locally, download both artifacts from the *
 
 CI keeps release optimizations but enables full debug information and disables symbol stripping. Extract the symbols artifact with the EXE and PDB together. Quit the installed daemon and Settings first (otherwise the single-instance guard exits the new process), then launch the extracted EXE in WinDbg and reproduce the command. When it breaks on an access violation, run `.ecxr` followed by `kb` and share the stack text. Keep the EXE/PDB pair for that run; symbols from another build cannot reliably explain an old fault offset. Do not share raw memory dumps publicly: they may contain API tokens and TLS private keys. This adds diagnostic artifacts, not a crash fix.
 
-For a local Windows build:
+For a local Windows build, install GNU Make, Rust 1.92, Python 3, NSIS, and the MSVC build tools, then run from the repository root:
 
 ```powershell
+make check-daemon
+make build-daemon
 cd daemon
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked --all-targets
-cargo build --release --locked --target x86_64-pc-windows-msvc
-choco install nsis --yes --no-progress
 makensis /DAPP_VERSION=0.1.0 installer.nsi
 ```
 
@@ -136,4 +145,4 @@ Close both the background daemon and its Settings window before updating or unin
 
 ## Validation status
 
-Linux core/HTTPS tests and strict Clippy cover shared protocol behavior but do not exercise the Windows process, pipe, renderer, or installer. Windows CI must compile and run the Windows API/job-object tests and package the installer. A Windows 11 desktop user must still verify native interaction, process lifecycle, and the repeated-cycle memory procedure above; these manual acceptance checks are pending until performed on the installed release. ESP32/LAN interoperability and gaming performance remain explicitly unverified/deferred.
+Linux core/HTTPS tests and strict Clippy cover shared protocol behavior but do not exercise every Windows process, pipe, renderer, or installer behavior. The maintainer reports manually testing the Windows app features and ESP32-to-daemon LAN control, including media commands and configured actions, successfully on their setup. They observed about 2.7 MB of daemon RAM use (less while idle), 0% CPU at idle, and no CPU spikes while handling media requests or launching configured scripts. They also saw no noticeable gaming-performance impact. Testing covered two Windows machines—a laptop and a desktop PC. These are observed results, not a cross-system benchmark; CI does not establish compatibility with every Windows PC or ESP32 network environment.
