@@ -1,6 +1,6 @@
 # Windows HTTPS media daemon
 
-The separate Rust tray app lives in [`daemon/`](../daemon/). It targets Windows 11 x64 and preserves the ESP32's [`/v1/media` contract](media-control-https.md); `/v1/actions` accepts only locally configured action IDs. Network requests never provide executable paths or arguments.
+The separate Rust tray app lives in [`daemon/`](../daemon/). It targets Windows 11 x64 (AMD64) and preserves the ESP32's [`/v1/media` contract](media-control-https.md); `/v1/actions` accepts only locally configured action IDs. Network requests never provide executable paths or arguments.
 
 ## Build and install
 
@@ -8,8 +8,8 @@ The Windows CI job uses Rust 1.92.0/MSVC x64, runs formatting, strict Clippy, te
 
 For crash diagnosis without building locally, download both artifacts from the **same Windows daemon CI run**:
 
-- `esp32-media-daemon-windows-x64`: the installer.
-- `esp32-media-daemon-windows-x64-symbols`: the matching release EXE and PDB debug symbols.
+- `esp32-media-daemon-windows-amd64`: the installer.
+- `esp32-media-daemon-windows-amd64-symbols`: the matching release EXE and PDB debug symbols.
 
 CI keeps release optimizations but enables full debug information and disables symbol stripping. Extract the symbols artifact with the EXE and PDB together. Quit the installed daemon and Settings first (otherwise the single-instance guard exits the new process), then launch the extracted EXE in WinDbg and reproduce the command. When it breaks on an access violation, run `.ecxr` followed by `kb` and share the stack text. Keep the EXE/PDB pair for that run; symbols from another build cannot reliably explain an old fault offset. Do not share raw memory dumps publicly: they may contain API tokens and TLS private keys. This adds diagnostic artifacts, not a crash fix.
 
@@ -25,7 +25,7 @@ choco install nsis --yes --no-progress
 makensis /DAPP_VERSION=0.1.0 installer.nsi
 ```
 
-The installer appears at `daemon/target/release/esp32-media-daemon-setup.exe`. Unsigned builds may trigger SmartScreen reputation warnings; do not disable Windows security features to work around them.
+The installer appears at `daemon/target/release/esp32-media-daemon-setup-amd64.exe`. Unsigned builds may trigger SmartScreen reputation warnings; do not disable Windows security features to work around them.
 
 ## Localhost-first HTTPS check
 

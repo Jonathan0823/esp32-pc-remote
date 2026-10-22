@@ -91,7 +91,7 @@ jobs:
       - name: Upload matching executable and symbols
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-media-daemon-windows-x64-symbols
+          name: esp32-media-daemon-windows-amd64-symbols
           path: |
             daemon/target/x86_64-pc-windows-msvc/release/esp32-media-daemon.exe
             daemon/target/x86_64-pc-windows-msvc/release/esp32*daemon.pdb
@@ -109,8 +109,8 @@ jobs:
           & $makensis "/DAPP_VERSION=$env:APP_VERSION" installer.nsi
       - uses: actions/upload-artifact@v4
         with:
-          name: esp32-media-daemon-windows-x64
-          path: daemon/target/release/esp32-media-daemon-setup.exe
+          name: esp32-media-daemon-windows-amd64
+          path: daemon/target/release/esp32-media-daemon-setup-amd64.exe
           if-no-files-found: error
 
   publish:
@@ -123,7 +123,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: esp32-media-daemon-windows-x64
+          name: esp32-media-daemon-windows-amd64
           path: release-assets
       - name: Refuse to overwrite an existing release
         env:
@@ -140,4 +140,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" release-assets/esp32-media-daemon-setup.exe --repo "$GH_REPO" --verify-tag --title "$RELEASE_TAG" --generate-notes
+        run: gh release create "$RELEASE_TAG" release-assets/esp32-media-daemon-setup-amd64.exe --repo "$GH_REPO" --verify-tag --title "$RELEASE_TAG" --generate-notes

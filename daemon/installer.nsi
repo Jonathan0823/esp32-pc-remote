@@ -6,7 +6,7 @@ RequestExecutionLevel user
 !endif
 
 Name "ESP32 Media Daemon"
-OutFile "target/release/esp32-media-daemon-setup.exe"
+OutFile "target/release/esp32-media-daemon-setup-amd64.exe"
 InstallDir "$LOCALAPPDATA\Programs\Esp32MediaDaemon"
 InstallDirRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Esp32MediaDaemon" "InstallLocation"
 
