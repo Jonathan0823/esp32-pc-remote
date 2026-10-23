@@ -256,9 +256,9 @@ fn dispatch_error(error_value: DispatchError) -> Response {
         DispatchError::StaleVoiceConfig => (StatusCode::CONFLICT, "sync_required"),
         DispatchError::ExecutionCancelled => (StatusCode::CONFLICT, "action_cancelled"),
         DispatchError::DisabledAction => (StatusCode::FORBIDDEN, "disabled_action"),
-        DispatchError::Execution | DispatchError::Configuration => {
-            (StatusCode::INTERNAL_SERVER_ERROR, "server_error")
-        }
+        DispatchError::Execution
+        | DispatchError::ExecutionWithReason(_)
+        | DispatchError::Configuration => (StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
     };
     error(status, label)
 }
@@ -567,6 +567,11 @@ mod tests {
                 "clock_skew",
             ),
             (DispatchError::Expired, StatusCode::GONE, "expired"),
+            (
+                DispatchError::ExecutionWithReason("private detail".into()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "server_error",
+            ),
             (
                 DispatchError::ExecutionCancelled,
                 StatusCode::CONFLICT,

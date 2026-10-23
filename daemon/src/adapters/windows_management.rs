@@ -521,6 +521,7 @@ fn snapshot(
                 request_id: event.request_id,
                 action_id: event.action_id,
                 category: event.category.into(),
+                reason: event.reason,
             })
             .collect(),
         startup_error,

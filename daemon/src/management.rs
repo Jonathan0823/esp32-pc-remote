@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
 };
 
-pub const PROTOCOL_VERSION: u16 = 3;
+pub const PROTOCOL_VERSION: u16 = 4;
 // Covers the serialized worst case from the existing 128-action and per-argument limits.
 pub const MAX_FRAME_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_PENDING_REQUESTS: usize = 1;
@@ -93,6 +93,7 @@ pub struct DiagnosticSnapshot {
     pub request_id: Option<String>,
     pub action_id: Option<String>,
     pub category: String,
+    pub reason: Option<String>,
 }
 
 pub fn read_frame(reader: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
@@ -188,6 +189,18 @@ mod tests {
         let decoded: Envelope<Request> = read_message(&mut Cursor::new(bytes)).unwrap().unwrap();
         assert_eq!(decoded.version, PROTOCOL_VERSION);
         assert!(matches!(decoded.payload, Request::ApplyVoiceConfig));
+    }
+
+    #[test]
+    fn diagnostic_snapshot_serializes_failure_reason() {
+        let snapshot = DiagnosticSnapshot {
+            request_id: Some("request".into()),
+            action_id: Some("launch_game".into()),
+            category: "action_failed".into(),
+            reason: Some("executable not found (OS error 2)".into()),
+        };
+        let value = serde_json::to_value(snapshot).unwrap();
+        assert_eq!(value["reason"], "executable not found (OS error 2)");
     }
 
     #[test]

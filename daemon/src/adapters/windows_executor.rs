@@ -113,11 +113,19 @@ impl ActionExecutor for WindowsExecutor {
                             }),
                         )
                         .await
-                        .map_err(|_| ExecutorError::Failed)?
-                        .map_err(|_| ExecutorError::Failed)?
+                        .map_err(|_| {
+                            ExecutorError::FailedWithReason("UAC launch timed out".into())
+                        })?
+                        .map_err(|_| {
+                            ExecutorError::FailedWithReason("Elevated launch task failed".into())
+                        })?
                     } else {
                         let mut process = base_command(&program, &args, working_dir.as_deref());
-                        process.spawn().map_err(|_| ExecutorError::Failed)?;
+                        process.spawn().map_err(|error| {
+                            ExecutorError::FailedWithReason(format!(
+                                "Could not start application: {error}"
+                            ))
+                        })?;
                         Ok(())
                     }
                 }
@@ -126,9 +134,11 @@ impl ActionExecutor for WindowsExecutor {
                         .try_acquire_owned()
                         .map_err(|_| ExecutorError::Busy)?;
                     let command = script_command(&action)?;
-                    let mut child = script_process(command)
-                        .spawn()
-                        .map_err(|_| ExecutorError::Failed)?;
+                    let mut child = script_process(command).spawn().map_err(|error| {
+                        ExecutorError::FailedWithReason(format!(
+                            "Could not start configured script: {error}"
+                        ))
+                    })?;
                     tokio::spawn(async move {
                         match tokio::time::timeout(SCRIPT_TIMEOUT, child.wait()).await {
                             Ok(Ok(status)) if status.success() => {
@@ -176,7 +186,9 @@ fn launch_elevated(
         .is_none_or(|extension| !extension.eq_ignore_ascii_case("exe"))
         || args.iter().any(|argument| argument.contains('\0'))
     {
-        return Err(ExecutorError::Failed);
+        return Err(ExecutorError::FailedWithReason(
+            "Invalid executable path or arguments".into(),
+        ));
     }
     let file = wide_os_string(program.as_os_str())?;
     let parameters = if args.is_empty() {
@@ -221,14 +233,20 @@ fn map_runas_error(error: windows::core::Error) -> ExecutorError {
     if error.code() == windows::core::HRESULT::from_win32(ERROR_CANCELLED.0) {
         ExecutorError::Cancelled
     } else {
-        ExecutorError::Failed
+        ExecutorError::FailedWithReason(format!(
+            "Windows ShellExecuteEx failed (HRESULT 0x{:08X}): {}",
+            error.code().0 as u32,
+            error.message()
+        ))
     }
 }
 
 fn wide_os_string(value: &OsStr) -> Result<Vec<u16>, ExecutorError> {
     let mut wide: Vec<_> = value.encode_wide().collect();
     if wide.contains(&0) {
-        return Err(ExecutorError::Failed);
+        return Err(ExecutorError::FailedWithReason(
+            "Path contains an invalid null character".into(),
+        ));
     }
     wide.push(0);
     Ok(wide)
@@ -485,12 +503,13 @@ mod tests {
             )),
             ExecutorError::Cancelled
         );
-        assert_eq!(
+        assert!(matches!(
             map_runas_error(windows::core::Error::from_hresult(
                 windows::Win32::Foundation::E_ACCESSDENIED,
             )),
-            ExecutorError::Failed
-        );
+            ExecutorError::FailedWithReason(reason)
+                if reason.starts_with("Windows ShellExecuteEx failed (HRESULT 0x80070005): ")
+        ));
     }
 
     async fn finish(command: tokio::process::Command) {
