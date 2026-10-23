@@ -13,7 +13,7 @@ use tokio::sync::Semaphore;
 #[cfg(test)]
 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
 use windows::Win32::{
-    Foundation::{CloseHandle, ERROR_CANCELLED},
+    Foundation::ERROR_CANCELLED,
     Media::Audio::{
         Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
         eRender as E_RENDER,
@@ -30,7 +30,7 @@ use windows::Win32::{
             INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
             SendInput, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
         },
-        Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW},
+        Shell::{SEE_MASK_FLAG_NO_UI, SHELLEXECUTEINFOW, ShellExecuteExW},
         WindowsAndMessaging::SW_SHOWNORMAL,
     },
 };
@@ -38,6 +38,8 @@ use windows::Win32::{
 use windows_future::{AsyncStatus, IAsyncOperation};
 
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(60);
+// Stay below the 30-second Settings RPC deadline.
+const ELEVATED_LAUNCH_TIMEOUT: Duration = Duration::from_secs(20);
 #[cfg(test)]
 const MEDIA_OPERATION_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -58,6 +60,7 @@ impl Drop for MtaLifetime {
 pub struct WindowsExecutor {
     running_scripts: Arc<Semaphore>,
     native_action: Arc<Semaphore>,
+    elevated_launch: Arc<Semaphore>,
 }
 
 impl Default for WindowsExecutor {
@@ -65,6 +68,7 @@ impl Default for WindowsExecutor {
         Self {
             running_scripts: Arc::new(Semaphore::new(1)),
             native_action: Arc::new(Semaphore::new(1)),
+            elevated_launch: Arc::new(Semaphore::new(1)),
         }
     }
 }
@@ -77,6 +81,7 @@ impl ActionExecutor for WindowsExecutor {
         let action = action.clone();
         let scripts = Arc::clone(&self.running_scripts);
         let native_action = Arc::clone(&self.native_action);
+        let elevated_launch = Arc::clone(&self.elevated_launch);
         Box::pin(async move {
             match action {
                 ConfiguredAction::Media { command } => {
@@ -97,10 +102,18 @@ impl ActionExecutor for WindowsExecutor {
                     run_as_admin,
                 } => {
                     if run_as_admin {
-                        tokio::task::spawn_blocking(move || {
-                            launch_elevated(&program, &args, working_dir.as_deref())
-                        })
+                        let permit = elevated_launch
+                            .try_acquire_owned()
+                            .map_err(|_| ExecutorError::Busy)?;
+                        tokio::time::timeout(
+                            ELEVATED_LAUNCH_TIMEOUT,
+                            tokio::task::spawn_blocking(move || {
+                                let _permit = permit;
+                                launch_elevated(&program, &args, working_dir.as_deref())
+                            }),
+                        )
                         .await
+                        .map_err(|_| ExecutorError::Failed)?
                         .map_err(|_| ExecutorError::Failed)?
                     } else {
                         let mut process = base_command(&program, &args, working_dir.as_deref());
@@ -182,7 +195,7 @@ fn launch_elevated(
     let verb = wide_string("runas");
     let mut execution = SHELLEXECUTEINFOW {
         cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
-        fMask: SEE_MASK_NOCLOSEPROCESS,
+        fMask: SEE_MASK_FLAG_NO_UI,
         lpVerb: windows::core::PCWSTR::from_raw(verb.as_ptr()),
         lpFile: windows::core::PCWSTR::from_raw(file.as_ptr()),
         lpParameters: parameters
@@ -200,9 +213,6 @@ fn launch_elevated(
     };
     if let Err(error) = unsafe { ShellExecuteExW(&mut execution) } {
         return Err(map_runas_error(error));
-    }
-    if !execution.hProcess.is_invalid() {
-        let _ = unsafe { CloseHandle(execution.hProcess) };
     }
     Ok(())
 }
@@ -438,6 +448,25 @@ fn set_default_output_mute(muted: bool) -> Result<(), ExecutorError> {
 mod tests {
     use super::*;
     use std::{fs, path::PathBuf};
+
+    #[test]
+    fn elevated_launch_semaphore_allows_only_one_active_prompt() {
+        let executor = WindowsExecutor::default();
+        let permit = executor
+            .elevated_launch
+            .clone()
+            .try_acquire_owned()
+            .unwrap();
+        assert!(
+            executor
+                .elevated_launch
+                .clone()
+                .try_acquire_owned()
+                .is_err()
+        );
+        drop(permit);
+        assert!(executor.elevated_launch.clone().try_acquire_owned().is_ok());
+    }
 
     #[test]
     fn elevated_argument_quoting_preserves_windows_argument_boundaries() {
