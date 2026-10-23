@@ -503,12 +503,13 @@ mod tests {
             )),
             ExecutorError::Cancelled
         );
-        assert_eq!(
+        assert!(matches!(
             map_runas_error(windows::core::Error::from_hresult(
                 windows::Win32::Foundation::E_ACCESSDENIED,
             )),
-            ExecutorError::Failed
-        );
+            ExecutorError::FailedWithReason(reason)
+                if reason.starts_with("Windows ShellExecuteEx failed (HRESULT 0x80070005): ")
+        ));
     }
 
     async fn finish(command: tokio::process::Command) {
