@@ -151,11 +151,8 @@ impl WindowsRuntime {
     pub async fn test_action(
         &self,
         action_id: &crate::domain::ActionId,
-    ) -> Result<(), RuntimeError> {
-        self.dispatcher
-            .test_action(action_id)
-            .await
-            .map_err(|_| RuntimeError)
+    ) -> Result<(), crate::application::DispatchError> {
+        self.dispatcher.test_action(action_id).await
     }
 
     pub async fn save_actions(

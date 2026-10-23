@@ -140,8 +140,18 @@ impl AppConfig {
             }
             match &action.action {
                 crate::domain::ConfiguredAction::Media { .. } => {}
-                crate::domain::ConfiguredAction::Launch { program, args, .. } => {
+                crate::domain::ConfiguredAction::Launch {
+                    program,
+                    args,
+                    run_as_admin,
+                    ..
+                } => {
                     if !program.is_absolute()
+                        || (*run_as_admin
+                            && !program
+                                .extension()
+                                .and_then(|extension| extension.to_str())
+                                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe")))
                         || args.len() > 64
                         || args.iter().any(|arg| arg.len() > 1024)
                     {
@@ -253,6 +263,34 @@ mod tests {
         assert!(config.validate().is_ok());
         assert_eq!(config.actions[0].phrase, None);
         assert_eq!(config.actions_revision, 0);
+    }
+
+    #[test]
+    fn elevation_is_valid_only_for_executable_launch_actions() {
+        let executable = std::env::current_exe().unwrap().with_extension("exe");
+        let action = |program| crate::domain::CustomAction {
+            id: crate::domain::ActionId::parse("launch_game").unwrap(),
+            name: "Game".into(),
+            enabled: true,
+            phrase: None,
+            action: crate::domain::ConfiguredAction::Launch {
+                program,
+                args: vec![],
+                working_dir: None,
+                run_as_admin: true,
+            },
+        };
+        let valid = AppConfig {
+            actions: vec![action(executable.clone())],
+            ..AppConfig::default()
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = AppConfig {
+            actions: vec![action(executable.with_extension("txt"))],
+            ..AppConfig::default()
+        };
+        assert!(invalid.validate().is_err());
     }
 
     #[test]

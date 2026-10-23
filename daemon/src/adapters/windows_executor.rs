@@ -5,11 +5,15 @@ use crate::{
 #[cfg(test)]
 use process_wrap::tokio::KillOnDrop;
 use process_wrap::tokio::{CommandWrap, JobObject};
-use std::{future::Future, path::Path, pin::Pin, process::Stdio, sync::Arc, time::Duration};
+use std::{
+    ffi::OsStr, future::Future, os::windows::ffi::OsStrExt, path::Path, pin::Pin, process::Stdio,
+    sync::Arc, time::Duration,
+};
 use tokio::sync::Semaphore;
 #[cfg(test)]
 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
 use windows::Win32::{
+    Foundation::{CloseHandle, ERROR_CANCELLED},
     Media::Audio::{
         Endpoints::IAudioEndpointVolume, MMDeviceEnumerator, eMultimedia as E_MULTIMEDIA,
         eRender as E_RENDER,
@@ -21,9 +25,13 @@ use windows::Win32::{
         Threading::CREATE_NO_WINDOW,
         WinRT::{RO_INIT_MULTITHREADED, RoInitialize, RoUninitialize},
     },
-    UI::Input::KeyboardAndMouse::{
-        INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
-        VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
+    UI::{
+        Input::KeyboardAndMouse::{
+            INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP,
+            SendInput, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
+        },
+        Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW},
+        WindowsAndMessaging::SW_SHOWNORMAL,
     },
 };
 #[cfg(test)]
@@ -86,10 +94,19 @@ impl ActionExecutor for WindowsExecutor {
                     program,
                     args,
                     working_dir,
+                    run_as_admin,
                 } => {
-                    let mut process = base_command(&program, &args, working_dir.as_deref());
-                    process.spawn().map_err(|_| ExecutorError::Failed)?;
-                    Ok(())
+                    if run_as_admin {
+                        tokio::task::spawn_blocking(move || {
+                            launch_elevated(&program, &args, working_dir.as_deref())
+                        })
+                        .await
+                        .map_err(|_| ExecutorError::Failed)?
+                    } else {
+                        let mut process = base_command(&program, &args, working_dir.as_deref());
+                        process.spawn().map_err(|_| ExecutorError::Failed)?;
+                        Ok(())
+                    }
                 }
                 action @ (ConfiguredAction::Batch { .. } | ConfiguredAction::PowerShell { .. }) => {
                     let permit = scripts
@@ -133,6 +150,105 @@ impl ActionExecutor for WindowsExecutor {
             }
         })
     }
+}
+
+fn launch_elevated(
+    program: &Path,
+    args: &[String],
+    working_dir: Option<&Path>,
+) -> Result<(), ExecutorError> {
+    if program
+        .extension()
+        .and_then(OsStr::to_str)
+        .is_none_or(|extension| !extension.eq_ignore_ascii_case("exe"))
+        || args.iter().any(|argument| argument.contains('\0'))
+    {
+        return Err(ExecutorError::Failed);
+    }
+    let file = wide_os_string(program.as_os_str())?;
+    let parameters = if args.is_empty() {
+        None
+    } else {
+        let value = args
+            .iter()
+            .map(|argument| quote_windows_argument(argument))
+            .collect::<Vec<_>>()
+            .join(" ");
+        Some(wide_string(&value))
+    };
+    let directory = working_dir
+        .map(|path| wide_os_string(path.as_os_str()))
+        .transpose()?;
+    let verb = wide_string("runas");
+    let mut execution = SHELLEXECUTEINFOW {
+        cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+        fMask: SEE_MASK_NOCLOSEPROCESS,
+        lpVerb: windows::core::PCWSTR::from_raw(verb.as_ptr()),
+        lpFile: windows::core::PCWSTR::from_raw(file.as_ptr()),
+        lpParameters: parameters
+            .as_ref()
+            .map_or(windows::core::PCWSTR::null(), |value| {
+                windows::core::PCWSTR::from_raw(value.as_ptr())
+            }),
+        lpDirectory: directory
+            .as_ref()
+            .map_or(windows::core::PCWSTR::null(), |value| {
+                windows::core::PCWSTR::from_raw(value.as_ptr())
+            }),
+        nShow: SW_SHOWNORMAL.0,
+        ..Default::default()
+    };
+    if let Err(error) = unsafe { ShellExecuteExW(&mut execution) } {
+        return Err(map_runas_error(error));
+    }
+    if !execution.hProcess.is_invalid() {
+        let _ = unsafe { CloseHandle(execution.hProcess) };
+    }
+    Ok(())
+}
+
+fn map_runas_error(error: windows::core::Error) -> ExecutorError {
+    if error.code() == windows::core::HRESULT::from_win32(ERROR_CANCELLED.0) {
+        ExecutorError::Cancelled
+    } else {
+        ExecutorError::Failed
+    }
+}
+
+fn wide_os_string(value: &OsStr) -> Result<Vec<u16>, ExecutorError> {
+    let mut wide: Vec<_> = value.encode_wide().collect();
+    if wide.contains(&0) {
+        return Err(ExecutorError::Failed);
+    }
+    wide.push(0);
+    Ok(wide)
+}
+
+fn wide_string(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+fn quote_windows_argument(argument: &str) -> String {
+    let mut quoted = String::from("\"");
+    let mut backslashes = 0;
+    for character in argument.chars() {
+        match character {
+            '\\' => backslashes += 1,
+            '"' => {
+                quoted.extend(std::iter::repeat_n('\\', backslashes * 2 + 1));
+                quoted.push('"');
+                backslashes = 0;
+            }
+            _ => {
+                quoted.extend(std::iter::repeat_n('\\', backslashes));
+                quoted.push(character);
+                backslashes = 0;
+            }
+        }
+    }
+    quoted.extend(std::iter::repeat_n('\\', backslashes * 2));
+    quoted.push('"');
+    quoted
 }
 
 fn base_command(
@@ -322,6 +438,31 @@ fn set_default_output_mute(muted: bool) -> Result<(), ExecutorError> {
 mod tests {
     use super::*;
     use std::{fs, path::PathBuf};
+
+    #[test]
+    fn elevated_argument_quoting_preserves_windows_argument_boundaries() {
+        assert_eq!(quote_windows_argument(""), "\"\"");
+        assert_eq!(quote_windows_argument("two words"), "\"two words\"");
+        assert_eq!(quote_windows_argument("a\"b"), "\"a\\\"b\"");
+        assert_eq!(quote_windows_argument(r#"a\"b"#), r#""a\\\"b""#);
+        assert_eq!(quote_windows_argument("trailing\\"), "\"trailing\\\\\"");
+    }
+
+    #[test]
+    fn only_windows_uac_cancellation_is_classified_as_cancelled() {
+        assert_eq!(
+            map_runas_error(windows::core::Error::from_hresult(
+                windows::core::HRESULT::from_win32(ERROR_CANCELLED.0),
+            )),
+            ExecutorError::Cancelled
+        );
+        assert_eq!(
+            map_runas_error(windows::core::Error::from_hresult(
+                windows::Win32::Foundation::E_ACCESSDENIED,
+            )),
+            ExecutorError::Failed
+        );
+    }
 
     async fn finish(command: tokio::process::Command) {
         let mut wrapped = script_process(command);

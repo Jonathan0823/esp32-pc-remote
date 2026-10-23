@@ -99,11 +99,17 @@ impl SettingsClient {
         self.applied(Request::ApplyVoiceConfig).await
     }
 
-    pub async fn test_action(&self, action_id: &ActionId) -> Result<(), String> {
-        self.applied(Request::TestAction {
-            action_id: action_id.clone(),
-        })
-        .await
+    pub async fn test_action(&self, action_id: &ActionId) -> Result<(), ManagementError> {
+        match self
+            .call(Request::TestAction {
+                action_id: action_id.clone(),
+            })
+            .await
+        {
+            Ok(Response::Applied { .. }) => Ok(()),
+            Ok(Response::ActionCancelled { .. }) => Err(ManagementError::Cancelled),
+            _ => Err(ManagementError::Failed),
+        }
     }
 
     pub async fn set_start_after_login(&self, enabled: bool) -> Result<(), String> {
@@ -156,9 +162,13 @@ impl SettingsClient {
             return Err("Background process returned a mismatched response".into());
         }
         match response.payload {
-            payload @ (Response::Snapshot { .. } | Response::Applied { .. }) => {
+            payload @ (Response::Snapshot { .. }
+            | Response::Applied { .. }
+            | Response::ActionCancelled { .. }) => {
                 let state = match &payload {
-                    Response::Snapshot { state } | Response::Applied { state } => state.clone(),
+                    Response::Snapshot { state }
+                    | Response::Applied { state }
+                    | Response::ActionCancelled { state } => state.clone(),
                     _ => unreachable!(),
                 };
                 self.replace_state(state);
@@ -436,6 +446,21 @@ fn dispatch_request(
         &request,
         Request::SetListener { .. } | Request::Reconfigure { .. } | Request::RotateCredentials
     );
+    if let Request::TestAction { action_id } = &request {
+        return match handle.block_on(service.test_action(action_id)) {
+            Ok(()) => Response::Applied {
+                state: snapshot(service, startup_error.load(Ordering::Relaxed)),
+            },
+            Err(crate::application::DispatchError::ExecutionCancelled) => {
+                Response::ActionCancelled {
+                    state: snapshot(service, startup_error.load(Ordering::Relaxed)),
+                }
+            }
+            Err(_) => Response::Error {
+                code: ManagementError::Failed,
+            },
+        };
+    }
     let result = match request {
         Request::Snapshot => {
             return Response::Snapshot {
@@ -445,7 +470,7 @@ fn dispatch_request(
         Request::SetListener { enabled } => handle.block_on(service.set_listener(enabled)),
         Request::SaveActions { actions } => handle.block_on(service.save_actions(actions)),
         Request::ApplyVoiceConfig => handle.block_on(service.apply_voice_config()),
-        Request::TestAction { action_id } => handle.block_on(service.test_action(&action_id)),
+        Request::TestAction { .. } => unreachable!("TestAction handled above"),
         Request::SetStartup { enabled } => handle.block_on(service.set_start_after_login(enabled)),
         Request::Reconfigure { bind_address, port } => {
             handle.block_on(service.reconfigure(bind_address, port))
@@ -552,6 +577,7 @@ fn error_message(error: ManagementError) -> &'static str {
     match error {
         ManagementError::InvalidRequest => "Background process rejected the Settings request",
         ManagementError::Busy => "Background process is busy",
+        ManagementError::Cancelled => "UAC prompt was cancelled",
         ManagementError::Failed => "Background process could not complete the operation",
     }
 }

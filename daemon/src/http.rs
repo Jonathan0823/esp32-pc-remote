@@ -254,6 +254,7 @@ fn dispatch_error(error_value: DispatchError) -> Response {
         }
         DispatchError::UnknownAction => (StatusCode::NOT_FOUND, "unknown_action"),
         DispatchError::StaleVoiceConfig => (StatusCode::CONFLICT, "sync_required"),
+        DispatchError::ExecutionCancelled => (StatusCode::CONFLICT, "action_cancelled"),
         DispatchError::DisabledAction => (StatusCode::FORBIDDEN, "disabled_action"),
         DispatchError::Execution | DispatchError::Configuration => {
             (StatusCode::INTERNAL_SERVER_ERROR, "server_error")
@@ -566,6 +567,11 @@ mod tests {
                 "clock_skew",
             ),
             (DispatchError::Expired, StatusCode::GONE, "expired"),
+            (
+                DispatchError::ExecutionCancelled,
+                StatusCode::CONFLICT,
+                "action_cancelled",
+            ),
         ] {
             let response = dispatch_error(error_value);
             assert_eq!(response.status(), expected_status);

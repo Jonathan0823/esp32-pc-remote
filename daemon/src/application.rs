@@ -29,6 +29,8 @@ pub enum ExecutorError {
     Failed,
     #[error("action executor is busy")]
     Busy,
+    #[error("elevated action was cancelled")]
+    Cancelled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,6 +66,8 @@ pub enum DispatchError {
     StaleVoiceConfig,
     #[error("action dispatch failed")]
     Execution,
+    #[error("elevated action was cancelled")]
+    ExecutionCancelled,
     #[error("action executor is busy")]
     ExecutionBusy,
     #[error("configuration is invalid")]
@@ -185,10 +189,10 @@ impl Dispatcher {
         self.record(
             None,
             Some(action_id.as_str()),
-            if result.is_ok() {
-                "local_test_dispatched"
-            } else {
-                "local_test_failed"
+            match &result {
+                Ok(()) => "local_test_dispatched",
+                Err(DispatchError::ExecutionCancelled) => "local_test_cancelled",
+                Err(_) => "local_test_failed",
             },
         );
         result
@@ -235,10 +239,10 @@ impl Dispatcher {
         self.record(
             Some(request_id.as_str()),
             Some(request.action_id.as_str()),
-            if result.is_ok() {
-                "action_dispatched"
-            } else {
-                "action_failed"
+            match &result {
+                Ok(()) => "action_dispatched",
+                Err(DispatchError::ExecutionCancelled) => "action_cancelled",
+                Err(_) => "action_failed",
             },
         );
         result?;
@@ -279,6 +283,7 @@ impl Dispatcher {
             .map_err(|error| match error {
                 ExecutorError::Failed => DispatchError::Execution,
                 ExecutorError::Busy => DispatchError::ExecutionBusy,
+                ExecutorError::Cancelled => DispatchError::ExecutionCancelled,
             })
     }
 }
@@ -361,6 +366,17 @@ mod tests {
     use crate::domain::{ActionId, CustomAction};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    struct CancelledExecutor;
+
+    impl ActionExecutor for CancelledExecutor {
+        fn execute<'a>(
+            &'a self,
+            _action: &'a ConfiguredAction,
+        ) -> Pin<Box<dyn Future<Output = Result<(), ExecutorError>> + Send + 'a>> {
+            Box::pin(async { Err(ExecutorError::Cancelled) })
+        }
+    }
+
     #[derive(Default)]
     struct FakeExecutor(AtomicUsize);
     impl ActionExecutor for FakeExecutor {
@@ -402,6 +418,48 @@ mod tests {
             issued_at_ms: 1000,
             expires_at_ms: 6000,
         }
+    }
+
+    #[tokio::test]
+    async fn uac_cancellation_is_distinct_for_local_and_voice_actions() {
+        let action_id = ActionId::parse("launch_game").unwrap();
+        let mut config = AppConfig {
+            actions: vec![CustomAction {
+                id: action_id.clone(),
+                name: "Game".into(),
+                enabled: true,
+                phrase: Some("open game".into()),
+                action: ConfiguredAction::Media {
+                    command: MediaCommand::Play,
+                },
+            }],
+            ..AppConfig::default()
+        };
+        config.publish_voice_config().unwrap();
+        let revision = config.published_voice.as_ref().unwrap().revision;
+        let dispatcher = Dispatcher::new(Arc::new(CancelledExecutor), config).unwrap();
+
+        assert_eq!(
+            dispatcher.test_action(&action_id).await,
+            Err(DispatchError::ExecutionCancelled)
+        );
+        assert_eq!(dispatcher.diagnostics()[0].category, "local_test_cancelled");
+        assert_eq!(
+            dispatcher
+                .dispatch_custom(
+                    CustomActionRequest {
+                        id: RequestId::parse("00000000000000000000000000000001").unwrap(),
+                        action_id,
+                        voice_revision: revision,
+                        issued_at_ms: 1000,
+                        expires_at_ms: 6000,
+                    },
+                    1000,
+                )
+                .await,
+            Err(DispatchError::ExecutionCancelled)
+        );
+        assert_eq!(dispatcher.diagnostics()[1].category, "action_cancelled");
     }
 
     #[tokio::test]
