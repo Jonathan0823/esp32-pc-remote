@@ -23,10 +23,12 @@ pub trait ActionExecutor: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = Result<(), ExecutorError>> + Send + 'a>>;
 }
 
-#[derive(Clone, Copy, Debug, Error, Eq, PartialEq)]
+#[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum ExecutorError {
     #[error("action dispatch failed")]
     Failed,
+    #[error("action dispatch failed: {0}")]
+    FailedWithReason(String),
     #[error("action executor is busy")]
     Busy,
     #[error("elevated action was cancelled")]
@@ -38,6 +40,7 @@ pub struct DiagnosticEvent {
     pub request_id: Option<String>,
     pub action_id: Option<String>,
     pub category: &'static str,
+    pub reason: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -66,6 +69,8 @@ pub enum DispatchError {
     StaleVoiceConfig,
     #[error("action dispatch failed")]
     Execution,
+    #[error("action dispatch failed")]
+    ExecutionWithReason(String),
     #[error("elevated action was cancelled")]
     ExecutionCancelled,
     #[error("action executor is busy")]
@@ -163,6 +168,7 @@ impl Dispatcher {
             } else {
                 "media_failed"
             },
+            diagnostic_reason(result.as_ref().err()),
         );
         result?;
         Ok(DispatchStatus::Executed)
@@ -194,6 +200,7 @@ impl Dispatcher {
                 Err(DispatchError::ExecutionCancelled) => "local_test_cancelled",
                 Err(_) => "local_test_failed",
             },
+            diagnostic_reason(result.as_ref().err()),
         );
         result
     }
@@ -244,6 +251,7 @@ impl Dispatcher {
                 Err(DispatchError::ExecutionCancelled) => "action_cancelled",
                 Err(_) => "action_failed",
             },
+            diagnostic_reason(result.as_ref().err()),
         );
         result?;
         Ok(DispatchStatus::Dispatched)
@@ -256,7 +264,13 @@ impl Dispatcher {
             .unwrap_or_default()
     }
 
-    fn record(&self, request_id: Option<&str>, action_id: Option<&str>, category: &'static str) {
+    fn record(
+        &self,
+        request_id: Option<&str>,
+        action_id: Option<&str>,
+        category: &'static str,
+        reason: Option<String>,
+    ) {
         if let Ok(mut events) = self.diagnostics.lock() {
             if events.len() == 128 {
                 events.pop_front();
@@ -265,6 +279,7 @@ impl Dispatcher {
                 request_id: request_id.map(str::to_owned),
                 action_id: action_id.map(str::to_owned),
                 category,
+                reason,
             });
         }
     }
@@ -282,9 +297,20 @@ impl Dispatcher {
             .await
             .map_err(|error| match error {
                 ExecutorError::Failed => DispatchError::Execution,
+                ExecutorError::FailedWithReason(reason) => {
+                    DispatchError::ExecutionWithReason(reason)
+                }
                 ExecutorError::Busy => DispatchError::ExecutionBusy,
                 ExecutorError::Cancelled => DispatchError::ExecutionCancelled,
             })
+    }
+}
+
+fn diagnostic_reason(error: Option<&DispatchError>) -> Option<String> {
+    match error {
+        Some(DispatchError::ExecutionWithReason(reason)) => Some(reason.clone()),
+        Some(DispatchError::ExecutionBusy) => Some("Action executor is busy".into()),
+        _ => None,
     }
 }
 
@@ -365,6 +391,21 @@ mod tests {
     use super::*;
     use crate::domain::{ActionId, CustomAction};
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct DetailedFailureExecutor;
+
+    impl ActionExecutor for DetailedFailureExecutor {
+        fn execute<'a>(
+            &'a self,
+            _action: &'a ConfiguredAction,
+        ) -> Pin<Box<dyn Future<Output = Result<(), ExecutorError>> + Send + 'a>> {
+            Box::pin(async {
+                Err(ExecutorError::FailedWithReason(
+                    "executable not found (OS error 2)".into(),
+                ))
+            })
+        }
+    }
 
     struct CancelledExecutor;
 
@@ -463,6 +504,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn action_failure_reason_is_kept_in_local_diagnostics() {
+        let action_id = ActionId::parse("launch_game").unwrap();
+        let program = if cfg!(windows) {
+            std::path::PathBuf::from(r"C:\Games\starrail.exe")
+        } else {
+            std::path::PathBuf::from("/games/starrail.exe")
+        };
+        let mut config = AppConfig {
+            actions: vec![CustomAction {
+                id: action_id.clone(),
+                name: "Game".into(),
+                enabled: true,
+                phrase: Some("open game".into()),
+                action: ConfiguredAction::Launch {
+                    program,
+                    args: Vec::new(),
+                    working_dir: None,
+                    run_as_admin: true,
+                },
+            }],
+            ..AppConfig::default()
+        };
+        config.publish_voice_config().unwrap();
+        let revision = config.published_voice.as_ref().unwrap().revision;
+        let dispatcher = Dispatcher::new(Arc::new(DetailedFailureExecutor), config).unwrap();
+
+        assert_eq!(
+            dispatcher
+                .dispatch_custom(
+                    CustomActionRequest {
+                        id: RequestId::parse("00000000000000000000000000000001").unwrap(),
+                        action_id,
+                        voice_revision: revision,
+                        issued_at_ms: 1000,
+                        expires_at_ms: 6000,
+                    },
+                    1000,
+                )
+                .await,
+            Err(DispatchError::ExecutionWithReason(
+                "executable not found (OS error 2)".into()
+            ))
+        );
+        let events = dispatcher.diagnostics();
+        let event = &events[0];
+        assert_eq!(event.category, "action_failed");
+        assert_eq!(
+            event.reason.as_deref(),
+            Some("executable not found (OS error 2)")
+        );
+    }
+
+    #[tokio::test]
     async fn request_executes_once_and_duplicate_does_not_dispatch_twice() {
         let executor = Arc::new(FakeExecutor::default());
         let dispatcher = Dispatcher::new(executor.clone(), AppConfig::default()).unwrap();
@@ -486,9 +580,9 @@ mod tests {
         let dispatcher =
             Dispatcher::new(Arc::new(FakeExecutor::default()), AppConfig::default()).unwrap();
         for index in 0..129 {
-            dispatcher.record(Some("request"), None, "media_executed");
+            dispatcher.record(Some("request"), None, "media_executed", None);
             if index == 0 {
-                dispatcher.record(Some("oldest"), None, "media_executed");
+                dispatcher.record(Some("oldest"), None, "media_executed", None);
             }
         }
         let events = dispatcher.diagnostics();

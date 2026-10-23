@@ -558,6 +558,9 @@ impl SettingsApp {
                         if let Some(id) = &event.action_id {
                             ui.small(format!("Action: {id}"));
                         }
+                        if let Some(reason) = &event.reason {
+                            ui.small(format!("Reason: {reason}"));
+                        }
                     });
                 }
             });
