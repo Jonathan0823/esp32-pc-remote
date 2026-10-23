@@ -20,12 +20,15 @@ use super::{
     windows_management::{SettingsClient, SettingsSupervisor},
     windows_runtime::{WindowsRuntime, acquire_single_instance},
 };
-use crate::domain::{ActionId, ConfiguredAction, CustomAction};
+use crate::{
+    domain::{ActionId, ConfiguredAction, CustomAction},
+    management::ManagementError,
+};
 
 enum UiEvent {
     ListenerState(bool),
     ConfigState(bool),
-    ActionTestResult(bool),
+    ActionTestResult(Result<(), ManagementError>),
     ActionsSaved(bool),
     VoiceConfigApplied(bool),
     StartupState(bool),
@@ -284,6 +287,7 @@ struct SettingsApp {
     interpreter_path: String,
     action_args_json: String,
     action_phrase: String,
+    action_run_as_admin: bool,
     phrase_drafts: std::collections::HashMap<String, String>,
     voice_apply_pending: bool,
     action_kind: usize,
@@ -340,6 +344,7 @@ impl SettingsApp {
             interpreter_path: String::new(),
             action_args_json: "[]".into(),
             action_phrase: String::new(),
+            action_run_as_admin: false,
             phrase_drafts: config
                 .actions
                 .iter()
@@ -456,6 +461,7 @@ impl SettingsApp {
                 program: path,
                 args,
                 working_dir: None,
+                run_as_admin: self.action_run_as_admin,
             },
             1 => ConfiguredAction::Batch {
                 script: path,
@@ -490,6 +496,7 @@ impl SettingsApp {
         self.action_name.clear();
         self.action_phrase.clear();
         self.action_path.clear();
+        self.action_run_as_admin = false;
         self.save_actions(actions);
     }
 
@@ -594,6 +601,32 @@ impl SettingsApp {
                             }
                         };
                         ui.add(egui::Label::new(description).wrap());
+                        if let ConfiguredAction::Launch { run_as_admin, .. } = &action.action {
+                            let mut run_as_admin = *run_as_admin;
+                            if ui
+                                .add_enabled(
+                                    !self.actions_pending,
+                                    egui::Checkbox::new(
+                                        &mut run_as_admin,
+                                        "Request administrator privileges (UAC each launch)",
+                                    ),
+                                )
+                                .on_hover_text("Windows asks for consent whenever this application action runs.")
+                                .changed()
+                            {
+                                let mut updated = self.service.config().actions;
+                                if let Some(item) =
+                                    updated.iter_mut().find(|item| item.id == action.id)
+                                    && let ConfiguredAction::Launch {
+                                        run_as_admin: value,
+                                        ..
+                                    } = &mut item.action
+                                {
+                                    *value = run_as_admin;
+                                }
+                                self.save_actions(updated);
+                            }
+                        }
                         ui.horizontal(|ui| {
                             ui.label("Voice phrase");
                             let phrase = self
@@ -726,6 +759,13 @@ impl SettingsApp {
                     ui.label(label);
                     if let Some(error) = file_path_field(ui, &mut self.action_path, kind) {
                         self.status = Some(error);
+                    }
+                    if self.action_kind == 0 {
+                        ui.checkbox(
+                            &mut self.action_run_as_admin,
+                            "Request administrator privileges (UAC prompt each launch)",
+                        );
+                        ui.weak("Windows asks for consent every time this application action runs.");
                     }
                     if self.action_kind == 2 {
                         ui.label("PowerShell interpreter (.exe)");
@@ -958,12 +998,14 @@ impl eframe::App for SettingsApp {
                         .into(),
                     );
                 }
-                UiEvent::ActionTestResult(success) => {
+                UiEvent::ActionTestResult(result) => {
                     self.status = Some(
-                        if success {
-                            "Test was dispatched"
-                        } else {
-                            "Test failed"
+                        match result {
+                            Ok(()) => "Test was dispatched",
+                            Err(ManagementError::Cancelled) => {
+                                "UAC prompt cancelled; action was not launched"
+                            }
+                            Err(_) => "Test failed",
                         }
                         .into(),
                     );
@@ -1068,7 +1110,7 @@ impl eframe::App for SettingsApp {
                                 let signals = Arc::clone(&self.signals);
                                 self.handle.spawn(async move {
                                     signals.wake(UiEvent::ActionTestResult(
-                                        service.test_action(&id).await.is_ok(),
+                                        service.test_action(&id).await,
                                     ));
                                 });
                             }

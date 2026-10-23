@@ -11,7 +11,7 @@ use std::{
     path::PathBuf,
 };
 
-pub const PROTOCOL_VERSION: u16 = 2;
+pub const PROTOCOL_VERSION: u16 = 3;
 // Covers the serialized worst case from the existing 128-action and per-argument limits.
 pub const MAX_FRAME_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_PENDING_REQUESTS: usize = 1;
@@ -64,6 +64,7 @@ pub enum Request {
 pub enum Response {
     Snapshot { state: DaemonSnapshot },
     Applied { state: DaemonSnapshot },
+    ActionCancelled { state: DaemonSnapshot },
     PairingToken { token: String },
     CaExported { path: PathBuf },
     Error { code: ManagementError },
@@ -74,6 +75,7 @@ pub enum Response {
 pub enum ManagementError {
     InvalidRequest,
     Busy,
+    Cancelled,
     Failed,
 }
 
@@ -186,6 +188,24 @@ mod tests {
         let decoded: Envelope<Request> = read_message(&mut Cursor::new(bytes)).unwrap().unwrap();
         assert_eq!(decoded.version, PROTOCOL_VERSION);
         assert!(matches!(decoded.payload, Request::ApplyVoiceConfig));
+    }
+
+    #[test]
+    fn action_cancellation_response_preserves_the_updated_snapshot() {
+        let response = Envelope::new(
+            8,
+            Response::ActionCancelled {
+                state: DaemonSnapshot {
+                    config: AppConfig::default(),
+                    diagnostics: Vec::new(),
+                    startup_error: false,
+                },
+            },
+        );
+        let mut bytes = Vec::new();
+        write_message(&mut bytes, &response).unwrap();
+        let decoded: Envelope<Response> = read_message(&mut Cursor::new(bytes)).unwrap().unwrap();
+        assert!(matches!(decoded.payload, Response::ActionCancelled { .. }));
     }
 
     #[test]

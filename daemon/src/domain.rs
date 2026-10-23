@@ -176,6 +176,8 @@ pub enum ConfiguredAction {
         program: PathBuf,
         args: Vec<String>,
         working_dir: Option<PathBuf>,
+        #[serde(default)]
+        run_as_admin: bool,
     },
     Batch {
         script: PathBuf,
@@ -294,6 +296,34 @@ mod tests {
 
     fn id() -> &'static str {
         "0123456789abcdef0123456789abcdef"
+    }
+
+    #[test]
+    fn launch_action_elevation_defaults_off_and_round_trips() {
+        let legacy: ConfiguredAction = serde_json::from_str(
+            r#"{"type":"launch","program":"C:\\app.exe","args":[],"working_dir":null}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            legacy,
+            ConfiguredAction::Launch {
+                run_as_admin: false,
+                ..
+            }
+        ));
+
+        let opted_in: ConfiguredAction = serde_json::from_str(
+            r#"{"type":"launch","program":"C:\\app.exe","args":[],"working_dir":null,"run_as_admin":true}"#,
+        )
+        .unwrap();
+        let serialized = serde_json::to_string(&opted_in).unwrap();
+        assert!(matches!(
+            serde_json::from_str::<ConfiguredAction>(&serialized).unwrap(),
+            ConfiguredAction::Launch {
+                run_as_admin: true,
+                ..
+            }
+        ));
     }
 
     #[test]
