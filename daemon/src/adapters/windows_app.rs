@@ -25,14 +25,21 @@ use crate::{
     management::ManagementError,
 };
 
+fn setting_error(operation: &str, error: impl std::fmt::Display) -> String {
+    format!("Error: {operation}: {error}")
+}
+
 enum UiEvent {
-    ListenerState(bool),
-    ConfigState(bool),
+    ListenerState {
+        enabled: bool,
+        result: Result<(), String>,
+    },
+    ConfigState(Result<(), String>),
     ActionTestResult(Result<(), ManagementError>),
-    ActionsSaved(bool),
-    VoiceConfigApplied(bool),
-    StartupState(bool),
-    CredentialsRotated(bool),
+    ActionsSaved(Result<(), String>),
+    VoiceConfigApplied(Result<(), String>),
+    StartupState(Result<(), String>),
+    CredentialsRotated(Result<(), String>),
     PairingToken(Result<String, String>),
     CaExported(Result<PathBuf, String>),
     SnapshotUpdated,
@@ -379,7 +386,10 @@ impl SettingsApp {
             } else {
                 service.config().listener_enabled
             };
-            signals.wake(UiEvent::ListenerState(actual));
+            signals.wake(UiEvent::ListenerState {
+                enabled: actual,
+                result,
+            });
         });
     }
 
@@ -391,9 +401,7 @@ impl SettingsApp {
         let service = Arc::clone(&self.service);
         let signals = Arc::clone(&self.signals);
         self.handle.spawn(async move {
-            signals.wake(UiEvent::ActionsSaved(
-                service.save_actions(actions).await.is_ok(),
-            ));
+            signals.wake(UiEvent::ActionsSaved(service.save_actions(actions).await));
         });
     }
 
@@ -406,7 +414,7 @@ impl SettingsApp {
         let signals = Arc::clone(&self.signals);
         self.handle.spawn(async move {
             signals.wake(UiEvent::VoiceConfigApplied(
-                service.apply_voice_config().await.is_ok(),
+                service.apply_voice_config().await,
             ));
         });
     }
@@ -441,7 +449,7 @@ impl SettingsApp {
         let signals = Arc::clone(&self.signals);
         self.handle.spawn(async move {
             signals.wake(UiEvent::StartupState(
-                service.set_start_after_login(enabled).await.is_ok(),
+                service.set_start_after_login(enabled).await,
             ));
         });
     }
@@ -824,8 +832,9 @@ impl SettingsApp {
                                 let service = Arc::clone(&self.service);
                                 let signals = Arc::clone(&self.signals);
                                 self.handle.spawn(async move {
-                                    let success = service.reconfigure(address, port).await.is_ok();
-                                    signals.wake(UiEvent::ConfigState(success));
+                                    signals.wake(UiEvent::ConfigState(
+                                        service.reconfigure(address, port).await,
+                                    ));
                                 });
                             }
                             _ => self.status = Some("Enter a valid IP address and port".into()),
@@ -919,43 +928,34 @@ impl eframe::App for SettingsApp {
         }
         while let Some(event) = self.signals.next_update() {
             match event {
-                UiEvent::ListenerState(enabled) => {
+                UiEvent::ListenerState { enabled, result } => {
                     self.listener_pending = false;
                     self.listener_enabled = enabled;
-                    self.status = Some(
-                        if enabled {
-                            "Listener enabled"
-                        } else {
-                            "Listener paused"
-                        }
-                        .into(),
-                    );
+                    self.status = Some(match result {
+                        Ok(()) if enabled => "Listener enabled".into(),
+                        Ok(()) => "Listener paused".into(),
+                        Err(error) => setting_error("updating listener", error),
+                    });
                 }
-                UiEvent::ConfigState(success) => {
-                    self.status = Some(
-                        if success {
-                            "Configuration applied"
-                        } else {
-                            "Configuration was not applied"
-                        }
-                        .into(),
-                    );
+                UiEvent::ConfigState(result) => {
+                    self.status = Some(match result {
+                        Ok(()) => "Configuration applied".into(),
+                        Err(error) => setting_error("applying configuration", error),
+                    });
                 }
-                UiEvent::CredentialsRotated(success) => {
-                    self.pairing_token = None;
+                UiEvent::CredentialsRotated(result) => {
+                    if result.is_ok() {
+                        self.pairing_token = None;
+                    }
                     self.listener_enabled = self.service.config().listener_enabled;
-                    self.status = Some(
-                        if success {
-                            "Token and TLS trust rotated; pair clients again"
-                        } else {
-                            "Credential rotation failed"
-                        }
-                        .into(),
-                    );
+                    self.status = Some(match result {
+                        Ok(()) => "Token and TLS trust rotated; pair clients again".into(),
+                        Err(error) => setting_error("rotating credentials", error),
+                    });
                 }
-                UiEvent::ActionsSaved(success) => {
+                UiEvent::ActionsSaved(result) => {
                     self.actions_pending = false;
-                    if success {
+                    if result.is_ok() {
                         self.phrase_drafts = self
                             .service
                             .config()
@@ -969,62 +969,62 @@ impl eframe::App for SettingsApp {
                             })
                             .collect();
                     }
-                    self.status = Some(
-                        if success {
-                            "Action configuration saved; Apply to publish voice changes"
-                        } else {
-                            "Invalid action or configuration save failed"
+                    self.status = Some(match result {
+                        Ok(()) => {
+                            "Action configuration saved; Apply to publish voice changes".into()
                         }
-                        .into(),
-                    );
+                        Err(error) => setting_error("saving action configuration", error),
+                    });
                 }
-                UiEvent::VoiceConfigApplied(success) => {
+                UiEvent::VoiceConfigApplied(result) => {
                     self.voice_apply_pending = false;
-                    self.status = Some(
-                        if success {
-                            "Voice settings published; say Jarvis, then update on the ESP32"
-                        } else {
-                            "Could not publish voice settings"
+                    self.status = Some(match result {
+                        Ok(()) => {
+                            "Voice settings published; say Jarvis, then update on the ESP32".into()
                         }
-                        .into(),
-                    );
+                        Err(error) => setting_error("publishing voice settings", error),
+                    });
                 }
-                UiEvent::StartupState(success) => {
+                UiEvent::StartupState(result) => {
                     self.startup_pending = false;
                     self.start_after_login = self.service.config().start_after_login;
-                    self.status = Some(
-                        if success {
-                            "Startup preference saved"
-                        } else {
-                            "Could not update startup preference"
-                        }
-                        .into(),
-                    );
+                    self.status = Some(match result {
+                        Ok(()) => "Startup preference saved".into(),
+                        Err(error) => setting_error("updating startup preference", error),
+                    });
                 }
                 UiEvent::ActionTestResult(result) => {
                     self.status = Some(
                         match result {
-                            Ok(()) => "Test was dispatched",
+                            Ok(()) => "Test was dispatched".into(),
                             Err(ManagementError::Cancelled) => {
-                                "UAC prompt cancelled; action was not launched"
+                                "UAC prompt cancelled; action was not launched".into()
                             }
-                            Err(_) => "Test failed",
+                            Err(ManagementError::Busy) => {
+                                setting_error("testing action", "daemon is busy")
+                            }
+                            Err(ManagementError::InvalidRequest) => {
+                                setting_error("testing action", "daemon rejected the request")
+                            }
+                            Err(ManagementError::Failed) => setting_error(
+                                "testing action",
+                                "daemon could not complete the request",
+                            ),
                         }
                         .into(),
                     );
                 }
                 UiEvent::PairingToken(result) => {
                     self.pairing_token = result.as_ref().ok().cloned();
-                    self.status = Some(if result.is_ok() {
-                        "Pairing token revealed".into()
-                    } else {
-                        "Could not retrieve the pairing token".into()
+                    self.status = Some(match result {
+                        Ok(_) => "Pairing token revealed".into(),
+                        Err(error) => setting_error("retrieving pairing token", error),
                     });
                 }
                 UiEvent::CaExported(result) => {
                     self.status = Some(match result {
                         Ok(path) => format!("CA exported to {}", path.display()),
-                        Err(_) => "Could not export the trusted CA".into(),
+                        Err(error) => setting_error("exporting trusted CA", error),
                     });
                 }
                 UiEvent::SnapshotUpdated => {
@@ -1078,14 +1078,20 @@ impl eframe::App for SettingsApp {
                 if ui.button("Close Settings").clicked() {
                     context.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
-                ui.add(
-                    egui::Label::new(
-                        self.status
-                            .as_deref()
-                            .unwrap_or("Settings closes; your tray agent keeps running."),
-                    )
-                    .wrap(),
-                );
+                let status = self
+                    .status
+                    .as_deref()
+                    .unwrap_or("Settings closes; your tray agent keeps running.");
+                if status.starts_with("Error:") {
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(status).color(ui.visuals().error_fg_color),
+                        )
+                        .wrap(),
+                    );
+                } else {
+                    ui.add(egui::Label::new(status).wrap());
+                }
             });
         });
         egui::CentralPanel::default().show(context, |ui| {
@@ -1135,7 +1141,9 @@ impl eframe::App for SettingsApp {
                                 let service = Arc::clone(&self.service);
                                 let signals = Arc::clone(&self.signals);
                                 self.handle.spawn(async move {
-                                    signals.wake(UiEvent::CredentialsRotated(service.rotate_credentials().await.is_ok()));
+                                    signals.wake(UiEvent::CredentialsRotated(
+                                        service.rotate_credentials().await,
+                                    ));
                                 });
                             }
                             if ui.button("Cancel").clicked() {
@@ -1165,12 +1173,26 @@ mod tests {
     }
 
     #[test]
+    fn settings_errors_include_the_operation_and_cause() {
+        assert_eq!(
+            setting_error("saving action configuration", "disk is full"),
+            "Error: saving action configuration: disk is full"
+        );
+    }
+
+    #[test]
     fn settings_updates_are_queued_without_a_background_ui_context() {
         let signals = UiSignals::new();
-        signals.wake(UiEvent::ListenerState(true));
+        signals.wake(UiEvent::ListenerState {
+            enabled: true,
+            result: Ok(()),
+        });
         assert!(matches!(
             signals.next_update(),
-            Some(UiEvent::ListenerState(true))
+            Some(UiEvent::ListenerState {
+                enabled: true,
+                result: Ok(())
+            })
         ));
         assert!(signals.next_update().is_none());
         assert!(signals.context.lock().unwrap().is_none());
