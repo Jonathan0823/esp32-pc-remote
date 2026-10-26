@@ -456,11 +456,11 @@ impl SettingsApp {
 
     fn add_action(&mut self) {
         let Ok(id) = ActionId::parse(self.action_id.trim()) else {
-            self.status = Some("Action ID must match [a-z][a-z0-9_]{0,63}".into());
+            self.status = Some("Error: Action ID must match [a-z][a-z0-9_]{0,63}".into());
             return;
         };
         let Ok(args) = serde_json::from_str::<Vec<String>>(&self.action_args_json) else {
-            self.status = Some("Arguments must be a JSON string array".into());
+            self.status = Some("Error: Arguments must be a JSON string array".into());
             return;
         };
         let path = PathBuf::from(&self.action_path);
@@ -497,7 +497,7 @@ impl SettingsApp {
         let mut candidate = self.service.config();
         candidate.actions = actions.clone();
         if candidate.validate().is_err() {
-            self.status = Some("Invalid action".into());
+            self.status = Some("Error: Invalid action".into());
             return;
         }
         self.action_id.clear();
