@@ -100,16 +100,12 @@ impl SettingsClient {
     }
 
     pub async fn test_action(&self, action_id: &ActionId) -> Result<(), ManagementError> {
-        match self
-            .call(Request::TestAction {
+        action_test_result(
+            self.call_raw(Request::TestAction {
                 action_id: action_id.clone(),
             })
-            .await
-        {
-            Ok(Response::Applied { .. }) => Ok(()),
-            Ok(Response::ActionCancelled { .. }) => Err(ManagementError::Cancelled),
-            _ => Err(ManagementError::Failed),
-        }
+            .await,
+        )
     }
 
     pub async fn set_start_after_login(&self, enabled: bool) -> Result<(), String> {
@@ -151,6 +147,13 @@ impl SettingsClient {
     }
 
     async fn call(&self, request: Request) -> Result<Response, String> {
+        match self.call_raw(request).await? {
+            Response::Error { code } => Err(error_message(code).into()),
+            payload => Ok(payload),
+        }
+    }
+
+    async fn call_raw(&self, request: Request) -> Result<Response, String> {
         let calls = self.calls.clone();
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let envelope = Envelope::new(id, request);
@@ -174,7 +177,6 @@ impl SettingsClient {
                 self.replace_state(state);
                 Ok(payload)
             }
-            Response::Error { code } => Err(error_message(code).into()),
             payload => Ok(payload),
         }
     }
@@ -199,6 +201,15 @@ impl SettingsClient {
         if let Ok(mut current) = self.state.write() {
             *current = state;
         }
+    }
+}
+
+fn action_test_result(response: Result<Response, String>) -> Result<(), ManagementError> {
+    match response {
+        Ok(Response::Applied { .. }) => Ok(()),
+        Ok(Response::ActionCancelled { .. }) => Err(ManagementError::Cancelled),
+        Ok(Response::Error { code }) => Err(code),
+        _ => Err(ManagementError::Failed),
     }
 }
 
@@ -456,6 +467,12 @@ fn dispatch_request(
                     state: snapshot(service, startup_error.load(Ordering::Relaxed)),
                 }
             }
+            Err(
+                crate::application::DispatchError::Busy
+                | crate::application::DispatchError::ExecutionBusy,
+            ) => Response::Error {
+                code: ManagementError::Busy,
+            },
             Err(_) => Response::Error {
                 code: ManagementError::Failed,
             },
@@ -586,6 +603,13 @@ fn error_message(error: ManagementError) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_test_preserves_management_error_codes() {
+        for code in [ManagementError::Busy, ManagementError::Failed] {
+            assert_eq!(action_test_result(Ok(Response::Error { code })), Err(code));
+        }
+    }
 
     #[test]
     fn closing_the_settings_job_terminates_only_its_owned_child() {
