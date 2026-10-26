@@ -213,18 +213,6 @@ fn action_test_result(response: Result<Response, String>) -> Result<(), Manageme
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn action_test_preserves_management_error_codes() {
-        for code in [ManagementError::Busy, ManagementError::Failed] {
-            assert_eq!(action_test_result(Ok(Response::Error { code })), Err(code));
-        }
-    }
-}
-
 fn call_worker(
     calls: &SyncSender<Call>,
     request: Envelope<Request>,
@@ -615,6 +603,13 @@ fn error_message(error: ManagementError) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_test_preserves_management_error_codes() {
+        for code in [ManagementError::Busy, ManagementError::Failed] {
+            assert_eq!(action_test_result(Ok(Response::Error { code })), Err(code));
+        }
+    }
 
     #[test]
     fn closing_the_settings_job_terminates_only_its_owned_child() {
