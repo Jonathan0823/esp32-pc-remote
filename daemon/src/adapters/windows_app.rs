@@ -994,25 +994,21 @@ impl eframe::App for SettingsApp {
                     });
                 }
                 UiEvent::ActionTestResult(result) => {
-                    self.status = Some(
-                        match result {
-                            Ok(()) => "Test was dispatched".into(),
-                            Err(ManagementError::Cancelled) => {
-                                "UAC prompt cancelled; action was not launched".into()
-                            }
-                            Err(ManagementError::Busy) => {
-                                setting_error("testing action", "daemon is busy")
-                            }
-                            Err(ManagementError::InvalidRequest) => {
-                                setting_error("testing action", "daemon rejected the request")
-                            }
-                            Err(ManagementError::Failed) => setting_error(
-                                "testing action",
-                                "daemon could not complete the request",
-                            ),
+                    self.status = Some(match result {
+                        Ok(()) => "Test was dispatched".into(),
+                        Err(ManagementError::Cancelled) => {
+                            "UAC prompt cancelled; action was not launched".into()
                         }
-                        .into(),
-                    );
+                        Err(ManagementError::Busy) => {
+                            setting_error("testing action", "daemon is busy")
+                        }
+                        Err(ManagementError::InvalidRequest) => {
+                            setting_error("testing action", "daemon rejected the request")
+                        }
+                        Err(ManagementError::Failed) => {
+                            setting_error("testing action", "daemon could not complete the request")
+                        }
+                    });
                 }
                 UiEvent::PairingToken(result) => {
                     self.pairing_token = result.as_ref().ok().cloned();
