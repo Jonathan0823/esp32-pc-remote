@@ -108,6 +108,7 @@ impl SettingsClient {
         {
             Ok(Response::Applied { .. }) => Ok(()),
             Ok(Response::ActionCancelled { .. }) => Err(ManagementError::Cancelled),
+            Ok(Response::Error { code }) => Err(code),
             _ => Err(ManagementError::Failed),
         }
     }
@@ -456,6 +457,12 @@ fn dispatch_request(
                     state: snapshot(service, startup_error.load(Ordering::Relaxed)),
                 }
             }
+            Err(
+                crate::application::DispatchError::Busy
+                | crate::application::DispatchError::ExecutionBusy,
+            ) => Response::Error {
+                code: ManagementError::Busy,
+            },
             Err(_) => Response::Error {
                 code: ManagementError::Failed,
             },
