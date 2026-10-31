@@ -114,6 +114,7 @@ pub struct Dispatcher {
     config: Arc<RwLock<AppConfig>>,
     seen: Mutex<DuplicateCache>,
     diagnostics: Mutex<VecDeque<DiagnosticEvent>>,
+    uploaded_diagnostics: Mutex<crate::diagnostics::Store>,
     lifecycle: AsyncRwLock<()>,
 }
 
@@ -130,6 +131,7 @@ impl Dispatcher {
             config: Arc::new(RwLock::new(config)),
             seen: Mutex::new(DuplicateCache::default()),
             diagnostics: Mutex::new(VecDeque::with_capacity(128)),
+            uploaded_diagnostics: Mutex::new(crate::diagnostics::Store::default()),
             lifecycle: AsyncRwLock::new(()),
         })
     }
@@ -261,6 +263,20 @@ impl Dispatcher {
         self.diagnostics
             .lock()
             .map(|events| events.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn accept_diagnostics(&self, batch: crate::diagnostics::Batch) -> Result<(), &'static str> {
+        self.uploaded_diagnostics
+            .lock()
+            .map_err(|_| "unavailable")?
+            .insert(batch)
+    }
+
+    pub fn uploaded_diagnostics(&self) -> Vec<crate::diagnostics::Event> {
+        self.uploaded_diagnostics
+            .lock()
+            .map(|store| store.records())
             .unwrap_or_default()
     }
 

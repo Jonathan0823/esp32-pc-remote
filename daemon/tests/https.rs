@@ -116,6 +116,17 @@ async fn provisioned_https_requires_matching_host_ca_and_token() {
         unpaired_client.get(&url).send().await.is_err(),
         "a client without the exported CA must reject the daemon certificate"
     );
+    assert!(
+        unpaired_client
+            .get(format!(
+                "https://127.0.0.1:{}/v1/diagnostics",
+                address.port()
+            ))
+            .send()
+            .await
+            .is_err(),
+        "diagnostics must use the same validated HTTPS listener"
+    );
     for authorization in [None, Some(format!("Bearer {}", "b".repeat(64)))] {
         let mut request = client.post(&url);
         if let Some(authorization) = authorization {
@@ -200,6 +211,56 @@ async fn provisioned_https_requires_matching_host_ca_and_token() {
     let reply: serde_json::Value =
         serde_json::from_slice(&response.bytes().await.unwrap()).unwrap();
     assert_eq!(reply["status"], "dispatched");
+
+    let diagnostics_url = format!("https://127.0.0.1:{}/v1/diagnostics", address.port());
+    let event = serde_json::json!({"schema":1,"uptime_ms":1234,"unix_time_ms":null,"kind":"clock_state","category":"not_ready"});
+    let diagnostics_body = serde_json::json!({"schema":1,"events":[event]});
+    let unauthorized = client
+        .post(&diagnostics_url)
+        .header("Content-Type", "application/json")
+        .body(diagnostics_body.to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unauthorized.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let malformed = client
+        .post(&diagnostics_url)
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .header("Content-Type", "application/json")
+        .body(r#"{"schema":2,"events":[]}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(malformed.status(), reqwest::StatusCode::BAD_REQUEST);
+    let oversized = client
+        .post(&diagnostics_url)
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .header("Content-Type", "application/json")
+        .body(" ".repeat(4097))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(oversized.status(), reqwest::StatusCode::PAYLOAD_TOO_LARGE);
+    let stored = client
+        .post(&diagnostics_url)
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .header("Content-Type", "application/json")
+        .body(diagnostics_body.to_string())
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(stored.status(), reqwest::StatusCode::OK);
+    let exported = client
+        .get(&diagnostics_url)
+        .header("Authorization", format!("Bearer {}", "a".repeat(64)))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(exported.status(), reqwest::StatusCode::OK);
+    let evidence: serde_json::Value =
+        serde_json::from_slice(&exported.bytes().await.unwrap()).unwrap();
+    assert_eq!(evidence[0]["category"], "not_ready");
+    assert!(evidence[0].get("message").is_none());
 
     let _ = shutdown_tx.send(true);
     assert!(server.await.unwrap().is_ok());

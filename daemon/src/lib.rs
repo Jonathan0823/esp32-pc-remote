@@ -4,6 +4,7 @@
 
 pub mod application;
 pub mod config;
+pub mod diagnostics;
 pub mod domain;
 pub mod http;
 pub mod management;

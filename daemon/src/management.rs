@@ -2,6 +2,7 @@
 
 use crate::{
     config::AppConfig,
+    diagnostics::Event,
     domain::{ActionId, CustomAction},
 };
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,7 @@ use std::{
     path::PathBuf,
 };
 
-pub const PROTOCOL_VERSION: u16 = 4;
+pub const PROTOCOL_VERSION: u16 = 5;
 // Covers the serialized worst case from the existing 128-action and per-argument limits.
 pub const MAX_FRAME_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_PENDING_REQUESTS: usize = 1;
@@ -84,6 +85,7 @@ pub enum ManagementError {
 pub struct DaemonSnapshot {
     pub config: AppConfig,
     pub diagnostics: Vec<DiagnosticSnapshot>,
+    pub uploaded_diagnostics: Vec<Event>,
     pub startup_error: bool,
 }
 
@@ -211,6 +213,7 @@ mod tests {
                 state: DaemonSnapshot {
                     config: AppConfig::default(),
                     diagnostics: Vec::new(),
+                    uploaded_diagnostics: Vec::new(),
                     startup_error: false,
                 },
             },
@@ -259,6 +262,7 @@ mod tests {
         let json = serde_json::to_value(DaemonSnapshot {
             config: AppConfig::default(),
             diagnostics: Vec::new(),
+            uploaded_diagnostics: Vec::new(),
             startup_error: false,
         })
         .unwrap();

@@ -270,6 +270,7 @@ enum SettingsTab {
     #[default]
     Overview,
     Actions,
+    Evidence,
     Connection,
 }
 
@@ -570,6 +571,58 @@ impl SettingsApp {
                             ui.small(format!("Reason: {reason}"));
                         }
                     });
+                }
+            });
+    }
+
+    fn evidence(&mut self, ui: &mut egui::Ui, context: &egui::Context) {
+        ui.heading("ESP32 diagnostics");
+        ui.label("Structured, allowlisted records uploaded by the paired ESP32. Records are held in memory and lost when the daemon exits.");
+        let records = self.service.uploaded_diagnostics();
+        ui.label(format!("{} records (maximum 128)", records.len()));
+        ui.horizontal(|ui| {
+            if ui.button("Refresh").clicked() {
+                let service = Arc::clone(&self.service);
+                let signals = Arc::clone(&self.signals);
+                self.handle.spawn(async move {
+                    let _ = service.refresh().await;
+                    signals.wake(UiEvent::SnapshotUpdated);
+                });
+            }
+            if ui
+                .add_enabled(!records.is_empty(), egui::Button::new("Copy JSON export"))
+                .clicked()
+            {
+                match serde_json::to_string_pretty(&records) {
+                    Ok(export) => {
+                        context.copy_text(export);
+                        self.status = Some("Diagnostics copied to clipboard.".into());
+                    }
+                    Err(_) => self.status = Some("Error: diagnostics could not be exported".into()),
+                }
+            }
+        });
+        if records.is_empty() {
+            ui.weak("No uploaded diagnostics are available. Upload may be deferred until the ESP32 has valid time, Wi-Fi, and trusted TLS.");
+        }
+        egui::Grid::new("diagnostics_records")
+            .striped(true)
+            .show(ui, |ui| {
+                ui.strong("Uptime (ms)");
+                ui.strong("Wall time (UTC ms)");
+                ui.strong("Event");
+                ui.strong("Category");
+                ui.end_row();
+                for record in records.iter().rev() {
+                    ui.monospace(record.uptime_ms.to_string());
+                    ui.monospace(
+                        record
+                            .unix_time_ms
+                            .map_or_else(|| "unavailable".into(), |time| time.to_string()),
+                    );
+                    ui.label(format!("{:?}", record.kind));
+                    ui.label(format!("{:?}", record.category));
+                    ui.end_row();
                 }
             });
     }
@@ -1062,6 +1115,7 @@ impl eframe::App for SettingsApp {
             ui.horizontal(|ui| {
                 ui.selectable_value(&mut self.tab, SettingsTab::Overview, "Overview");
                 ui.selectable_value(&mut self.tab, SettingsTab::Actions, "Actions");
+                ui.selectable_value(&mut self.tab, SettingsTab::Evidence, "Diagnostics");
                 ui.selectable_value(
                     &mut self.tab,
                     SettingsTab::Connection,
@@ -1098,6 +1152,7 @@ impl eframe::App for SettingsApp {
                     match self.tab {
                         SettingsTab::Overview => self.overview(ui),
                         SettingsTab::Actions => self.actions(ui),
+                        SettingsTab::Evidence => self.evidence(ui, context),
                         SettingsTab::Connection => self.connection(ui, context),
                     }
                 });

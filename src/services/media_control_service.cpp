@@ -19,10 +19,23 @@
 #include "src/services/media_control_config.h"
 #include "src/services/media_control_policy.h"
 #include "src/services/media_control_service.h"
+#include "src/services/diagnostics_service.h"
 #include "src/services/indicator_service.h"
 #include "src/services/voice_service.h"
 
 namespace {
+void record_preflight(MediaSubmitStatus status) {
+  DiagnosticCategory category;
+  switch (status) {
+    case MediaSubmitStatus::WifiUnavailable: category = DiagnosticCategory::WifiUnavailable; break;
+    case MediaSubmitStatus::ClockNotReady: category = DiagnosticCategory::ClockUnavailable; break;
+    case MediaSubmitStatus::Stale: category = DiagnosticCategory::Stale; break;
+    case MediaSubmitStatus::QueueFull: category = DiagnosticCategory::QueueFull; break;
+    default: return;
+  }
+  diagnostics_record(DiagnosticKind::PreflightRejected, category);
+}
+
 constexpr time_t MIN_VALID_UNIX_TIME = 1735689600;  // 2025-01-01 UTC
 constexpr UBaseType_t MEDIA_QUEUE_LENGTH = 1;
 constexpr uint32_t MEDIA_WORKER_STACK_BYTES = 12288;
@@ -146,6 +159,7 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
   heap_caps_get_info(&psramBefore, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
   httpStatus = http.POST(reinterpret_cast<uint8_t*>(payload), payloadLength);
   if (httpStatus < 0) {
+    diagnostics_record(DiagnosticKind::TlsTransport, DiagnosticCategory::Unknown);
     char tlsDetail[160] = {};
     const int tlsError = client.lastError(tlsDetail, sizeof(tlsDetail));
     printf("[media] transport failure cmd=%s id=%s http=%d (%s) tls=%d (%s)\n",
@@ -159,6 +173,10 @@ MediaResult send_intent(const MediaIntent& intent, int& httpStatus) {
            static_cast<unsigned>(psramBefore.total_free_bytes),
            static_cast<unsigned>(psramBefore.largest_free_block));
   }
+  diagnostics_record(DiagnosticKind::HttpResponse,
+                     httpStatus >= 200 && httpStatus < 300 ? DiagnosticCategory::Http2xx :
+                     httpStatus >= 400 && httpStatus < 500 ? DiagnosticCategory::Http4xx :
+                     httpStatus >= 500 && httpStatus < 600 ? DiagnosticCategory::Http5xx : DiagnosticCategory::HttpOther);
   if (httpStatus >= 400 && httpStatus < 500) {
     http.end();
     return MediaResult::Rejected;
@@ -243,6 +261,11 @@ bool send_custom_action(const MediaIntent& intent) {
     return false;
   }
   const int status = http.POST(reinterpret_cast<uint8_t*>(payload), payloadLength);
+  if (status < 0) diagnostics_record(DiagnosticKind::TlsTransport, DiagnosticCategory::Unknown);
+  else diagnostics_record(DiagnosticKind::HttpResponse,
+                          status >= 200 && status < 300 ? DiagnosticCategory::Http2xx :
+                          status >= 400 && status < 500 ? DiagnosticCategory::Http4xx :
+                          status >= 500 && status < 600 ? DiagnosticCategory::Http5xx : DiagnosticCategory::HttpOther);
   if (status != 200) {
     http.end();
     printf("[voice] custom action request rejected/unknown http=%d\n", status);
@@ -463,6 +486,7 @@ MediaSubmitStatus media_control_submit(MediaCommand command,
   if (result == MediaSubmitStatus::Queued) {
     report_result(MediaResult::Queued, intent);
   } else {
+    record_preflight(result);
     printf("[media] command rejected cmd=%s reason=%u\n",
            media_command_name(command), static_cast<unsigned>(result));
     indicator_media_result(MediaResult::Rejected);
@@ -500,6 +524,7 @@ MediaSubmitStatus media_control_submit_custom_action(const char* actionId,
     indicator_media_result(MediaResult::Queued);
     puts("[voice] custom action queued");
   } else {
+    record_preflight(result);
     printf("[voice] custom action rejected reason=%u\n", static_cast<unsigned>(result));
     indicator_media_result(MediaResult::Rejected);
   }

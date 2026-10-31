@@ -1,6 +1,7 @@
 use crate::{
     application::{ApiToken, DispatchError, DispatchStatus, Dispatcher},
     config::{self, AppConfig},
+    diagnostics::{self, Batch},
     domain::{self, CustomActionRequest, MediaRequest, VoiceConfigAckRequest},
 };
 use axum::{
@@ -58,12 +59,60 @@ pub fn router(state: HttpState) -> Router {
         .route("/v1/actions", post(custom_action))
         .route("/v1/voice-config", get(voice_config))
         .route("/v1/voice-config/ack", post(voice_config_ack))
+        .route(
+            "/v1/diagnostics",
+            post(upload_diagnostics).get(read_diagnostics),
+        )
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(2),
         ))
-        .layer(DefaultBodyLimit::max(domain::BODY_LIMIT))
+        .layer(DefaultBodyLimit::max(diagnostics::MAX_BATCH_BYTES))
         .with_state(state)
+}
+
+async fn upload_diagnostics(
+    State(state): State<HttpState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    if !authorized(&state, &headers) {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    if !json_content_type(&headers) {
+        return error(StatusCode::BAD_REQUEST, "content_type");
+    }
+    if !valid_framing_limit(&headers, &body, diagnostics::MAX_BATCH_BYTES) {
+        return error(
+            if body.len() > diagnostics::MAX_BATCH_BYTES {
+                StatusCode::PAYLOAD_TOO_LARGE
+            } else {
+                StatusCode::BAD_REQUEST
+            },
+            "invalid_framing",
+        );
+    }
+    let batch: Batch = match serde_json::from_slice(&body) {
+        Ok(batch) => batch,
+        Err(_) => return error(StatusCode::BAD_REQUEST, "invalid_diagnostics"),
+    };
+    match state.dispatcher.accept_diagnostics(batch) {
+        Ok(()) => json(StatusCode::OK, &serde_json::json!({"status":"stored"})),
+        Err("too_large") => error(StatusCode::PAYLOAD_TOO_LARGE, "too_large"),
+        Err("rate_limited") => error(StatusCode::TOO_MANY_REQUESTS, "rate_limited"),
+        Err(_) => error(StatusCode::BAD_REQUEST, "invalid_diagnostics"),
+    }
+}
+
+async fn read_diagnostics(State(state): State<HttpState>, headers: HeaderMap) -> Response {
+    if !authorized(&state, &headers) {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    json_limited(
+        StatusCode::OK,
+        &state.dispatcher.uploaded_diagnostics(),
+        diagnostics::MAX_STORE_RESPONSE_BYTES,
+    )
 }
 
 async fn media(State(state): State<HttpState>, headers: HeaderMap, body: Bytes) -> Response {
@@ -72,6 +121,9 @@ async fn media(State(state): State<HttpState>, headers: HeaderMap, body: Bytes) 
     }
     if !json_content_type(&headers) {
         return error(StatusCode::BAD_REQUEST, "content_type");
+    }
+    if body.len() > domain::BODY_LIMIT {
+        return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large");
     }
     if !valid_framing(&headers, &body) {
         return error(StatusCode::BAD_REQUEST, "invalid_framing");
@@ -107,6 +159,9 @@ async fn custom_action(
     }
     if !json_content_type(&headers) {
         return error(StatusCode::BAD_REQUEST, "content_type");
+    }
+    if body.len() > domain::BODY_LIMIT {
+        return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large");
     }
     if !valid_framing(&headers, &body) {
         return error(StatusCode::BAD_REQUEST, "invalid_framing");
@@ -162,6 +217,9 @@ async fn voice_config_ack(
 ) -> Response {
     if !authorized(&state, &headers) {
         return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    if body.len() > domain::BODY_LIMIT {
+        return error(StatusCode::PAYLOAD_TOO_LARGE, "too_large");
     }
     if !json_content_type(&headers) || !valid_framing(&headers, &body) {
         return error(StatusCode::BAD_REQUEST, "invalid_framing");
@@ -227,12 +285,16 @@ fn authorized(state: &HttpState, headers: &HeaderMap) -> bool {
 }
 
 fn valid_framing(headers: &HeaderMap, body: &[u8]) -> bool {
+    valid_framing_limit(headers, body, domain::BODY_LIMIT)
+}
+
+fn valid_framing_limit(headers: &HeaderMap, body: &[u8], limit: usize) -> bool {
     !headers.contains_key(header::TRANSFER_ENCODING)
         && headers
             .get(header::CONTENT_LENGTH)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<usize>().ok())
-            .is_some_and(|length| length == body.len() && length <= domain::BODY_LIMIT)
+            .is_some_and(|length| length == body.len() && length <= limit)
 }
 
 fn json_content_type(headers: &HeaderMap) -> bool {

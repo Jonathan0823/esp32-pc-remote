@@ -50,6 +50,31 @@ Custom speech actions use the existing authenticated `/v1/actions` endpoint with
 - Use bounded HTTP operations and parse at most 512 response bytes. Disable redirects. Keep diagnostics redacted and local; no token in Serial, MQTT, Grafana, or exceptions.
 - LED uses the existing single owner: blue while listening; yellow on queued/accepted; white only for a correlated `200 executed` media reply or `200 dispatched` custom-action reply; red for rejection, failure, or unknown outcome. Pulses are 500 ms, dim (no brighter than the existing indicator setting), and restore blue if still listening. Red means execution was not confirmed, not that the action definitely did not occur. Serial gives the precise result.
 
+## Bounded clock/network diagnostics
+
+The ESP32's optional diagnostics path is separate from media command queues and uses `POST /v1/diagnostics` on the same paired HTTPS listener, bearer token, and normally validated `PC_MEDIA_CA_CERT`/hostname. It never disables certificate validation, accepts redirects, changes command timestamps, or uploads command bodies, IDs, credentials, arbitrary strings, reset logs, IPs, MACs, or RSSI.
+
+Schema version 1 is strict JSON. A batch has `schema: 1` and 1–16 typed events; each event has `schema`, monotonic `uptime_ms`, optional `unix_time_ms` (null until the system clock is ready), a `kind`, and an allowlisted `category`. Permitted kind/category pairs are:
+
+- `clock_state`: `ready` or `not_ready`.
+- `preflight_rejected`: `wifi_unavailable`, `clock_unavailable`, `stale`, or `queue_full`.
+- `http_response`: `http_2xx`, `http_4xx`, `http_5xx`, or `http_other`.
+- `tls_transport`: currently `unknown` where the HTTP client reports only a generic negative transport result; no cause is inferred.
+
+Unknown fields, versions, kinds, categories, and mismatched kind/category combinations are rejected. Companion request bodies are capped at 4,096 bytes, batches at 16 records, and accepted uploads at four batches per second. The in-memory store retains the newest 128 records and at most 32 KiB of serialized event data, evicting oldest records first. Data is RAM-only and is lost when either device or the daemon restarts. The ESP32 uses a 32-record RAM ring (drop-oldest), an eight-record upload batch, and a 16-event non-blocking capture queue; a full capture queue drops the new event. The uploader runs in its own low-priority task, not the media command worker. It waits for Wi-Fi, trusted valid time, pairing configuration, and the existing validated TLS setup; it defers rather than weakening TLS. Transfer failures use 1, 2, 4, 8, 16, then 30 second capped backoff and keep the local ring until a successful HTTP 200. Upload is best-effort and does not affect a media result.
+
+In the companion, open Settings → **Diagnostics** and use **Refresh** to read the current RAM store. **Copy JSON export** copies only those typed records to the local clipboard. Missing wall time remains `null`/unavailable; records are observations, not a diagnosis. This is not a public dashboard or cloud telemetry path.
+
+### Manual failure/recovery evidence procedure
+
+1. Start the paired daemon with its listener enabled and the ESP32 configured with the exported CA and existing pairing token. Do not use production secrets in screenshots or reports.
+2. Let the device establish Wi-Fi and normal clock synchronization. Confirm the daemon's local Diagnostics view can be refreshed and copy/export contains only allowlisted fields.
+3. Reproduce the failure condition without disabling TLS or changing expiry/replay checks. If clock/TLS/network prerequisites are unavailable, expect upload to defer; the records remain only in the ESP RAM ring and may be lost on reset.
+4. Restore normal connectivity and trusted time, then allow the bounded backoff to retry. Refresh Settings and verify clock readiness, uptime, preflight/HTTP/TLS categories, and explicit unavailable wall times as applicable.
+5. Repeat ordinary media commands during deferred/retry periods and verify they remain responsive. Capture a representative failure and recovery export before rebooting the ESP or daemon; compare with separately collected Windows Time-Service state. Do not infer the root cause solely from recovery after manually syncing Windows.
+
+This diagnostic path does not set Windows or ESP clocks. A TLS/certificate failure while time is wrong intentionally prevents upload until ordinary trust prerequisites recover.
+
 ## Test server
 
 `scripts/media_https_test_server.py` is a loopback-default Python standard-library fixture. It validates the request/token/expiry/duplicates and responds `202 accepted`; it never runs a PC action or responds `executed`. Host tests generate disposable localhost certificates with OpenSSL and exercise verified TLS, duplicate rejection, authentication, and hostname mismatch.

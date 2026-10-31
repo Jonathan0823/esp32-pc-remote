@@ -14,6 +14,7 @@
 #include "src/services/indicator_service.h"
 #include "src/services/voice_service.h"
 #include "src/services/media_control_service.h"
+#include "src/services/diagnostics_service.h"
 #include "src/services/ota_service.h"
 
 namespace {
@@ -70,6 +71,7 @@ void setup() {
   wifi_connect();
   media_control_time_setup();
   media_control_service_start();
+  diagnostics_service_start();
   ota_service_start();
   log_init();
   telegram_setup();

@@ -47,6 +47,7 @@ impl SettingsClient {
             state: RwLock::new(DaemonSnapshot {
                 config: AppConfig::default(),
                 diagnostics: Vec::new(),
+                uploaded_diagnostics: Vec::new(),
                 startup_error: false,
             }),
             calls,
@@ -541,6 +542,7 @@ fn snapshot(
                 reason: event.reason,
             })
             .collect(),
+        uploaded_diagnostics: service.uploaded_diagnostics(),
         startup_error,
     }
 }
