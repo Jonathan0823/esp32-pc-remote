@@ -75,6 +75,13 @@ impl SettingsClient {
             .unwrap_or_default()
     }
 
+    pub fn uploaded_diagnostics(&self) -> Vec<crate::diagnostics::Event> {
+        self.state
+            .read()
+            .map(|state| state.uploaded_diagnostics.clone())
+            .unwrap_or_default()
+    }
+
     pub fn startup_error(&self) -> bool {
         self.state.read().is_ok_and(|state| state.startup_error)
     }

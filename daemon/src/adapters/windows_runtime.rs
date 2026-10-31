@@ -134,6 +134,10 @@ impl WindowsRuntime {
         self.dispatcher.diagnostics()
     }
 
+    pub fn uploaded_diagnostics(&self) -> Vec<crate::diagnostics::Event> {
+        self.dispatcher.uploaded_diagnostics()
+    }
+
     pub fn config(&self) -> AppConfig {
         self.config
             .read()

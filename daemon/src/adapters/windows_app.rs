@@ -618,7 +618,7 @@ impl SettingsApp {
                     ui.monospace(
                         record
                             .unix_time_ms
-                            .map_or_else(|| "unavailable".into(), |time| time.to_string()),
+                            .map_or_else(|| String::from("unavailable"), |time| time.to_string()),
                     );
                     ui.label(format!("{:?}", record.kind));
                     ui.label(format!("{:?}", record.category));
